@@ -1,0 +1,107 @@
+/* -----------------------------
+   🌌 Launch Modal — Full Styles
+----------------------------- */
+
+/* Overlay darkens the background */
+.launch-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+
+/* 🌌 Ambient pulsing glow */
+.ambient-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.ambient-gradient {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 140%;
+  height: 140%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, rgba(255,255,255,0.08), transparent 70%);
+  filter: blur(80px);
+  opacity: 0.5;
+  animation: pulseGlow 6s ease-in-out infinite;
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.35;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: translate(-50%, -50%) scale(1.12);
+  }
+}
+
+/* 🌑 Modal Card (Black Glass + Glow) */
+.modal-card {
+  background: #0d0d0d;
+  color: white;
+  padding: 48px 42px;
+  width: 520px;
+  border-radius: 18px;
+  text-align: center;
+  position: relative;
+
+  /* ✨ Cinematic white aura glow (Option C) */
+  box-shadow:
+    0 0 80px rgba(255, 255, 255, 0.25),
+    0 0 120px rgba(255, 255, 255, 0.15),
+    0 0 200px rgba(255, 255, 255, 0.08);
+}
+
+/* Title */
+.modal-title {
+  margin-top: 20px;
+  font-size: 1.9rem;
+  font-weight: 700;
+}
+
+/* Body Text */
+.modal-text {
+  margin: 20px auto 32px;
+  max-width: 420px;
+  font-size: 1.05rem;
+  line-height: 1.55;
+  color: #dcdcdc;
+}
+
+/* Buttons */
+.modal-buttons {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+}
+
+/* 🚀 Rocket Icon */
+.rocket-container {
+  position: relative;
+  display: inline-block;
+}
+
+/* 🔥 Green flame glow */
+.rocket-glow {
+  position: absolute;
+  bottom: -10px;
+  left: 50%;
+  width: 90px;
+  height: 60px;
+  transform: translateX(-50%);
+  background: radial-gradient(circle, rgba(0,255,120,0.35), transparent 70%);
+  filter: blur(20px);
+  pointer-events: none;
+}

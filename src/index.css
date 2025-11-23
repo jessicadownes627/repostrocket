@@ -1,0 +1,243 @@
+/* ---------------------------
+   🚀 REPOSTROCKET GLOBAL THEME
+   Green • Black • White
+--------------------------- */
+
+:root {
+  --green: #00C853;
+  --green-dark: #00A844;
+  --black: #0A0A0A;
+  --white: #FFFFFF;
+  --gray-light: #F4F4F4;
+  --gray-medium: #A0A0A0;
+
+  --radius: 10px;
+  --transition: 0.25s ease;
+}
+
+/* BODY RESET */
+body {
+  margin: 0;
+  padding: 0;
+  font-family: Inter, system-ui, Helvetica, Arial, sans-serif;
+  background: var(--white);
+  color: var(--black);
+}
+
+/* HEADERS */
+h1, h2, h3, h4 {
+  margin: 0 0 20px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+/* CONTAINERS */
+.page-container {
+  max-width: 600px;
+  margin: 40px auto;
+  padding: 20px;
+}
+
+/* BUTTONS */
+button {
+  cursor: pointer;
+  padding: 12px 18px;
+  font-size: 1rem;
+  border-radius: var(--radius);
+  border: none;
+  transition: var(--transition);
+  font-weight: 600;
+}
+
+/* PRIMARY (Green Rocket Button) */
+.btn-primary {
+  background: var(--green);
+  color: var(--black);
+}
+.btn-primary:hover {
+  background: var(--green-dark);
+}
+
+/* SECONDARY (Black Button) */
+.btn-secondary {
+  background: var(--black);
+  color: var(--white);
+}
+.btn-secondary:hover {
+  opacity: 0.85;
+}
+
+/* OUTLINE BUTTON */
+.btn-outline {
+  background: transparent;
+  border: 2px solid var(--black);
+  color: var(--black);
+}
+.btn-outline:hover {
+  border-color: var(--green);
+  color: var(--green-dark);
+}
+
+/* CHECKBOX ITEMS */
+.checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  font-size: 1.1rem;
+}
+
+/* PLATFORM LIST */
+.platform-list {
+  background: var(--gray-light);
+  padding: 20px;
+  border-radius: var(--radius);
+  margin-top: 20px;
+}
+
+/* CENTER */
+.center {
+  text-align: center;
+}
+
+/* ---------------------------
+   🌌 Ambient Galaxy Background
+--------------------------- */
+
+.repostrocket-background {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at center, #1a1a1a 0%, #000 80%);
+  z-index: -1;
+  pointer-events: none;
+}
+/* ---------------------------
+   ✨ Modal Glow (Cinematic)
+--------------------------- */
+
+.modal-glow {
+  box-shadow:
+    0 0 80px rgba(255, 255, 255, 0.25),
+    0 0 120px rgba(255, 255, 255, 0.15),
+    0 0 200px rgba(255, 255, 255, 0.08);
+}
+/* ---------------------------
+   🌟 Center Shimmer Glow
+--------------------------- */
+
+.shimmer-center {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 900px;
+  height: 900px;
+  translate: -50% -50%;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 70%);
+  animation: pulseGlow 4s ease-in-out infinite;
+  z-index: -1;
+  filter: blur(80px);
+}
+
+@keyframes pulseGlow {
+  0% { opacity: 0.35; }
+  50% { opacity: 0.6; }
+  100% { opacity: 0.35; }
+}
+/* ---------------------------
+   ✨ Tiny Stars Drift
+--------------------------- */
+
+.stars {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  background-image:
+    radial-gradient(2px 2px at 20% 30%, rgba(255,255,255,0.4) 0%, transparent 40%),
+    radial-gradient(1.5px 1.5px at 70% 60%, rgba(255,255,255,0.3) 0%, transparent 40%),
+    radial-gradient(2.5px 2.5px at 40% 80%, rgba(255,255,255,0.25) 0%, transparent 40%),
+    radial-gradient(1px 1px at 85% 20%, rgba(255,255,255,0.35) 0%, transparent 40%);
+  animation: starsFloat 18s linear infinite;
+  z-index: -1;
+  opacity: 0.65;
+}
+
+@keyframes starsFloat {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-80px); }
+}
+/* ---------------------------
+   🚀 Launch Modal – Layout
+--------------------------- */
+
+.launch-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+
+/* Modal box */
+.launch-modal {
+  background: #0a0a0a;
+  border-radius: 18px;
+  padding: 48px 42px;
+  width: 520px;
+  text-align: center;
+  position: relative;
+  color: white;
+}
+
+/* Title */
+.modal-title {
+  margin-top: 20px;
+  font-size: 1.8rem;
+  font-weight: 700;
+}
+
+/* Text */
+.modal-text {
+  margin: 18px auto 32px;
+  max-width: 420px;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: #dcdcdc;
+}
+
+/* Buttons */
+.modal-buttons {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+}
+
+/* Rocket icon wrapper */
+.rocket-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+/* Green glow under rocket */
+.rocket-glow {
+  position: absolute;
+  top: 46px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90px;
+  height: 60px;
+  background: radial-gradient(circle, rgba(0, 255, 120, 0.35), transparent 70%);
+  filter: blur(20px);
+  pointer-events: none;
+}
+
+/* Modal Glow (you added already) */
+.modal-glow {
+  box-shadow:
+    0 0 80px rgba(255, 255, 255, 0.25),
+    0 0 120px rgba(255, 255, 255, 0.15),
+    0 0 200px rgba(255, 255, 255, 0.08);
+}
