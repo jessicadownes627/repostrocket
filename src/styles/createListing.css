@@ -1,0 +1,362 @@
+/* Step 2 neon gamer SaaS vibe */
+.create-page {
+  min-height: 100vh;
+  background: #0b0f0c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  color: #f8fbf8;
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+}
+
+.create-shell {
+  width: min(820px, 100%);
+  background: #0f1411;
+  border: 1px solid rgba(0, 255, 115, 0.18);
+  border-radius: 18px;
+  box-shadow: 0 0 12px rgba(0, 255, 115, 0.25), 0 18px 60px rgba(0, 0, 0, 0.45);
+  padding: 18px;
+}
+
+.create-card {
+  background: #ffffff;
+  border: 1px solid #dddddd;
+  border-radius: 14px;
+  padding: 24px;
+  color: #0b0f0c;
+}
+
+.create-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.create-eyebrow {
+  margin: 0 0 6px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: #0f8a3f;
+}
+
+.create-card h1 {
+  margin: 0 0 6px;
+  font-size: clamp(26px, 4vw, 32px);
+}
+
+.create-subtitle {
+  margin: 0 0 12px;
+  color: #3a3a3a;
+}
+
+.create-pill {
+  background: #0f8a3f;
+  color: #ffffff;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.3px;
+}
+
+.create-form {
+  display: grid;
+  gap: 16px;
+  margin-top: 6px;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.field label {
+  font-weight: 800;
+  color: #0b0f0c;
+}
+
+.field input,
+.field textarea,
+.field select {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid #dfe5e0;
+  padding: 12px;
+  background: #f8fbf8;
+  font-size: 15px;
+}
+
+.field textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.field select {
+  appearance: none;
+  background: #f8fbf8 url("data:image/svg+xml,%3csvg width='12' height='8' viewBox='0 0 12 8' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M1 1l5 5 5-5' stroke='%230f8a3f' stroke-width='2' fill='none' fill-rule='evenodd'/%3e%3c/svg%3e") no-repeat right 12px center;
+  background-size: 12px 8px;
+}
+
+.field input:focus,
+.field textarea:focus,
+.field select:focus,
+.price-input:focus {
+  outline: none;
+  border-color: #0f8a3f;
+  box-shadow: 0 0 0 2px rgba(15, 138, 63, 0.15);
+}
+
+.price-input {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid #dfe5e0;
+  padding: 12px;
+  background: #ffffff;
+  font-size: 15px;
+}
+
+.price-input::-webkit-outer-spin-button,
+.price-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.price-input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.helper {
+  margin: 0;
+  color: #6b6b6b;
+  font-size: 13px;
+}
+
+.helper-note {
+  color: #2f3a33;
+  font-size: 13px;
+}
+
+.radio-group {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.radio-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #dfe5e0;
+  background: #f8fbf8;
+  cursor: pointer;
+}
+
+.radio-pill input {
+  accent-color: #0f8a3f;
+}
+
+.cap {
+  text-transform: capitalize;
+  font-weight: 700;
+  color: #0b0f0c;
+}
+
+.uploader {
+  border: 1.5px dashed rgba(255, 255, 255, 0.25);
+  border-radius: 14px;
+  background: #0d0d0d;
+  min-height: 140px;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.uploader:hover {
+  border-color: #00ff73;
+  box-shadow: 0 0 12px rgba(0, 255, 115, 0.25);
+}
+
+.uploader--dragging {
+  border-color: #00ff73;
+  box-shadow: 0 0 12px rgba(0, 255, 115, 0.35);
+}
+
+.uploader-input {
+  display: none;
+}
+
+.uploader-content {
+  text-align: center;
+  color: #cdeedc;
+  display: grid;
+  gap: 6px;
+}
+
+.uploader-icon {
+  font-size: 28px;
+}
+
+.photo-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.photo-thumb {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.photo-thumb img {
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+  display: block;
+}
+
+.photo-remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.variant-toggle {
+  margin-top: 8px;
+}
+
+.variant-grid {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.variant-thumb {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.variant-thumb img {
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+  display: block;
+}
+
+.variant-label {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #9bf7c2;
+  padding: 4px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.ai-prompt {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 255, 115, 0.25);
+  background: rgba(0, 255, 115, 0.05);
+  color: #dfffee;
+}
+
+.ai-prompt p {
+  margin: 6px 0 0;
+  color: #cceee0;
+}
+
+.ai-prompt-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.ai-link {
+  margin-top: 6px;
+}
+
+.ai-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: grid;
+  place-items: center;
+  z-index: 2000;
+}
+
+.ai-modal-card {
+  background: #0f1411;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 14px;
+  padding: 18px;
+  width: min(420px, 90%);
+  color: #f7faf7;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
+}
+
+.ai-modal-card h3 {
+  margin: 0 0 10px;
+}
+
+.ai-modal-card p {
+  margin: 4px 0;
+  color: #cdeedc;
+}
+
+.ai-modal-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  justify-content: flex-end;
+}
+
+.actions {
+  margin-top: 6px;
+  display: grid;
+  gap: 6px;
+}
+
+.create-cta {
+  width: 100%;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  box-shadow: 0 0 12px rgba(0, 255, 115, 0.35);
+}
+
+.microcopy {
+  margin: 0;
+  color: #4a4a4a;
+  font-size: 13px;
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .create-card {
+    padding: 18px;
+  }
+}

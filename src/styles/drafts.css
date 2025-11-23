@@ -1,0 +1,131 @@
+.drafts-page {
+  min-height: 100vh;
+  background: #0b0f0c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  color: #f8fbf8;
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+}
+
+.drafts-shell {
+  width: min(960px, 100%);
+  background: #0f1411;
+  border: 1px solid rgba(0, 255, 115, 0.2);
+  border-radius: 18px;
+  box-shadow: 0 0 12px rgba(0, 255, 115, 0.25), 0 18px 60px rgba(0, 0, 0, 0.45);
+  padding: 20px;
+}
+
+.drafts-header h1 {
+  margin: 0 0 6px;
+  font-size: clamp(26px, 4vw, 32px);
+}
+
+.drafts-header p {
+  margin: 0 0 16px;
+  color: #cdeedc;
+}
+
+.drafts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.draft-card {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 12px;
+  box-shadow: inset 0 0 0 1px rgba(0, 255, 115, 0.08);
+}
+
+.draft-thumb {
+  width: 90px;
+  height: 90px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: grid;
+  place-items: center;
+}
+
+.draft-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.draft-placeholder {
+  color: #a7b6ae;
+  font-size: 12px;
+}
+
+.draft-meta {
+  display: grid;
+  gap: 4px;
+}
+
+.draft-title {
+  font-weight: 800;
+  font-size: 16px;
+  color: #f2f7f4;
+}
+
+.draft-info {
+  color: #cdd8d2;
+  font-size: 13px;
+  display: flex;
+  gap: 8px;
+}
+
+.draft-date {
+  color: #9fb4a8;
+  font-size: 12px;
+}
+
+.draft-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.delete-btn {
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f8fbf8;
+  cursor: pointer;
+}
+
+.drafts-empty {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 24px;
+  text-align: center;
+  color: #cdeedc;
+}
+
+@media (max-width: 640px) {
+  .draft-card {
+    grid-template-columns: 1fr;
+  }
+
+  .draft-thumb {
+    width: 100%;
+    height: 160px;
+  }
+
+  .draft-actions {
+    justify-content: flex-start;
+  }
+}

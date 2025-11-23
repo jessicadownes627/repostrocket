@@ -1,0 +1,151 @@
+/* Fullscreen dark neon gamer background */
+.loading-container {
+  height: 100vh;
+  width: 100%;
+  background: radial-gradient(circle at top, #092b20, #000000 70%);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+  color: #b9ffda;
+  text-align: center;
+  font-family: Inter, sans-serif;
+}
+
+/* Scanning/flickering HUD overlay */
+.scan-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 255, 140, 0.05) 0px,
+    rgba(0, 255, 140, 0.05) 2px,
+    transparent 4px,
+    transparent 8px
+  );
+  animation: scan 4s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes scan {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+/* Rocket container */
+.rocket-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: float 2.4s ease-in-out infinite;
+  z-index: 2;
+}
+
+@keyframes float {
+  0%   { transform: translateY(0); }
+  50%  { transform: translateY(-18px); }
+  100% { transform: translateY(0); }
+}
+
+/* Rocket body */
+.rocket-body {
+  width: 70px;
+  height: 140px;
+  background: #0d0d0d;
+  border: 3px solid #00ff88;
+  border-radius: 40px 40px 20px 20px;
+  position: relative;
+  box-shadow: 0 0 20px rgba(0, 255, 140, 0.5);
+}
+
+/* Rocket fins */
+.rocket-fin {
+  width: 25px;
+  height: 40px;
+  background: #00ff88;
+  position: absolute;
+  bottom: 15px;
+  border-radius: 8px;
+}
+
+.left { left: -20px; }
+.right { right: -20px; }
+
+/* Window */
+.rocket-window {
+  width: 30px;
+  height: 30px;
+  background: #ffffff20;
+  border: 3px solid #00ff88;
+  border-radius: 50%;
+  position: absolute;
+  top: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* Rocket flame */
+.rocket-fire {
+  width: 20px;
+  height: 40px;
+  background: radial-gradient(circle, #00ff88, #00aa55);
+  border-radius: 50%;
+  margin-top: -6px;
+  animation: firePulse 0.12s infinite alternate;
+  filter: blur(2px);
+}
+
+@keyframes firePulse {
+  from {
+    transform: scaleY(0.7) scaleX(0.7);
+    opacity: 0.5;
+  }
+  to {
+    transform: scaleY(1.1) scaleX(1);
+    opacity: 1;
+  }
+}
+
+/* Title text */
+.loading-title {
+  margin-top: 30px;
+  font-size: 2rem;
+  font-weight: 700;
+  text-shadow: 0 0 15px #00ff88;
+}
+
+/* Sub text */
+.loading-sub {
+  margin-top: 10px;
+  opacity: 0.7;
+  font-size: 1rem;
+  letter-spacing: 0.5px;
+}
+
+/* Progress bar */
+.progress-bar {
+  margin-top: 40px;
+  width: 300px;
+  height: 6px;
+  background: #003322;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 0 10px #00ff88;
+}
+
+.progress {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, #00ff88, #22ffc0);
+  animation: load 3s ease-in-out forwards;
+}
+
+@keyframes load {
+  0% { width: 0%; }
+  100% { width: 100%; }
+}
