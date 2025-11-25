@@ -5,7 +5,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #00ff73;
+  color: #E8D5A8;
   font-family: Inter, system-ui, -apple-system, sans-serif;
   animation: splashFade 1.8s ease forwards;
 }
@@ -24,10 +24,10 @@
   justify-content: center;
   width: 56px;
   height: 56px;
-  border: 1px solid rgba(0, 255, 115, 0.4);
+  border: 1px solid rgba(232, 213, 168, 0.45);
   border-radius: 16px;
-  color: #00ff73;
-  background: rgba(0, 255, 115, 0.06);
+  color: #E8D5A8;
+  background: rgba(232, 213, 168, 0.08);
 }
 
 .splash-rocket {
@@ -41,15 +41,15 @@
   font-size: 22px;
   letter-spacing: 0.5px;
   color: #f8fbf8;
-  text-shadow: 0 0 8px rgba(0, 255, 115, 0.2);
+  text-shadow: 0 0 8px rgba(232, 213, 168, 0.2);
 }
 
 .splash-tagline {
   margin: 0;
-  color: #9beebf;
+  color: #E8D5A8;
   font-weight: 600;
   letter-spacing: 0.3px;
-  text-shadow: 0 0 6px rgba(0, 255, 115, 0.18);
+  text-shadow: 0 0 6px rgba(232, 213, 168, 0.18);
 }
 
 @keyframes splashFade {

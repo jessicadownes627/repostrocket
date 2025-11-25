@@ -1,108 +1,189 @@
 /* ---------------------------
-   🚀 REPOSTROCKET GLOBAL THEME
-   Green • Black • White
---------------------------- */
+   🚀 REPOSTROCKET GLOBAL THEME — Luxe Noir / Emerald / Gold
+   (Premium AF Typography + Spacing Upgrade)
+---------------------------- */
+
+@import url("https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap");
 
 :root {
-  --green: #00C853;
-  --green-dark: #00A844;
-  --black: #0A0A0A;
-  --white: #FFFFFF;
-  --gray-light: #F4F4F4;
-  --gray-medium: #A0A0A0;
+  /* Spacing Scale */
+  --space-xxs: 6px;
+  --space-xs: 10px;
+  --space-sm: 14px;
+  --space-md: 20px;
+  --space-lg: 28px;
+  --space-xl: 36px;
+  --space-xxl: 48px;
 
-  --radius: 10px;
+  /* Line Heights */
+  --lh-tight: 1.15;
+  --lh-normal: 1.4;
+  --lh-relaxed: 1.6;
+
+  /* Premium Tracking */
+  --track-tight: -0.6px;
+  --track-medium: -0.3px;
+  --track-wide: 0.5px;
+
+  /* Colors */
+  --bg-1: #111315;
+  --bg-2: #181B1D;
+  --bg-card: #1D2123;
+
+  --text-main: #F2F2F2;
+  --text-muted: #AAAEB3;
+  --text-gold: #E8D5A8;
+
+  --accent-emerald: #2A7A5E;
+  --accent-emerald-soft: rgba(42,122,94,0.3);
+
+  --border-gold: #E8D5A833;
+
+  --btn-primary-bg: #2A7A5E;
+  --btn-primary-text: #F8F8F8;
+  --btn-secondary-bg: #1A1D1F;
+  --btn-secondary-border: #E8D5A8;
+
+  --radius: 12px; /* Slightly increased for a richer look */
   --transition: 0.25s ease;
 }
 
-/* BODY RESET */
-body {
+/* ---------------------------
+   🌑 RESET
+---------------------------- */
+
+html, body {
   margin: 0;
   padding: 0;
-  font-family: Inter, system-ui, Helvetica, Arial, sans-serif;
-  background: var(--white);
-  color: var(--black);
+  background: var(--bg-1);
 }
 
-/* HEADERS */
+body {
+  font-family: "Inter", system-ui, Helvetica, Arial, sans-serif;
+  color: var(--text-main);
+  font-size: 16px;
+  line-height: var(--lh-normal);
+  letter-spacing: var(--track-medium);
+}
+
+/* ---------------------------
+   ✨ HEADINGS (High-End Typography)
+---------------------------- */
+
 h1, h2, h3, h4 {
-  margin: 0 0 20px;
+  margin: 0 0 var(--space-md);
+  font-family: "Cinzel", serif;
   font-weight: 700;
-  letter-spacing: -0.5px;
+  color: var(--text-gold);
+  letter-spacing: var(--track-tight);
+  line-height: var(--lh-tight);
 }
 
-/* CONTAINERS */
+h1 { font-size: 2rem; }
+h2 { font-size: 1.55rem; }
+h3 { font-size: 1.25rem; }
+h4 { font-size: 1.05rem; }
+
+/* Section Titles */
+.section-title {
+  margin-bottom: var(--space-sm);
+  font-size: 1.45rem;
+  letter-spacing: -0.4px;
+}
+
+/* ---------------------------
+   📦 LAYOUT / CONTAINERS
+---------------------------- */
+
 .page-container {
-  max-width: 600px;
-  margin: 40px auto;
-  padding: 20px;
+  max-width: 780px;
+  margin: var(--space-xl) auto;
+  padding: var(--space-md);
 }
 
-/* BUTTONS */
+/* Vertical spacing between major blocks */
+.section-block {
+  margin-bottom: var(--space-xl);
+}
+
+/* Card-like sections */
+.card-block {
+  padding: var(--space-lg);
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  margin-bottom: var(--space-xl);
+}
+
+/* ---------------------------
+   🟢 BUTTONS (Premium Polished)
+---------------------------- */
+
 button {
   cursor: pointer;
-  padding: 12px 18px;
+  padding: 14px 20px;
   font-size: 1rem;
   border-radius: var(--radius);
   border: none;
   transition: var(--transition);
   font-weight: 600;
+  letter-spacing: var(--track-medium);
 }
 
-/* PRIMARY (Green Rocket Button) */
+/* PRIMARY (Green) */
 .btn-primary {
-  background: var(--green);
-  color: var(--black);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
 }
 .btn-primary:hover {
-  background: var(--green-dark);
+  background: #368c6e;
 }
 
-/* SECONDARY (Black Button) */
+/* SECONDARY (Black w/Gold) */
 .btn-secondary {
-  background: var(--black);
-  color: var(--white);
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-border);
+  border: 1px solid var(--btn-secondary-border);
 }
 .btn-secondary:hover {
-  opacity: 0.85;
+  border-color: #f0e0b9;
+  color: #f0e0b9;
 }
 
-/* OUTLINE BUTTON */
-.btn-outline {
-  background: transparent;
-  border: 2px solid var(--black);
-  color: var(--black);
-}
-.btn-outline:hover {
-  border-color: var(--green);
-  color: var(--green-dark);
-}
+/* ---------------------------
+   ✔️ FORM ELEMENTS / CHECKBOX ITEMS
+---------------------------- */
 
-/* CHECKBOX ITEMS */
 .checkbox-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 0;
+  gap: var(--space-sm);
+  padding: var(--space-xs) 0;
   font-size: 1.1rem;
+  line-height: var(--lh-tight);
 }
 
-/* PLATFORM LIST */
+/* ---------------------------
+   🧩 PLATFORM LIST
+---------------------------- */
+
 .platform-list {
-  background: var(--gray-light);
-  padding: 20px;
+  background: var(--bg-card);
+  padding: var(--space-lg);
   border-radius: var(--radius);
-  margin-top: 20px;
+  margin-top: var(--space-lg);
 }
 
-/* CENTER */
+/* ---------------------------
+   ✨ UTILS
+---------------------------- */
+
 .center {
   text-align: center;
 }
 
 /* ---------------------------
    🌌 Ambient Galaxy Background
---------------------------- */
+---------------------------- */
 
 .repostrocket-background {
   position: fixed;
@@ -111,9 +192,10 @@ button {
   z-index: -1;
   pointer-events: none;
 }
+
 /* ---------------------------
    ✨ Modal Glow (Cinematic)
---------------------------- */
+---------------------------- */
 
 .modal-glow {
   box-shadow:
@@ -121,9 +203,10 @@ button {
     0 0 120px rgba(255, 255, 255, 0.15),
     0 0 200px rgba(255, 255, 255, 0.08);
 }
+
 /* ---------------------------
    🌟 Center Shimmer Glow
---------------------------- */
+---------------------------- */
 
 .shimmer-center {
   position: fixed;
@@ -144,9 +227,10 @@ button {
   50% { opacity: 0.6; }
   100% { opacity: 0.35; }
 }
+
 /* ---------------------------
-   ✨ Tiny Stars Drift
---------------------------- */
+   ✨ Stars
+---------------------------- */
 
 .stars {
   pointer-events: none;
@@ -166,9 +250,10 @@ button {
   0% { transform: translateY(0); }
   100% { transform: translateY(-80px); }
 }
+
 /* ---------------------------
-   🚀 Launch Modal – Layout
---------------------------- */
+   🚀 Launch Modal
+---------------------------- */
 
 .launch-overlay {
   position: fixed;
@@ -181,7 +266,6 @@ button {
   z-index: 999;
 }
 
-/* Modal box */
 .launch-modal {
   background: #0a0a0a;
   border-radius: 18px;
@@ -192,36 +276,32 @@ button {
   color: white;
 }
 
-/* Title */
 .modal-title {
-  margin-top: 20px;
+  margin-top: var(--space-sm);
   font-size: 1.8rem;
   font-weight: 700;
+  letter-spacing: -0.4px;
 }
 
-/* Text */
 .modal-text {
-  margin: 18px auto 32px;
+  margin: var(--space-sm) auto var(--space-lg);
   max-width: 420px;
   font-size: 1rem;
   line-height: 1.5;
   color: #dcdcdc;
 }
 
-/* Buttons */
 .modal-buttons {
   display: flex;
-  gap: 20px;
+  gap: var(--space-md);
   justify-content: center;
 }
 
-/* Rocket icon wrapper */
 .rocket-wrapper {
   position: relative;
   display: inline-block;
 }
 
-/* Green glow under rocket */
 .rocket-glow {
   position: absolute;
   top: 46px;
@@ -234,10 +314,222 @@ button {
   pointer-events: none;
 }
 
-/* Modal Glow (you added already) */
-.modal-glow {
+/* -----------------------------------------------
+   💎 Green Glass Button with Champagne Outline
+------------------------------------------------ */
+.btn-glass-gold {
+  background: rgba(42, 122, 94, 0.20); /* translucent emerald */
+  color: #ffffff;
+  font-weight: 700;
+  padding: 15px 26px;
+  border-radius: 14px;
+
+  /* champagne outline */
+  border: 1.8px solid rgba(232, 213, 168, 0.60);
+
+  /* soft glass effect */
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+
+  /* soft depth */
   box-shadow:
-    0 0 80px rgba(255, 255, 255, 0.25),
-    0 0 120px rgba(255, 255, 255, 0.15),
-    0 0 200px rgba(255, 255, 255, 0.08);
+    0 6px 18px rgba(0, 0, 0, 0.45),
+    0 0 16px rgba(232, 213, 168, 0.18) inset;
+
+  letter-spacing: -0.3px;
+  transition: 0.25s ease;
+}
+
+/* HOVER: brighter glass, stronger champagne glow, tiny lift */
+.btn-glass-gold:hover {
+  background: rgba(42, 122, 94, 0.32);
+  border-color: rgba(232, 213, 168, 0.80);
+
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.55),
+    0 0 18px rgba(232, 213, 168, 0.28) inset;
+
+  transform: translateY(-2px);
+}
+
+/* -------------------------------------------
+   ✨ Ultimate Champagne Sparkle + Shimmer Combo
+-------------------------------------------- */
+
+.sparkly-header {
+  position: relative;
+  display: inline-block;
+  background: linear-gradient(
+    90deg,
+    rgba(232,213,168,0.85),
+    rgba(255,244,220,1),
+    rgba(232,213,168,0.85)
+  );
+  -webkit-background-clip: text;
+  color: transparent;
+  background-size: 200%;
+  animation: sparkleFlow 4s linear infinite;
+}
+
+@keyframes sparkleFlow {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Champagne glitter particles */
+.header-glitter {
+  position: relative;
+  display: inline-block;
+}
+
+.header-glitter::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(2px 2px at 20% 30%, rgba(255,255,255,0.8), transparent),
+    radial-gradient(2.5px 2.5px at 80% 20%, rgba(255,244,220,0.9), transparent),
+    radial-gradient(1.5px 1.5px at 50% 70%, rgba(255,240,210,0.7), transparent),
+    radial-gradient(1px 1px at 65% 40%, rgba(255,255,255,0.75), transparent);
+  animation: glitterBlink 2.6s infinite ease-in-out;
+}
+
+@keyframes glitterBlink {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+/* Subtle glitter text utility */
+.glitter-text {
+  position: relative;
+  display: inline-block;
+  background: linear-gradient(
+    90deg,
+    rgba(232,213,168,0.75),
+    rgba(255,244,220,1),
+    rgba(232,213,168,0.75)
+  );
+  -webkit-background-clip: text;
+  color: transparent;
+  background-size: 200%;
+  animation: sparkleFlow 4s linear infinite;
+}
+
+.glitter-text::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(2px 2px at 20% 30%, rgba(255,255,255,0.7), transparent),
+    radial-gradient(2px 2px at 80% 20%, rgba(255,244,220,0.8), transparent),
+    radial-gradient(1.5px 1.5px at 50% 70%, rgba(255,240,210,0.6), transparent);
+  animation: glitterBlink 2.6s infinite ease-in-out;
+}
+/* -------------------------------------------
+   🌌 STEP 5 — PREMIUM BACKGROUND DEPTH LAYER
+   Adds geometric grid, gold dust, vignette, glow layers.
+-------------------------------------------- */
+
+/* Root backdrop wrapper */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background:
+    /* subtle diagonal grid */
+    repeating-linear-gradient(
+      135deg,
+      rgba(255,255,255,0.015) 0,
+      rgba(255,255,255,0.015) 2px,
+      transparent 2px,
+      transparent 20px
+    );
+  pointer-events: none;
+  z-index: -4;
+  opacity: 0.5;
+}
+
+/* Soft vignette corners */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(
+      circle at top left,
+      rgba(0,0,0,0.55),
+      transparent 55%
+    ),
+    radial-gradient(
+      circle at bottom right,
+      rgba(0,0,0,0.55),
+      transparent 55%
+    );
+  pointer-events: none;
+  z-index: -3;
+  opacity: 0.6;
+}
+
+/* Gold dust shimmer */
+.rr-gold-dust {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -2;
+  background-image:
+    radial-gradient(2px 2px at 12% 22%, rgba(232,213,168,0.18), transparent 60%),
+    radial-gradient(1.5px 1.5px at 78% 42%, rgba(232,213,168,0.12), transparent 65%),
+    radial-gradient(2.5px 2.5px at 34% 74%, rgba(232,213,168,0.15), transparent 60%),
+    radial-gradient(1px 1px at 90% 12%, rgba(232,213,168,0.2), transparent 70%);
+  animation: goldDrift 22s linear infinite;
+  opacity: 0.55;
+}
+
+@keyframes goldDrift {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-140px); }
+}
+
+/* Emerald depth wash */
+.rr-deep-emerald {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background:
+    radial-gradient(
+      circle at center,
+      rgba(42,122,94,0.12) 0%,
+      transparent 65%
+    );
+  filter: blur(90px);
+  opacity: 0.35;
+}
+/* ✨ Luxe Champagne Glitter Text (Clean + Premium) */
+.glitter-text {
+  background: 
+      linear-gradient(
+        90deg,
+        #e9d9b5 0%,
+        #f5e9c9 25%,
+        #fff7e3 50%,
+        #f5e9c9 75%,
+        #e9d9b5 100%
+      ),
+      url("data:image/svg+xml;utf8,\
+<svg xmlns='http://www.w3.org/2000/svg' width='60' height='60'>\
+<circle cx='4' cy='4' r='1' fill='rgba(255,255,255,0.35)'/>\
+<circle cx='20' cy='14' r='1' fill='rgba(255,255,255,0.25)'/>\
+<circle cx='32' cy='28' r='1' fill='rgba(255,255,255,0.30)'/>\
+<circle cx='12' cy='40' r='1' fill='rgba(255,255,255,0.20)'/>\
+<circle cx='48' cy='12' r='1' fill='rgba(255,255,255,0.28)'/>\
+</svg>");
+  background-blend-mode: overlay;
+  background-size: 200% auto, 80px 80px;
+  -webkit-background-clip: text;
+  color: transparent;
+  font-weight: 700;
+  letter-spacing: -0.5px;
 }

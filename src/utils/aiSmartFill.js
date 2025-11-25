@@ -11,6 +11,8 @@ export async function mockAnalyzePhotos(photos = []) {
   const color = hint.includes("black") ? "Black" : hint.includes("blue") ? "Blue" : "Neutral";
   const style = isJacket ? "Streetwear" : isDress ? "Casual" : "Everyday";
   const material = isDenim ? "Denim" : "Cotton";
+  const tags = ["Casual", "Modern", "Layering", "Neutral"];
+  const price = 25;
 
   const description = `AI guess: ${condition} ${color} ${material} ${category.toLowerCase()} with ${style.toLowerCase()} vibes.`;
 
@@ -21,5 +23,7 @@ export async function mockAnalyzePhotos(photos = []) {
     style,
     material,
     description,
+    tags,
+    price,
   };
 }

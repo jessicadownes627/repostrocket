@@ -1,8 +1,14 @@
 export const IMAGE_VARIANTS = {
+  mercari: {
+    name: "Square",
+    width: 1080,
+    height: 1080,
+    mode: "cover",
+  },
   poshmark: {
     name: "Square",
-    width: 1500,
-    height: 1500,
+    width: 1200,
+    height: 1600,
     mode: "cover",
   },
   depop: {
@@ -39,6 +45,6 @@ export function getVariantForPlatform(platform = "") {
   if (key === "etsy") return "etsy";
   if (key === "vinted" || key === "kidizen") return "facebook";
   if (key === "grailed") return "poshmark";
-  if (key === "mercari") return "poshmark";
+  if (key === "mercari") return "mercari";
   return "facebook";
 }

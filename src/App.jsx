@@ -6,6 +6,7 @@ import LaunchLoading from "./pages/LaunchLoading";
 import Preflight from "./pages/Preflight";
 import Splash from "./pages/Splash";
 import Drafts from "./pages/Drafts";
+import PlatformPrep from "./pages/PlatformPrep";
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
         <Route path="/loading" element={<LaunchLoading />} />
         <Route path="/preflight" element={<Preflight />} />
         <Route path="/drafts" element={<Drafts />} />
+        <Route path="/platform-prep" element={<PlatformPrep />} />
       </Routes>
     </Router>
   );

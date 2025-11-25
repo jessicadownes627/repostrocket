@@ -1,0 +1,31 @@
+.platform-prep-page {
+  min-height: 100vh;
+  background: #0b0f0c;
+  padding: 30px;
+  color: #fff;
+}
+
+.prep-title {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #39ff88;
+  margin-bottom: 8px;
+}
+
+.prep-sub {
+  opacity: 0.8;
+  margin-bottom: 20px;
+}
+
+.prep-grid {
+  display: grid;
+  gap: 20px;
+}
+
+.prep-card {
+  background: #111;
+  border: 1px solid rgba(0,255,120,0.3);
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 0 12px rgba(0,255,120,0.2);
+}

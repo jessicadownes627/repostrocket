@@ -8,6 +8,11 @@ import { generatePlatformTags } from "../utils/tagGenerator";
 import CopyButton from "../components/CopyButton";
 import { TAG_CONFIG } from "../config/platformTagSettings";
 import { platformLinks, formatTagPreview } from "../utils/platformFormatting";
+import FloatingPanel from "../components/FloatingPanel";
+import { useSmartFill } from "../hooks/useSmartFill";
+import { useSmartPaste } from "../hooks/useSmartPaste";
+import { useAutoTitle } from "../hooks/useAutoTitle";
+import { useTitleShuffle } from "../hooks/useTitleShuffle";
 import JSZip from "jszip";
 import "../styles/launchpad.css";
 import "../styles/launchloading.css";
@@ -64,8 +69,29 @@ function LoadingView() {
 
 function Launchpad() {
   const navigate = useNavigate();
-  const { selectedPlatforms, listingData, resetListing, setListingField } = useListingStore();
+  const { selectedPlatforms, setSelectedPlatforms, listingData, resetListing, setListingField } = useListingStore();
   const [isLoading, setIsLoading] = useState(true);
+  const [isPanelOpen, setIsPanelOpen] = useState(sessionStorage.getItem("rr_panel") === "open");
+  const [isExpanded, setIsExpanded] = useState(sessionStorage.getItem("rr_panel_expanded") === "true");
+  const [platform, setPlatform] = useState(sessionStorage.getItem("rr_platform") || "mercari");
+  useEffect(() => {
+    if (!selectedPlatforms.length) {
+      const stored = localStorage.getItem("rr_selectedPlatforms");
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length) {
+            setSelectedPlatforms(parsed);
+            if (parsed[0]) setPlatform(parsed[0].toLowerCase());
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+    } else if (selectedPlatforms.length && !selectedPlatforms.map((p) => p.toLowerCase()).includes(platform)) {
+      setPlatform(selectedPlatforms[0].toLowerCase());
+    }
+  }, [selectedPlatforms, platform, setSelectedPlatforms]);
 
   useEffect(() => {
     if (!selectedPlatforms.length) {
@@ -78,6 +104,17 @@ function Launchpad() {
     return () => clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    if (listingData && Object.keys(listingData || {}).length) {
+      setIsPanelOpen(true);
+      sessionStorage.setItem("rr_panel", "open");
+    }
+  }, [listingData]);
+
+  useEffect(() => {
+    sessionStorage.setItem("rr_platform", platform);
+  }, [platform]);
+
   const platformDescriptions = useMemo(
     () => getPlatformDescriptions(listingData, selectedPlatforms),
     [listingData, selectedPlatforms]
@@ -89,6 +126,33 @@ function Launchpad() {
   );
 
   const platformTags = useMemo(() => generatePlatformTags(listingData), [listingData]);
+
+  const {
+    autoCopyBundle,
+    smartFillBundle,
+    features,
+    colorName,
+    confidenceLabel,
+    confidenceScore,
+    category: detectedCategory,
+    smartFillTrigger,
+  } = useSmartFill(listingData, platform);
+  const { copyToClipboard } = useSmartPaste(listingData);
+  const [shuffleSeed, setShuffleSeed] = useState(Date.now());
+  const titleVariants = useTitleShuffle({
+    platform,
+    features,
+    brand: listingData.brand,
+    category: detectedCategory ? { name: detectedCategory } : null,
+    seed: shuffleSeed,
+  });
+  const onShuffle = () => setShuffleSeed(Date.now());
+  const autoTitle = useAutoTitle({
+    platform,
+    features,
+    brand: listingData.brand,
+    category: detectedCategory ? { name: detectedCategory } : null,
+  });
 
   useEffect(() => {
     // persist tags in store for draft restore
@@ -104,6 +168,10 @@ function Launchpad() {
       window.open(url, "_blank");
     }
   };
+
+  useEffect(() => {
+    if (smartFillTrigger) smartFillTrigger();
+  }, [platform, smartFillTrigger]);
 
   const downloadZip = async (platform) => {
     const variantKey = getVariantForPlatform(platform);
@@ -129,6 +197,14 @@ function Launchpad() {
       console.error("Zip download failed", err);
       alert("Could not create zip. Please try again or download images manually.");
     }
+  };
+
+  const handleSmartPaste = () => {
+    copyToClipboard();
+  };
+
+  const handleSmartFill = () => {
+    autoCopyBundle();
   };
 
   const startOver = () => {
@@ -196,7 +272,22 @@ function Launchpad() {
                   {tagConfig.type !== "none" && tags && (
                     <div className="field-block">
                       <div className="field-label">Tags</div>
-                      <div className="tag-preview">{tagPreview}</div>
+                      <div className="tag-preview">
+                        {Array.isArray(tags)
+                          ? tags.map((tag, idx) => (
+                              <span key={`${platform}-tag-${idx}`} className="tag-pill">
+                                {tag}
+                              </span>
+                            ))
+                          : (tagPreview || "")
+                              .split(/\s+/)
+                              .filter(Boolean)
+                              .map((t, idx) => (
+                                <span key={`${platform}-tag-${idx}`} className="tag-pill">
+                                  {t}
+                                </span>
+                              ))}
+                      </div>
                       <CopyButton
                         text={tagConfig.type === "hashtags" ? (tags || []).join(" ") : tagPreview}
                         label="Copy Tags"
@@ -232,6 +323,35 @@ function Launchpad() {
           </button>
         </div>
       </div>
+
+      <FloatingPanel
+        isOpen={isPanelOpen}
+        onClose={() => {
+          setIsPanelOpen(false);
+          sessionStorage.setItem("rr_panel", "closed");
+        }}
+        listingData={listingData}
+        onSmartPaste={handleSmartPaste}
+        onSmartFill={handleSmartFill}
+        isExpanded={isExpanded}
+        setIsExpanded={(val) => {
+          setIsExpanded(val);
+          sessionStorage.setItem("rr_panel_expanded", val ? "true" : "false");
+        }}
+        thumbUrl={listingData?.photos?.[0]}
+        smartFill={smartFillBundle}
+        confidenceLabel={confidenceLabel}
+        confidenceScore={confidenceScore}
+        features={features}
+        colorName={colorName}
+        platform={platform}
+        setPlatform={setPlatform}
+        selectedPlatforms={selectedPlatforms}
+        autoTitle={autoTitle}
+        titleVariants={titleVariants}
+        onShuffle={onShuffle}
+        autoCopyBundle={autoCopyBundle}
+      />
     </div>
   );
 }
