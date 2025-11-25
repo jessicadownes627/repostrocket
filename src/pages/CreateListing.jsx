@@ -187,6 +187,20 @@ function CreateListing() {
     }
   }, [selectedPlatforms.length, setSelectedPlatforms]);
 
+  useEffect(() => {
+    const fixIOSInput = (e) => {
+      const el = e.target;
+      setTimeout(() => {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 300);
+    };
+
+    const inputs = document.querySelectorAll("input, textarea");
+    inputs.forEach((i) => i.addEventListener("focus", fixIOSInput));
+
+    return () => inputs.forEach((i) => i.removeEventListener("focus", fixIOSInput));
+  }, []);
+
   /** Convert selected images to DataURLs */
   const readFilesAsDataUrls = async (files) => {
     const arr = Array.from(files || []);
@@ -381,7 +395,7 @@ function CreateListing() {
             <section className="section-wrapper">
               <div className="section-head">
                 <h2 className="section-title">Listing Photos</h2>
-                <p className="section-subtitle">Add up to 4 photos. HEIC converts automatically.</p>
+                <p className="section-subtitle">Add up to 4 photos. We'll format them perfectly for every platform.</p>
               </div>
               <hr className="section-divider" />
 
@@ -398,7 +412,9 @@ function CreateListing() {
                   <div className="universal-photo-grid">
                     {displayPhotos.map((url, i) => (
                       <div key={i} className="photo-slot filled">
-                        <img src={url} alt="preview" className="photo-preview" />
+                        <div className="photo-preview-wrapper">
+                          <img src={url} alt="preview" className="photo-preview" />
+                        </div>
                         <button
                           type="button"
                           className="remove-photo"
@@ -653,8 +669,11 @@ function CreateListing() {
                   onClick={() => navigate("/platform-prep")}
                 >
                   🚀 Next → Platform Versions
-                  <span className="next-sub">See how your listing looks on each platform</span>
                 </button>
+              </div>
+              <div className="next-step-wrapper">
+                <div className="next-step-label">Next → Platform Versions</div>
+                <div className="next-step-sub">See how your listing looks on each platform.</div>
               </div>
             </section>
 

@@ -66,58 +66,70 @@ function Welcome() {
 
   return (
     <div className="welcome-page">
-      <div className="welcome-card">
-        <p className="welcome-eyebrow" style={{ textAlign: "center", width: "100%" }}>
-          Welcome to RepostRocket 🚀
-        </p>
-        <h2 className="step-title glitter-text">Choose Your Selling Platforms</h2>
-       <p className="welcome-subtitle">
-  Choose all marketplaces you’d like to list on.<br />
-  Repost Rocket handles formatting across every platform.
-</p>
-        <p className="welcome-disclaimer">
-          You’ll need active accounts on any marketplaces you choose.
-        </p>
+      <div className="welcome-card welcome-wrapper">
+        <div className="welcome-container">
+          <h1 className="welcome-title">
+            Choose Your Selling Platforms
+          </h1>
 
-        <div className="platform-grid">
-          {platformOptions.map((p) => {
-            const isActive = normalizedSelected.includes(p.id);
-            return (
-              <button
-                key={p.id}
-                className={`platform-card ${isActive ? "active" : ""}`}
-                onClick={() => togglePlatform(p.id)}
-                type="button"
-              >
-                <div className="platform-row-left">
-                  <span className="platform-label">{p.name}</span>
-                </div>
-                <div className={`platform-checkbox ${isActive ? "on" : ""}`}>
-                  {isActive ? "✓" : ""}
-                </div>
-              </button>
-            );
-          })}
-        </div>
+          <p className="welcome-subtext">
+            Pick every marketplace you plan to post this listing on.
+            Repost Rocket handles formatting across every platform.
+            <br /><br />
+            <span style={{ opacity: 0.8, fontSize: "0.9rem" }}>
+              (Note: You must have active accounts on these marketplaces to publish listings.)
+            </span>
+          </p>
 
-        <div className="cta-hero">
+          {/* Platform Grid */}
+          <div className="platform-grid">
+            {platformOptions.map((p) => {
+              const isActive = normalizedSelected.includes(p.id);
+              return (
+                <div
+                  key={p.id}
+                  className={`platform-card ${isActive ? "selected" : ""}`}
+                  onClick={() => togglePlatform(p.id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      togglePlatform(p.id);
+                    }
+                  }}
+                >
+                  <div className="platform-title">{p.name}</div>
+                  <div className="platform-check">
+                    {isActive && (
+                      <svg viewBox="0 0 24 24">
+                        <path
+                          fill="currentColor"
+                          d="M20.285 6.709a1 1 0 0 0-1.414-1.414l-9.192 9.193-4.242-4.243A1 1 0 0 0 4.023 11.66l4.95 4.95a1 1 0 0 0 1.414 0l9.898-9.9Z"
+                        />
+                      </svg>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Bottom Buttons */}
           <button
-            className="btn-glass-gold"
+            className="select-all-platforms-btn"
+            onClick={selectAllPlatforms}
+          >
+            Select All Platforms
+          </button>
+
+          <button
+            className="luxury-button"
             onClick={handleContinue}
             disabled={!hasSelection}
             style={{ opacity: hasSelection ? 1 : 0.5 }}
           >
-            Continue → Create Your Listing
-          </button>
-        </div>
-        <div className="platform-actions">
-          <button
-            type="button"
-            className="select-all-platforms-btn"
-            onClick={selectAllPlatforms}
-            style={{ width: "100%" }}
-          >
-            Select All Platforms
+            Continue →
           </button>
         </div>
         <button

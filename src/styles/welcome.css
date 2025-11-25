@@ -762,6 +762,203 @@
   }
 }
 
+/* -------------------------------------------
+   🌙 REPOST ROCKET — LUXURY HOTEL UPGRADE
+   Glimmer, Soft Gold, Shadow Depth, Boutique Glow
+-------------------------------------------- */
+
+/* Smooth vertical luxury gradient */
+body {
+  background: linear-gradient(to bottom, #101212 0%, #000 100%);
+}
+
+/* Luxury hero spacing — centered like a boutique brand */
+.welcome-container {
+  padding-top: 48px;
+  margin-bottom: 20px;
+}
+
+/* Header — softer, more elegant, more "hotel signage" */
+.welcome-title {
+  color: var(--text-gold);
+  font-family: "Playfair Display", serif;
+  font-weight: 600;
+  font-size: 1.85rem;
+  text-align: center;
+  letter-spacing: 0.6px;
+  margin-bottom: 14px;
+}
+
+/* Subtext refinement — warm champagne tone */
+.welcome-subtext {
+  color: #cfc9bd;
+  font-size: 1rem;
+  letter-spacing: 0.3px;
+  line-height: 1.45;
+  max-width: 90%;
+  margin: 0 auto 28px auto;
+  text-align: center;
+}
+
+/* -----------------------------
+   ✨ Platform Grid
+------------------------------ */
+
+.platform-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 22px;
+  margin-top: 16px;
+}
+
+/* Premium elevated card */
+.platform-card {
+  background: rgba(255,255,255,0.03);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  border: 1px solid rgba(232,213,168,0.15);
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  transition: 0.25s ease;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+}
+
+/* Hover — luxury micro-shadow */
+.platform-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+  border-color: rgba(232,213,168,0.28);
+}
+
+/* Selected state — boutique glow */
+.platform-card.selected {
+  background: rgba(42,122,94,0.18);
+  border-color: rgba(232,213,168,0.45);
+  box-shadow: 0 0 22px rgba(42,122,94,0.35),
+              inset 0 0 12px rgba(255,255,255,0.1);
+}
+
+/* Label refinement */
+.platform-label {
+  font-size: 1.05rem;
+  letter-spacing: 0.3px;
+  color: var(--text-main);
+  font-weight: 500;
+}
+
+/* -----------------------------
+   Luxury Checkmark
+------------------------------ */
+
+.platform-checkbox {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1.5px solid rgba(232,213,168,0.55);
+  background: rgba(0,0,0,0.4);
+  transition: 0.25s ease;
+}
+
+.platform-card.selected .platform-checkbox {
+  background: linear-gradient(145deg, #2A7A5E, #1e5947);
+  border-color: rgba(232,213,168,0.85);
+  box-shadow: 0 0 6px rgba(232,213,168,0.25);
+}
+
+/* Checkmark icon animation */
+.platform-card.selected .platform-checkbox svg {
+  transform: scale(1);
+  opacity: 1;
+}
+
+.platform-checkbox svg {
+  transform: scale(0.85);
+  opacity: 0.7;
+  transition: 0.15s ease-in-out;
+}
+
+/* -----------------------------
+   Buttons — Luxury Hotel Glow
+------------------------------ */
+
+.select-all-platforms-btn {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(232,213,168,0.45);
+  color: var(--text-gold);
+  border-radius: 12px;
+  padding: 14px 20px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  width: 100%;
+  margin-top: 20px;
+  backdrop-filter: blur(12px);
+
+  transition: 0.25s ease;
+  box-shadow: 0 0 12px rgba(232,213,168,0.15);
+}
+
+.select-all-platforms-btn:hover {
+  box-shadow: 0 0 20px rgba(232,213,168,0.25);
+  border-color: rgba(232,213,168,0.75);
+}
+
+.continue-btn {
+  background: linear-gradient(135deg, #2A7A5E, #245d49);
+  color: #fff;
+  border-radius: 14px;
+  padding: 15px 22px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  width: 100%;
+  box-shadow: 0 4px 16px rgba(42,122,94,0.32);
+  transition: 0.25s ease;
+  margin-top: 14px;
+}
+
+.continue-btn:hover {
+  box-shadow: 0 6px 26px rgba(42,122,94,0.45);
+  transform: translateY(-1px);
+}
+
+/* -----------------------------
+   📱 MOBILE RESIZE (max 640px)
+------------------------------ */
+
+@media (max-width: 640px) {
+  .welcome-container {
+    padding-top: 28px;
+  }
+
+  .platform-grid {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+
+  .platform-card {
+    padding: 16px 18px;
+    border-radius: 14px;
+  }
+
+  .platform-checkbox {
+    width: 20px;
+    height: 20px;
+  }
+
+  .welcome-title {
+    font-size: 1.65rem;
+    margin-bottom: 10px;
+  }
+
+  .continue-btn,
+  .select-all-platforms-btn {
+    font-size: 1rem;
+    padding: 14px;
+  }
+}
+
 /* -----------------------------------------
    📱 LUXURY MOBILE SAFETY NET — ALWAYS PRETTY
 ----------------------------------------- */
@@ -804,5 +1001,163 @@
 
   body {
     overflow-x: hidden !important;
+  }
+}
+
+/* -------------------------------------------
+   🌙 REPOST ROCKET — LUXURY HOTEL UPGRADE
+   Glimmer, Soft Gold, Shadow Depth, Boutique Glow
+-------------------------------------------- */
+
+:root {
+  --lacquer-black: #0b0b0c;
+  --lacquer-black-gloss: rgba(255,255,255,0.06);
+  --champagne: #f4e7c8;
+  --champagne-soft: rgba(244,231,200,0.6);
+  --champagne-glow: rgba(244,231,200,0.32);
+  --panel-green: #0f231e;
+}
+
+/* MAIN WRAPPER */
+.welcome-wrapper {
+  background: var(--lacquer-black);
+  padding: 2.2rem 1.5rem 2rem;
+  border-radius: 28px;
+  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow:
+    0 0 60px rgba(0,0,0,0.7),
+    inset 0 1px 0 var(--lacquer-black-gloss);
+  margin-bottom: 16px;
+}
+
+/* HEADER */
+.welcome-title {
+  font-family: "Playfair Display", serif;
+  font-size: 2.4rem;
+  color: var(--champagne);
+  text-align: center;
+  margin-bottom: 0.6rem;
+  letter-spacing: 0.5px;
+}
+
+.welcome-sub {
+  font-size: 1.1rem;
+  color: var(--champagne-soft);
+  text-align: center;
+  line-height: 1.45;
+  margin-bottom: 2rem;
+}
+
+/* DISCLAIMER TEXT */
+.welcome-disclaimer {
+  font-size: 0.95rem;
+  text-align: center;
+  color: var(--champagne-soft);
+  margin-bottom: 2rem;
+}
+
+/* === LUXURY PLATFORM CARDS === */
+.platform-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* CARD */
+.platform-card {
+  background: var(--panel-green);
+  border-radius: 22px;
+  padding: 1.35rem 1.1rem;
+  border: 1px solid rgba(255,255,255,0.04);
+  position: relative;
+
+  box-shadow:
+    0 0 25px rgba(0,0,0,0.45),
+    inset 0 0 0 1px rgba(255,255,255,0.04);
+  
+  transition: transform 0.2s ease, box-shadow 0.25s ease;
+}
+
+@media (hover: hover) {
+  .platform-card:hover {
+    transform: translateY(-3px);
+    box-shadow:
+      0 6px 32px rgba(0,0,0,0.55),
+      0 0 15px var(--champagne-glow);
+  }
+}
+
+.platform-card.selected {
+  border: 1px solid var(--champagne);
+  box-shadow:
+    0 0 18px var(--champagne-glow),
+    inset 0 0 0 1px var(--champagne-soft);
+}
+
+.platform-title {
+  color: white;
+  font-size: 1.35rem;
+  font-weight: 500;
+  text-align: center;
+}
+
+.platform-check {
+  height: 34px;
+  width: 34px;
+  border-radius: 50%;
+  background: var(--lacquer-black);
+  border: 2px solid var(--champagne);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0.9rem auto 0;
+
+  box-shadow:
+    0 0 10px var(--champagne-glow),
+    inset 0 0 0 1px var(--champagne-soft);
+}
+
+.platform-check svg {
+  color: var(--champagne);
+  width: 18px;
+  height: 18px;
+}
+
+/* BUTTONS */
+.luxury-button {
+  background: linear-gradient(
+    180deg,
+    var(--panel-green),
+    #07150f
+  );
+  color: var(--champagne);
+  padding: 1rem 1.4rem;
+  font-size: 1.25rem;
+  border-radius: 18px;
+  width: 100%;
+  text-align: center;
+  border: 1px solid var(--champagne-soft);
+  margin-top: 2rem;
+  letter-spacing: 0.3px;
+
+  box-shadow:
+    0 0 25px rgba(0,0,0,0.55),
+    inset 0 0 0 1px rgba(255,255,255,0.04);
+}
+
+.luxury-button:hover {
+  box-shadow: 0 0 26px var(--champagne-glow);
+}
+
+/* MOBILE REFINEMENT */
+@media (max-width: 640px) {
+  .welcome-wrapper {
+    padding: 2rem 1.1rem;
+  }
+  .platform-card {
+    padding: 1.25rem;
+  }
+  .platform-title {
+    font-size: 1.25rem;
   }
 }

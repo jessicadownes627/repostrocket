@@ -64,6 +64,8 @@ body {
   font-size: 16px;
   line-height: var(--lh-normal);
   letter-spacing: var(--track-medium);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* ---------------------------
@@ -77,6 +79,7 @@ h1, h2, h3, h4 {
   color: var(--text-gold);
   letter-spacing: var(--track-tight);
   line-height: var(--lh-tight);
+  text-shadow: 0 0 6px rgba(232,213,168,0.08);
 }
 
 h1 { font-size: 2rem; }
@@ -312,6 +315,31 @@ button {
   background: radial-gradient(circle, rgba(0, 255, 120, 0.35), transparent 70%);
   filter: blur(20px);
   pointer-events: none;
+}
+
+/* -------------------------------------------
+   🌟 GLOBAL LUXURY FINISHING TOUCHES
+   Soft Champagne Glow + Elevated Visual Depth
+-------------------------------------------- */
+
+/* Very subtle vignette for depth */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at center, transparent 35%, rgba(0,0,0,0.45) 100%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Micro-transition for all interactive items */
+button, .platform-card, .platform-checkbox {
+  transition: all 0.25s ease;
+}
+
+/* Smooth scrolling everywhere */
+html {
+  scroll-behavior: smooth;
 }
 
 /* -----------------------------------------------

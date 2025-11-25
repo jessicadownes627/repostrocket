@@ -48,7 +48,7 @@ body {
   padding: 26px 24px;
   position: relative;
   backdrop-filter: blur(14px);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .create-shell::before {
@@ -124,14 +124,23 @@ body {
   overflow: visible;
 }
 
+.listing-step-container,
+.section-box,
+.scroll-wrapper {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .section-wrapper {
   background: rgba(15,17,18,0.55);
   border: 1px solid rgba(232,213,168,0.12);
   border-radius: 16px;
-  padding: 26px 24px;
+  padding: 32px 28px !important;
   box-shadow: 0 0 16px rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(6px);
   margin-bottom: 42px;
+  overflow: visible !important;
+  box-sizing: border-box !important;
 }
 
 .section-head {
@@ -167,6 +176,15 @@ body {
   text-align: center;
 }
 
+/* Ensure inner inputs don't exceed width */
+.section-wrapper input,
+.section-wrapper textarea,
+.section-wrapper select {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
 .field {
   display: grid;
   gap: 8px;
@@ -188,7 +206,7 @@ body {
   padding: 12px;
   background: var(--bg-2);
   color: var(--text-main);
-  font-size: 15px;
+  font-size: 16px;
   box-sizing: border-box;
 }
 
@@ -197,6 +215,12 @@ body {
   resize: vertical;
   margin-top: 10px;
   margin-bottom: 20px;
+}
+
+.title-input,
+.description-input {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .description-wrap {
@@ -496,21 +520,21 @@ body {
 }
 
 .autofill-btn {
-  background: var(--btn-primary-bg);
-  color: var(--btn-primary-text);
-  border: none;
-  box-shadow: 0 0 22px rgba(0,0,0,0.35);
+  background: linear-gradient(180deg, #0d2016, #163528);
+  color: #e7d7b6 !important;
+  border: 1px solid rgba(213,199,161,0.35);
+  box-shadow: 0 0 20px rgba(213,199,161,0.35);
   border-radius: 14px;
   padding: 12px 16px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.2px;
   cursor: pointer;
   transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
 }
 
 .autofill-btn:hover:enabled {
-  transform: translateY(-1px);
-  box-shadow: 0 0 22px rgba(0,0,0,0.45);
+  transform: translateY(-2px);
+  box-shadow: 0 0 22px rgba(213,199,161,0.45);
 }
 
 .autofill-btn:disabled {
@@ -744,8 +768,9 @@ body {
 /* Photo slot box */
 /* Premium photo slots */
 .photo-slot {
+  position: relative;
   width: 100%;
-  height: 180px;
+  height: 260px;
   border-radius: 14px;
   background: rgba(10,11,12,0.85);
   display: flex;
@@ -989,6 +1014,489 @@ body {
 .ai-modal-card p {
   margin: 4px 0;
   color: #cdeedc;
+}
+
+/* ——— GLOBAL LUXURY FORM RESET ——— */
+.lux-form-block {
+  padding: 28px 22px;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
+  border-radius: 20px;
+  border: 1px solid rgba(212, 185, 120, 0.16);
+  box-shadow: 0 0 20px rgba(212, 185, 120, 0.05);
+}
+
+/* ——— SECTION TITLES ——— */
+.lux-form-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 26px;
+  letter-spacing: 0.04em;
+  text-align: center;
+  margin-bottom: 16px;
+  color: #E8D6A9;
+  text-shadow: 0px 0px 12px rgba(212,185,120,0.18);
+}
+
+/* thin gold divider */
+.lux-divider {
+  height: 1px;
+  width: 70%;
+  margin: 12px auto 22px auto;
+  background: linear-gradient(
+      to right,
+      transparent,
+      rgba(212,185,120,0.45),
+      transparent
+  );
+}
+
+/* ——— LABELS ——— */
+.lux-label {
+  font-size: 15px;
+  color: #F2E9D2;
+  letter-spacing: 0.3px;
+  margin-bottom: 10px !important;
+  display: block;
+  text-shadow: 0px 0px 6px rgba(212,185,120,0.08);
+}
+
+/* ——— INPUT WRAPPER ——— */
+.lux-input-wrapper {
+  margin-top: 14px !important;
+  margin-bottom: 24px !important;
+}
+
+/* ——— INPUTS ——— */
+.lux-input, .lux-textarea {
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 16px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.10);
+  color: #fff;
+  transition: all 0.25s ease;
+}
+
+.lux-input:focus, .lux-textarea:focus {
+  border-color: rgba(212,185,120,0.45);
+  box-shadow: 0 0 16px rgba(212,185,120,0.25);
+  background: rgba(255,255,255,0.08);
+  outline: none;
+}
+
+/* prevents title label from touching input on mobile */
+@media (max-width: 600px) {
+  .lux-label {
+    margin-bottom: 14px !important;
+  }
+  .lux-input-wrapper {
+    margin-top: 18px !important;
+  }
+}
+
+/* ——— BUTTON ELEGANCE ——— */
+.lux-btn {
+  background: linear-gradient(
+    to bottom,
+    rgba(20,50,30,1),
+    rgba(12,28,20,1)
+  );
+  border: 1px solid rgba(212,185,120,0.25);
+  padding: 14px 22px;
+  border-radius: 16px;
+  color: #fff;
+  font-size: 17px;
+  letter-spacing: 0.5px;
+  transition: 0.25s ease;
+}
+
+.lux-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 22px rgba(212,185,120,0.25);
+}
+
+/* ============================
+GLOBAL LUXURY FORM STYLING
+============================ */
+input, textarea, select {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  margin-top: 0.6rem !important;
+  margin-bottom: 1.6rem !important;
+  background: rgba(20, 40, 30, 0.65);
+  color: #fdfbf7;
+  border: 1px solid rgba(224, 200, 160, 0.35);
+  border-radius: 10px;
+  font-size: 1rem;
+  backdrop-filter: blur(10px);
+}
+
+label {
+  margin-top: 1rem;
+  margin-bottom: 0.3rem;
+  display: block;
+  font-family: "Cormorant Garamond", serif;
+  color: #e7d7b6;
+  font-size: 1.15rem;
+  letter-spacing: 0.4px;
+}
+
+/* ============================
+AI AUTO-FILL BUTTON
+============================ */
+.auto-fill-btn {
+  background: linear-gradient(180deg, #0b281b, #163528);
+  color: #d5c7a1;
+  border: 1px solid rgba(213,199,161,0.3);
+  padding: 0.85rem 1.4rem;
+  border-radius: 12px;
+  font-size: 1rem;
+  margin: 1.4rem auto 1.6rem auto;
+  display: block;
+  width: fit-content;
+  transition: all 0.25s ease;
+}
+.auto-fill-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 18px rgba(213,199,161,0.45);
+}
+
+/* ============================
+NEXT: PLATFORM VERSIONS (VISUALS)
+============================ */
+.next-step-wrapper {
+  margin-top: 3rem;
+  text-align: center;
+}
+
+.next-step-label {
+  font-family: "Cormorant Garamond", serif;
+  font-size: 1.4rem;
+  color: #e7d7b6;
+  margin-bottom: 0.35rem;
+  letter-spacing: 0.5px;
+}
+
+.next-step-sub {
+  font-size: 0.95rem;
+  color: #aaa;
+  letter-spacing: 0.2px;
+}
+
+/* ============================
+SHIPPING TIP BOX (STYLING ONLY)
+============================ */
+.shipping-tip-box {
+  margin-top: 1.5rem;
+  background: rgba(18, 22, 20, 0.7);
+  border: 1px solid rgba(200,180,140,0.25);
+  border-radius: 14px;
+  padding: 1.2rem 1.4rem;
+  color: #e8e3d8;
+}
+
+.shipping-tip-box ul {
+  margin-top: 0.6rem;
+  margin-bottom: 0.4rem;
+  padding-left: 1.2rem;
+}
+
+.shipping-tip-box li {
+  margin-bottom: 0.4rem;
+  font-size: 0.95rem;
+}
+
+/* ============================================
+NEXT STEP (Platform Versions) — LUXURY VERSION
+============================================ */
+.next-step-wrapper {
+  margin-top: 2.6rem !important;
+  text-align: center;
+}
+
+.next-step-label {
+  font-family: "Cormorant Garamond", serif !important;
+  font-size: 1.3rem !important;
+  letter-spacing: 0.5px;
+  color: #e7d7b6 !important;
+  margin-bottom: 0.35rem !important;
+  display: block;
+}
+
+.next-step-sub {
+  font-size: 0.95rem !important;
+  color: #cfc8b9 !important;
+  letter-spacing: 0.2px;
+  display: block;
+  margin-top: 0.2rem !important;
+}
+
+/* Remove emoji → optional */
+.next-step-label .emoji {
+  display: none !important;
+}
+/* ============================
+FIX: AI AUTO-FILL BUTTON (LUXURY VERSION)
+============================ */
+
+.smart-fill-section {
+  margin-top: 2.4rem;
+  margin-bottom: 2.4rem;
+  text-align: center;
+}
+
+.smart-fill-section h3 {
+  letter-spacing: 0.8px;
+  margin-bottom: 0.4rem;
+  font-family: "Cormorant Garamond", serif;
+  color: #e7d7b6;
+  font-size: 1.35rem;
+}
+
+.smart-fill-section p {
+  margin-bottom: 1.2rem;
+  color: #cfc8b9;
+  font-size: 0.95rem;
+}
+
+/* REPLACES THE DEFAULT GREEN BUTTON */
+.auto-fill-btn {
+  background: linear-gradient(180deg, #0d2016, #163528);
+  color: #e7d7b6 !important;
+  border: 1px solid rgba(213,199,161,0.35);
+  padding: 0.9rem 1.6rem;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: all 0.25s ease;
+}
+
+/* Remove emoji if you want — just uncomment:
+.auto-fill-btn span:first-child {
+  display: none;
+}
+*/
+
+.auto-fill-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 20px rgba(213,199,161,0.55);
+}
+
+/* ============================
+FIX: INPUT BOXES IN LISTING DETAILS
+============================ */
+
+.listing-details-section input,
+.listing-details-section textarea,
+.listing-details-section select {
+  background: rgba(20, 40, 30, 0.65) !important;
+  border: 1px solid rgba(224, 200, 160, 0.35) !important;
+  color: #fdfbf7 !important;
+  border-radius: 12px !important;
+  padding: 0.9rem 1.1rem !important;
+  font-size: 1rem !important;
+  backdrop-filter: blur(10px) !important;
+  margin-top: 0.5rem !important;
+}
+
+/* Increase spacing between label + input */
+.listing-details-section label {
+  margin-bottom: 0.35rem !important;
+}
+
+/* FIX: Input clipping on right side */
+.listing-details-section input,
+.listing-details-section textarea {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  margin-right: 0 !important;
+}
+
+/* Fix parent wrapper clipping */
+.listing-details-section .form-row,
+.listing-details-section .input-wrapper,
+.listing-details-section .field-wrapper {
+  overflow: visible !important;
+  padding-right: 0 !important;
+}
+
+/* ============================
+FIX: TAG PILLS (REMOVE MINT, USE WHITE)
+============================ */
+
+.tag-pill,
+.style-tag,
+.category-pill {
+  background: rgba(0,0,0,0.2) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255,255,255,0.45) !important;
+  border-radius: 12px !important;
+  padding: 0.35rem 0.75rem !important;
+  font-size: 0.85rem !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.3px;
+  transition: all 0.2s ease;
+}
+
+/* Hover — soft gold glow */
+.tag-pill:hover,
+.style-tag:hover,
+.category-pill:hover {
+  border-color: rgba(224,200,160,0.6) !important;
+  box-shadow: 0 0 10px rgba(224,200,160,0.25);
+}
+
+/* Active state — clear visual selection */
+.tag-pill.active,
+.style-tag.active,
+.category-pill.active {
+  background: rgba(224,200,160,0.12) !important;
+  border-color: rgba(224,200,160,0.75) !important;
+  color: #fff !important;
+  box-shadow: 0 0 16px rgba(224,200,160,0.28);
+  font-weight: 600 !important;
+}
+
+/* ============================================
+CATEGORY BUTTONS  (category-pill)
+============================================ */
+.category-pill {
+  background: rgba(0,0,0,0.25) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255,255,255,0.4) !important;
+  border-radius: 12px !important;
+  padding: 0.55rem 1.1rem !important;
+  font-size: 0.95rem !important;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+/* On hover */
+.category-pill:hover {
+  border-color: rgba(224,200,160,0.6) !important;
+  box-shadow: 0 0 12px rgba(224,200,160,0.25);
+}
+
+/* Selected (active) category */
+.category-pill.active {
+  background: linear-gradient(180deg, #0d2016, #163528) !important;
+  color: #e7d7b6 !important;
+  border: 1px solid rgba(224,200,160,0.55) !important;
+  box-shadow: 0 0 14px rgba(224,200,160,0.4);
+}
+
+/* Remove default blue outline */
+.category-pill:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* ============================================
+CONDITION BUTTONS  (tap-btn)
+============================================ */
+.tap-btn {
+  background: rgba(0,0,0,0.28) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255,255,255,0.35) !important;
+  border-radius: 12px !important;
+  padding: 0.75rem 1.4rem !important;
+  font-size: 1rem !important;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  backdrop-filter: blur(8px);
+}
+
+/* Hover */
+.tap-btn:hover {
+  border-color: rgba(224,200,160,0.55) !important;
+  box-shadow: 0 0 14px rgba(224,200,160,0.25);
+}
+
+/* Active (selected condition) */
+.tap-btn.active {
+  background: linear-gradient(180deg, #0d2016, #163528) !important;
+  color: #e7d7b6 !important;
+  border-color: rgba(224,200,160,0.75) !important;
+  box-shadow: 0 0 18px rgba(224,200,160,0.45);
+}
+
+.tap-btn:focus {
+  outline: none !important;
+}
+
+/* ============================================
+STYLE TAG PILLS  (tag-pill)
+============================================ */
+.tag-pill {
+  background: rgba(0,0,0,0.22) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255,255,255,0.35) !important;
+  border-radius: 12px !important;
+  padding: 0.4rem 0.9rem !important;
+  font-size: 0.85rem !important;
+  letter-spacing: 0.3px !important;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+/* Hover */
+.tag-pill:hover {
+  border-color: rgba(224,200,160,0.55) !important;
+  box-shadow: 0 0 10px rgba(224,200,160,0.25);
+}
+
+/* Active tag */
+.tag-pill.active {
+  background: rgba(224,200,160,0.15) !important;
+  border-color: rgba(224,200,160,0.85) !important;
+  color: #e7d7b6 !important;
+  box-shadow: 0 0 16px rgba(224,200,160,0.35);
+}
+
+.tag-pill:focus {
+  outline: none !important;
+}
+
+/* REMOVE embedded checkmarks in text */
+.tag-pill.active {
+  position: relative;
+  padding-right: 1.8rem !important;
+}
+
+/* Add a PERFECT checkmark */
+.tag-pill.active::after {
+  content: "✓";
+  font-size: 0.9rem;
+  color: #e7d7b6;
+  position: absolute;
+  right: 0.65rem;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.95;
+}
+/* Add elegant spacing between labels and inputs */
+.form-label,
+.listing-details-section h3,
+.listing-details-section label {
+  margin-bottom: 8px !important;
+  display: block;
+}
+
+/* Add top spacing above each label block */
+.input-block,
+.field-block,
+.title-input-wrapper {
+  margin-top: 16px !important;
+}
+
+/* Ensure the input isn’t glued to the next section */
+input,
+textarea {
+  margin-bottom: 20px !important;
 }
 
 .ai-modal-actions {
@@ -1275,6 +1783,25 @@ body {
 
 .photo-slot img {
   animation: photoAppear 0.35s ease forwards;
+}
+
+.photo-preview-wrapper {
+  width: 100%;
+  height: 260px;
+  border-radius: 22px;
+  overflow: hidden;
+  background: #0d0f10;
+  border: 1px solid rgba(255, 215, 130, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.photo-preview-wrapper img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 22px;
 }
 
 /* Tap ripple effect */
