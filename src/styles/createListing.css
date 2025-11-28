@@ -363,6 +363,462 @@ body {
   transform: translateY(-2px);
 }
 
+/* ===== Luxe Gold Review Button — Final ===== */
+.review-btn-luxe {
+  width: 100%;
+  padding: 1rem 1.25rem;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(32, 28, 22, 0.65), rgba(14, 12, 10, 0.8));
+  border: 1px solid rgba(255, 228, 180, 0.35);
+  color: #f2e6d0;
+  font-size: 1.05rem;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  font-family: "Inter", sans-serif;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 0 20px rgba(255, 222, 168, 0.08);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  cursor: pointer;
+}
+
+.pulse-once {
+  position: relative;
+  overflow: hidden;
+}
+
+.pulse-once::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -120%;
+  width: 120%;
+  height: 100%;
+  background: linear-gradient(
+    120deg,
+    rgba(255,245,220,0) 0%,
+    rgba(255,245,220,0.5) 40%,
+    rgba(255,245,220,0) 80%
+  );
+  transform: skewX(-20deg);
+  animation: shimmer-once 1.2s ease-out 0.4s forwards;
+}
+
+@keyframes shimmer-once {
+  0% { left: -120%; }
+  100% { left: 140%; }
+}
+
+.review-microcopy {
+  font-size: 0.78rem;
+  color: rgba(255, 240, 215, 0.55);
+  margin-top: 0.35rem;
+  text-align: center;
+  letter-spacing: 0.25px;
+  font-family: "Inter", sans-serif;
+}
+
+/* =============================== */
+/* STEP 2 MASTER POLISH — SPACING  */
+/* =============================== */
+
+/* Add universal breathing room to every section except photos */
+.spaced-section {
+  margin-top: 2.75rem;
+}
+
+/* Shipping row spacing */
+.shipping-pill-row-spaced {
+  margin-bottom: 1.25rem;
+}
+
+/* Shipping card tweaks */
+.shipping-tips-card {
+  background: rgba(0,0,0,0.55);
+  border: 1px solid rgba(255, 215, 0, 0.21);
+  padding: 1.5rem 1.25rem;
+  margin-top: 0.5rem;
+  border-radius: 12px;
+}
+
+/* Fix tips list spacing */
+.tips-list {
+  margin: 0.75rem 0 1.25rem 1.25rem;
+  line-height: 1.45;
+}
+
+/* Microcopy spacing */
+.tips-disclaimer {
+  opacity: 0.8;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+/* Section titles & spacing */
+.section-title {
+  margin-bottom: 0.35rem;
+}
+
+.section-subtitle {
+  margin-bottom: 0.75rem;
+}
+
+/* AI review block spacing */
+.autofill-row {
+  margin-top: 0.75rem;
+}
+
+/* Optimize Listing microcopy */
+.review-microcopy {
+  margin-top: 0.35rem;
+  margin-bottom: 0.5rem;
+  opacity: 0.8;
+}
+
+/* Pricing microcopy */
+.price-micro {
+  margin-top: 0.65rem;
+}
+
+/* Create page bottom buttons */
+.actions-spaced {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  margin-top: 2rem;
+}
+
+/* Adjust bottom CTA spacing */
+.actions-spaced .create-cta {
+  margin-top: 0;
+}
+
+/* Kill stray whitespace after sections */
+.section-wrapper:last-of-type {
+  padding-bottom: 1rem;
+}
+
+/* Section spacing consistency */
+.section-wrapper {
+  margin-bottom: 28px;
+}
+
+.spaced-section {
+  margin-top: 20px;
+  margin-bottom: 32px;
+}
+
+.actions-spaced {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 24px;
+}
+
+/* CTA buttons */
+.cta-button {
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--charcoal-soft);
+  border: 1px solid var(--emerald-dim);
+  color: #d9ffe7;
+  font-size: 1rem;
+  transition: var(--transition);
+}
+
+.cta-button:hover {
+  box-shadow: 0 0 var(--glow-radius) var(--emerald-soft);
+  border-color: var(--emerald-soft);
+}
+
+/* Textarea polish */
+textarea[readonly],
+.field-textarea {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--emerald-dim);
+  color: #eafff5;
+  padding: 12px;
+  border-radius: 10px;
+  min-height: 90px;
+}
+
+/* Smart fill buttons */
+.smart-fill-btn {
+  background: var(--charcoal-soft);
+  border: 1px solid var(--emerald-dim);
+  padding: 12px 14px;
+  border-radius: 12px;
+  color: #d2ffe4;
+  font-weight: 500;
+}
+
+.smart-fill-btn:hover {
+  border-color: var(--emerald-soft);
+}
+
+/* Shipping pills */
+.shipping-pill {
+  border-radius: 20px;
+  border: 1px solid var(--emerald-dim);
+  padding: 8px 18px;
+  color: #d7ffe8;
+  background: var(--charcoal-dim);
+  transition: var(--transition);
+}
+
+.shipping-pill.active {
+  background: rgba(0, 255, 140, 0.12);
+  border-color: var(--emerald-soft);
+}
+
+.shipping-pill:hover {
+  box-shadow: 0 0 10px var(--emerald-soft);
+}
+
+/* Tips card */
+.shipping-tips-card {
+  border: 1px solid var(--emerald-dim);
+  padding: 18px;
+  border-radius: var(--card-radius);
+  background: var(--charcoal-dim);
+}
+
+.tips-title {
+  color: #baffd9;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+/* Microcopy fix */
+.tips-disclaimer {
+  margin-top: 10px;
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+/* SMART FILL – LUXE STACK */
+.smartfill-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-top: 20px;
+}
+
+.smartfill-btn {
+  position: relative;
+  width: 100%;
+  padding: 16px 20px;
+  text-align: left;
+  border-radius: 14px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #f8f8f8;
+  background: #0d0f11;
+  border: 1px solid rgba(255, 215, 130, 0.25);
+  box-shadow: 0 0 8px rgba(0,0,0,0.35);
+  transition: 0.25s ease;
+}
+
+.smartfill-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 12px rgba(255, 215, 130, 0.28);
+}
+
+/* Sub-text */
+.smartfill-sub {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 400;
+  margin-top: 4px;
+  opacity: 0.8;
+}
+
+/* Magic Fill (Gold Button) */
+.gold-fill-btn {
+  background: linear-gradient(to right, #d7b07e, #f2d6a0);
+  color: #1a1a1a;
+  border: none;
+}
+
+/* Full AI Auto-Fill (Emerald Button) */
+.emerald-fill-btn {
+  background: linear-gradient(135deg, #063225, #0f5c44);
+  border: 1px solid rgba(34, 255, 190, 0.25);
+}
+
+/* Review Button */
+.review-fill-btn {
+  background: linear-gradient(135deg, #18100d, #3a2b22);
+  border: 1px solid rgba(255, 215, 130, 0.35);
+}
+
+.review-powered {
+  position: absolute;
+  right: 18px;
+  bottom: 8px;
+  font-size: 0.7rem;
+  opacity: 0.55;
+}
+
+/* Clear Button */
+.clear-fill-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  opacity: 0.7;
+}
+
+.clear-fill-btn:hover {
+  opacity: 1;
+}
+
+/* ————————————————————————————————
+   STEP 2 • CTA BUTTONS (FINAL LUXE SET)
+   ———————————————————————————————— */
+
+.cta-btn {
+  width: 100%;
+  padding: 14px 18px;
+  margin: 10px 0;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 12px;
+  transition: all 0.25s ease;
+  cursor: pointer;
+  text-align: center;
+}
+
+.cta-btn-outline {
+  background: transparent;
+  border: 1px solid rgba(255, 215, 130, 0.45);
+  color: rgba(255, 215, 130, 0.9);
+}
+
+.cta-btn-outline:hover {
+  border-color: rgba(255, 215, 130, 0.75);
+  box-shadow: 0 0 12px rgba(255, 215, 130, 0.4);
+  transform: translateY(-2px);
+}
+
+.cta-btn-primary {
+  background: linear-gradient(180deg, #083a2f, #042a22);
+  color: #fff;
+  border: 1px solid rgba(0, 255, 150, 0.25);
+  box-shadow: 0 0 12px rgba(0, 255, 150, 0.25) inset;
+}
+
+.cta-btn-primary:hover {
+  box-shadow: 0 0 20px rgba(0, 255, 150, 0.45);
+  transform: translateY(-2px);
+}
+
+.discard-draft {
+  text-align: center;
+  font-size: 0.9rem;
+  opacity: 0.75;
+  margin-bottom: 10px;
+}
+
+/* ============================= */
+/* SHIPPING PILL — LUXE VERSION */
+/* ============================= */
+
+.shipping-pill {
+  background: #0b0f14;
+  color: #e7e2d9;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 0.5rem 1.25rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  transition: all 0.25s ease;
+}
+
+/* ACTIVE — EMERALD + SOFT GOLD */
+.shipping-pill.active {
+  background: radial-gradient(circle at center, #123524, #0b0f14);
+  border-color: rgba(255, 223, 156, 0.9) !important;
+  box-shadow:
+    0 0 10px rgba(18, 53, 36, 0.7),
+    inset 0 0 8px rgba(255, 223, 156, 0.25);
+  color: #fffdf6;
+}
+
+/* INACTIVE — TRUE NEUTRAL */
+.shipping-pill:not(.active) {
+  background: #0b0f14 !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  box-shadow: none !important;
+  color: #e7e2d9 !important;
+}
+
+/* HOVER — LIGHT GOLD POLISH */
+@media (hover:hover) {
+  .shipping-pill:not(.active):hover {
+    border-color: rgba(255, 223, 156, 0.4);
+    color: #fffdf6;
+  }
+}
+
+/* SHIPPING PILL • FINAL OVERRIDE (FIXED + LUXE) */
+.shipping-pill {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 215, 0, 0.25);
+  color: #fff;
+  padding: 10px 18px;
+  border-radius: 14px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Hover */
+.shipping-pill:hover {
+  border-color: rgba(255, 215, 0, 0.5);
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.18);
+}
+
+/* ACTIVE — now ACTUALLY overrides everything */
+.shipping-pill.active {
+  background: rgba(255, 215, 0, 0.22);
+  border-color: rgba(255, 215, 0, 0.85);
+  box-shadow: 0 0 12px rgba(255, 215, 0, 0.35);
+  color: #fff;
+}
+
+
+.pulse-once {
+  position: relative;
+  overflow: hidden;
+}
+
+.pulse-once::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -120%;
+  width: 120%;
+  height: 100%;
+  background: linear-gradient(
+    120deg,
+    rgba(255, 245, 220, 0) 0%,
+    rgba(255, 245, 220, 0.5) 40%,
+    rgba(255, 245, 220, 0) 80%
+  );
+  transform: skewX(-20deg);
+  animation: shimmer-once 1.2s ease-out 0.4s forwards;
+}
+
+@keyframes shimmer-once {
+  0% {
+    left: -120%;
+  }
+  100% {
+    left: 140%;
+  }
+}
+
+
 .photo-slot.filled .slot-img {
   position: absolute;
   inset: 0;
@@ -615,6 +1071,12 @@ body {
 /* ULTRA SHIPPING — PREMIUM UI    */
 /* ------------------------------ */
 
+.shipping-pill-row,
+.shipping-pill-row-spaced {
+  overflow: visible !important;
+  padding: 6px 2px;
+}
+
 .shipping-pill-row {
   display: flex;
   gap: 12px;
@@ -643,6 +1105,44 @@ body {
   border-color: var(--accent-emerald);
   color: #fff;
   box-shadow: inset 0 0 12px var(--accent-emerald-soft);
+}
+
+.shipping-pill.active {
+  background: rgba(10, 40, 20, 0.85);
+  border-color: gold;
+  box-shadow:
+    0 0 8px rgba(255, 215, 0, 0.6),
+    0 0 16px rgba(255, 215, 0, 0.3);
+  transform: translateY(-1px);
+}
+
+.shipping-pill:not(.active) {
+  opacity: 0.85;
+}
+
+.shipping-pill:not(.active):hover {
+  opacity: 1;
+}
+
+/* FIX: Only active shipping pill gets border + glow */
+.shipping-pill {
+  background: #0b0f14;
+  color: #e7e2d9;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  transition: all 0.25s ease;
+}
+
+.shipping-pill.active {
+  border: 1px solid rgba(255, 215, 0, 0.9) !important;
+  background: radial-gradient(circle at center, #0f1d16, #0b0f14);
+  box-shadow: 0 0 12px rgba(255, 215, 0, 0.45), inset 0 0 8px rgba(255, 215, 0, 0.25);
+  color: #fffdf6;
+}
+
+/* FIX: Non-active pills must lose any glow */
+.shipping-pill:not(.active) {
+  box-shadow: none !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
 }
 
 /* Tips Card */
@@ -1236,6 +1736,7 @@ NEXT STEP (Platform Versions) — LUXURY VERSION
 .next-step-label .emoji {
   display: none !important;
 }
+
 /* ============================
 FIX: AI AUTO-FILL BUTTON (LUXURY VERSION)
 ============================ */
@@ -1978,4 +2479,408 @@ textarea {
     rgba(255,255,255,0.05),
     transparent 60%
   );
+}
+
+/* ——— LUXURY MAGIC FILL BUTTON ——— */
+.lux-ai-box {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.lux-magic-btn {
+  background: linear-gradient(135deg, #c6a676, #e7d7b6);
+  color: #1a1a1a;
+  padding: 1rem 1.5rem;
+  border-radius: 14px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  width: 100%;
+  box-shadow:
+    0 4px 10px rgba(0,0,0,0.25),
+    0 0 20px rgba(230,210,190,0.35);
+}
+
+.lux-magic-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow:
+    0 8px 18px rgba(0,0,0,0.35),
+    0 0 30px rgba(240,220,190,0.45);
+}
+
+.lux-magic-btn:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.lux-ai-hint {
+  font-size: 0.85rem;
+  opacity: 0.85;
+  margin-top: 0.35rem;
+}
+
+/* === Luxe Gold Review Button === */
+.review-btn-luxe {
+  width: 100%;
+  padding: 1rem 1.25rem;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(32, 28, 22, 0.65), rgba(14, 12, 10, 0.8));
+  border: 1px solid rgba(255, 228, 180, 0.35);
+  color: #f2e6d0;
+  font-size: 1.05rem;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  font-family: "Inter", sans-serif;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 0 20px rgba(255, 222, 168, 0.08);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  cursor: pointer;
+}
+
+.review-btn-luxe:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 28px rgba(255, 222, 168, 0.18);
+  border-color: rgba(255, 232, 200, 0.55);
+}
+
+/* One-time shimmer when button enters screen */
+.pulse-once {
+  position: relative;
+  overflow: hidden;
+}
+
+.pulse-once::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -120%;
+  width: 120%;
+  height: 100%;
+  background: linear-gradient(
+    120deg,
+    rgba(255, 245, 220, 0) 0%,
+    rgba(255, 245, 220, 0.5) 40%,
+    rgba(255, 245, 220, 0) 80%
+  );
+  transform: skewX(-20deg);
+  animation: shimmer-once 1.2s ease-out 0.4s forwards;
+}
+
+@keyframes shimmer-once {
+  0% { left: -120%; }
+  100% { left: 140%; }
+}
+
+.review-microcopy {
+  font-size: 0.78rem;
+  color: rgba(255, 240, 215, 0.55);
+  margin-top: 0.35rem;
+  text-align: center;
+  letter-spacing: 0.25px;
+  font-family: "Inter", sans-serif;
+}
+
+/* AI Parsed preview */
+.ai-parse-preview {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  color: #e7d7b6;
+}
+
+.ai-parse-title {
+  margin-bottom: 0.5rem;
+  font-size: 1rem;
+  color: #dcc9a3;
+  font-weight: 500;
+}
+
+.ai-parse-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.35rem 1rem;
+  font-size: 0.9rem;
+}
+
+/* -------------------------------------------
+   LUXE GOLD REVIEW BUTTON
+-------------------------------------------- */
+.ai-review-pill {
+  margin-top: 1rem;
+  padding: 0.9rem 1rem;
+  background: rgba(20, 30, 20, 0.55);
+  border: 1px solid rgba(224, 200, 160, 0.45);
+  border-radius: 12px;
+  color: #e7d7b6;
+  text-align: center;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.ai-review-pill:hover {
+  box-shadow: 0 0 14px rgba(224, 200, 160, 0.45);
+  transform: translateY(-1px);
+}
+
+/* Luxury review trigger */
+.review-btn-luxe {
+  width: 100%;
+  margin-top: 10px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  border: 1.6px solid rgba(232, 213, 168, 0.55);
+  background: linear-gradient(135deg, #0d2016, #163528);
+  color: #e7d7b6;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.45),
+    0 0 14px rgba(232, 213, 168, 0.15) inset;
+  transition: 0.25s ease;
+}
+
+.review-btn-luxe:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.55),
+    0 0 18px rgba(232, 213, 168, 0.28) inset;
+}
+
+.size-grid,
+.bagtype-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(95px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.size-pill {
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,255,180,0.3);
+  background: rgba(0,0,0,0.3);
+  color: #e4fff6;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.size-pill:hover {
+  border-color: rgba(0,255,180,0.8);
+  background: rgba(0,255,180,0.1);
+}
+
+.size-pill.active {
+  border-color: #00ffb4;
+  background: rgba(0,255,180,0.15);
+  box-shadow: 0 0 10px rgba(0,255,180,0.4);
+}
+
+/* --------- Luxe Gold Review Button --------- */
+.review-btn-luxe {
+  width: 100%;
+  padding: 1rem 1.25rem;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(32, 28, 22, 0.65), rgba(14, 12, 10, 0.8));
+  border: 1px solid rgba(255, 228, 180, 0.35);
+  color: #f2e6d0;
+  font-size: 1.05rem;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  font-family: "Inter", sans-serif;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 0 20px rgba(255, 222, 168, 0.08);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  cursor: pointer;
+}
+
+.review-btn-luxe:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 28px rgba(255, 222, 168, 0.18);
+  border-color: rgba(255, 232, 200, 0.55);
+}
+
+.pulse-once {
+  position: relative;
+  overflow: hidden;
+}
+
+.pulse-once::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -120%;
+  width: 120%;
+  height: 100%;
+  background: linear-gradient(
+    120deg,
+    rgba(255, 245, 220, 0) 0%,
+    rgba(255, 245, 220, 0.5) 40%,
+    rgba(255, 245, 220, 0) 80%
+  );
+  transform: skewX(-20deg);
+  animation: shimmer-once 1.2s ease-out 0.4s forwards;
+}
+
+@keyframes shimmer-once {
+  0% {
+    left: -120%;
+  }
+  100% {
+    left: 140%;
+  }
+}
+
+.review-microcopy {
+  font-size: 0.78rem;
+  color: rgba(255, 240, 215, 0.55);
+  margin-top: 0.35rem;
+  text-align: center;
+  letter-spacing: 0.25px;
+  font-family: "Inter", sans-serif;
+}
+.section-wrapper:last-of-type {
+  padding-bottom: 1rem;
+}
+
+/* SMART FILL – LUXE STACK */
+.smartfill-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-top: 20px;
+}
+
+.smartfill-btn {
+  position: relative;
+  width: 100%;
+  padding: 16px 20px;
+  text-align: left;
+  border-radius: 14px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #f8f8f8;
+  background: #0d0f11;
+  border: 1px solid rgba(255, 215, 130, 0.25);
+  box-shadow: 0 0 8px rgba(0,0,0,0.35);
+  transition: 0.25s ease;
+}
+
+.smartfill-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 12px rgba(255, 215, 130, 0.28);
+}
+
+/* Sub-text */
+.smartfill-sub {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 400;
+  margin-top: 4px;
+  opacity: 0.8;
+}
+
+/* Magic Fill (Gold Button) */
+.gold-fill-btn {
+  background: linear-gradient(to right, #d7b07e, #f2d6a0);
+  color: #1a1a1a;
+  border: none;
+}
+
+/* Full AI Auto-Fill (Emerald Button) */
+.emerald-fill-btn {
+  background: linear-gradient(135deg, #063225, #0f5c44);
+  border: 1px solid rgba(34, 255, 190, 0.25);
+}
+
+/* Review Button */
+.review-fill-btn {
+  background: linear-gradient(135deg, #18100d, #3a2b22);
+  border: 1px solid rgba(255, 215, 130, 0.35);
+}
+
+.review-powered {
+  position: absolute;
+  right: 18px;
+  bottom: 8px;
+  font-size: 0.7rem;
+  opacity: 0.55;
+}
+
+/* Clear Button */
+.clear-fill-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  opacity: 0.7;
+}
+
+.clear-fill-btn:hover {
+  opacity: 1;
+}
+
+/* ———————————————————————————————— */
+/* STEP 2 • CTA BUTTONS (FINAL LUXE SET) */
+/* ———————————————————————————————— */
+
+.cta-btn {
+  width: 100%;
+  padding: 14px 18px;
+  margin: 10px 0;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 12px;
+  transition: all 0.25s ease;
+  cursor: pointer;
+  text-align: center;
+}
+
+.cta-btn-outline {
+  background: transparent;
+  border: 1px solid rgba(255, 215, 130, 0.45);
+  color: rgba(255, 215, 130, 0.9);
+}
+
+.cta-btn-outline:hover {
+  border-color: rgba(255, 215, 130, 0.75);
+  box-shadow: 0 0 12px rgba(255, 215, 130, 0.4);
+  transform: translateY(-2px);
+}
+
+.cta-btn-primary {
+  background: linear-gradient(180deg, #083a2f, #042a22);
+  color: #fff;
+  border: 1px solid rgba(0, 255, 150, 0.25);
+  box-shadow: 0 0 12px rgba(0, 255, 150, 0.25) inset;
+}
+
+.cta-btn-primary:hover {
+  box-shadow: 0 0 20px rgba(0, 255, 150, 0.45);
+  transform: translateY(-2px);
+}
+
+.discard-draft {
+  text-align: center;
+  font-size: 0.9rem;
+  opacity: 0.75;
+  margin-bottom: 10px;
+}
+
+/* GLOBAL INPUT FIXES */
+textarea[readOnly],
+input[readOnly] {
+  background: rgba(255,255,255,0.07);
+  color: white;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 10px;
+}
+
+/* Global CTA Regulator */
+.cta-btn {
+  font-family: inherit;
+  letter-spacing: 0.3px;
+  box-sizing: border-box;
 }

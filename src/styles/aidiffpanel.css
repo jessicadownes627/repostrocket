@@ -1,0 +1,94 @@
+.diff-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(10px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 5000;
+}
+
+.diff-card {
+  width: 92%;
+  max-width: 480px;
+  background: rgba(20, 20, 20, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  padding: 1.5rem;
+  color: #eae6dd;
+  box-shadow: 0 0 24px rgba(255, 214, 150, 0.25);
+  animation: fadeInUp 0.35s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.diff-close {
+  background: none;
+  border: none;
+  color: #d5c7b1;
+  font-size: 1.2rem;
+  float: right;
+  cursor: pointer;
+}
+
+.diff-title {
+  font-size: 1.5rem;
+  margin-top: 0.5rem;
+}
+
+.diff-sub {
+  color: #c0b9aa;
+  margin-bottom: 1rem;
+}
+
+.diff-item {
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.diff-field {
+  font-size: 1.1rem;
+  margin-bottom: 0.3rem;
+}
+
+.diff-block {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.diff-label {
+  font-size: 0.8rem;
+  color: #a8a39a;
+}
+
+.diff-label.after {
+  color: #d4c3a8;
+}
+
+.diff-text {
+  font-size: 0.9rem;
+  margin-top: 0.25rem;
+}
+
+.after-text {
+  color: #f0e8dc;
+  font-weight: 600;
+}
+
+.diff-reason {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: #d1c2a4;
+}

@@ -1,14 +1,14 @@
 export const platformLinks = {
-  poshmark: "https://poshmark.com/create-listing",
-  mercari: "https://www.mercari.com/sell",
-  ebay: "https://www.ebay.com/sl/sell",
-  depop: "https://www.depop.com/sell/",
-  "facebook marketplace": "https://www.facebook.com/marketplace/create/item",
-  vinted: "https://www.vinted.com/items/new",
-  kidizen: "https://www.kidizen.com/items/new",
-  etsy: "https://www.etsy.com/your/shops/me/listings/create",
-  shopify: "https://shopify.com",
-  grailed: "https://www.grailed.com/sell",
+  poshmark: { deep: "poshmark://create", web: "https://poshmark.com/create-listing" },
+  mercari: { deep: "mercari://sell", web: "https://www.mercari.com/sell" },
+  ebay: { deep: "ebay://selling/create", web: "https://www.ebay.com/sl/sell" },
+  depop: { deep: "depop://selling/create", web: "https://www.depop.com/sell/" },
+  "facebook marketplace": { deep: "fb://marketplace/sell", web: "https://www.facebook.com/marketplace/create/item" },
+  vinted: { deep: "vinted://sell/item", web: "https://www.vinted.com/items/new" },
+  kidizen: { deep: "", web: "https://www.kidizen.com/items/new" },
+  etsy: { deep: "", web: "https://www.etsy.com/your/shops/me/listings/create" },
+  shopify: { deep: "", web: "https://shopify.com" },
+  grailed: { deep: "", web: "https://www.grailed.com/sell" },
 };
 
 export function formatTagPreview(tags, type) {

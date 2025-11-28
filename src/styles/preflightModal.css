@@ -1,0 +1,149 @@
+/* -------------------------------------------- */
+/*  Repost Rocket — Ultra Luxe Preflight Modal  */
+/*  Emerald Noir Premium                        */
+/* -------------------------------------------- */
+
+.preflight-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(6px);
+  z-index: 9990;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.35s ease forwards;
+}
+
+.preflight-modal {
+  background: var(--charcoal-card);
+  border: 1px solid var(--charcoal-border);
+  border-radius: 16px;
+  width: 92%;
+  max-width: 500px;
+  padding: 26px 28px 30px;
+  position: relative;
+  box-shadow: 0 0 24px rgba(0, 230, 153, 0.15);
+  animation: modalPop var(--transition-slow) ease forwards;
+}
+
+.preflight-modal h2 {
+  color: var(--emerald-text);
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 14px;
+}
+
+.preflight-modal p {
+  font-size: 15px;
+  line-height: 1.45;
+  opacity: 0.85;
+  margin-bottom: 18px;
+}
+
+/* -------------------------------------------- */
+/*  ISSUE LISTS                                  */
+/* -------------------------------------------- */
+
+.preflight-issues {
+  margin-top: 14px;
+  margin-bottom: 24px;
+  padding: 14px 16px;
+  background: var(--charcoal-soft);
+  border-radius: 12px;
+  border: 1px solid var(--charcoal-border);
+}
+
+.preflight-issues-title {
+  font-size: 16px;
+  color: var(--emerald-text);
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.preflight-issues ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.preflight-issues li {
+  font-size: 14px;
+  margin-bottom: 8px;
+  opacity: 0.9;
+}
+
+/* -------------------------------------------- */
+/*  BUTTONS                                      */
+/* -------------------------------------------- */
+
+.preflight-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.preflight-btn {
+  flex: 1;
+  padding: 12px 14px;
+  background: var(--charcoal-soft);
+  color: #fff;
+  border: 1px solid var(--emerald-soft);
+  border-radius: var(--radius-pill);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-mid);
+  text-align: center;
+}
+
+.preflight-btn:hover {
+  border-color: var(--emerald);
+  color: var(--emerald-text);
+  box-shadow: 0 0 12px var(--emerald-soft);
+}
+
+.preflight-btn-primary {
+  background: var(--emerald);
+  border-color: var(--emerald);
+  color: #000;
+}
+
+.preflight-btn-primary:hover {
+  background: var(--emerald-text);
+  border-color: var(--emerald-text);
+  color: #000;
+  box-shadow: 0 0 16px var(--emerald-glow);
+}
+
+/* -------------------------------------------- */
+/*  CLOSE ICON                                   */
+/* -------------------------------------------- */
+
+.preflight-close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  color: #999;
+  cursor: pointer;
+  font-size: 20px;
+  transition: var(--transition-fast);
+}
+
+.preflight-close:hover {
+  color: var(--emerald-text);
+}
+
+/* -------------------------------------------- */
+/*  ANIMATIONS                                   */
+/* -------------------------------------------- */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modalPop {
+  0%   { opacity: 0; transform: scale(0.85); }
+  60%  { opacity: 1; transform: scale(1.03); }
+  100% { transform: scale(1); }
+}

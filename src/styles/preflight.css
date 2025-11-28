@@ -1,0 +1,203 @@
+/* ============================================ */
+/*   PRE-FLIGHT PAGE — ULTRA LUXE EMERALD GLOW   */
+/* ============================================ */
+
+.preflight-page {
+  min-height: 100vh;
+  background: var(--charcoal-900, #0a0f14);
+  display: flex;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #fff;
+  font-family: Inter, sans-serif;
+}
+
+.preflight-container {
+  width: 100%;
+  max-width: 700px;
+  animation: fadeInUp 0.6s ease;
+}
+
+/* ============================================ */
+/*   TITLES                                     */
+/* ============================================ */
+
+.preflight-title {
+  text-align: center;
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+  background: linear-gradient(90deg, var(--emerald-400), var(--emerald-300));
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+.preflight-subtitle {
+  text-align: center;
+  font-size: 1rem;
+  color: var(--charcoal-300);
+  margin-bottom: 25px;
+}
+
+/* ============================================ */
+/*   CARDS                                      */
+/* ============================================ */
+
+.preflight-card {
+  background: var(--charcoal-800, #11171d);
+  padding: 22px;
+  border-radius: 14px;
+  margin-bottom: 22px;
+  border: 1px solid rgba(0, 255, 170, 0.1);
+  box-shadow: 0 0 20px rgba(0, 255, 170, 0.08);
+  animation: fadeIn 0.4s ease;
+}
+
+.preflight-card ul {
+  padding-left: 20px;
+}
+
+.preflight-card li {
+  margin: 6px 0;
+  color: var(--charcoal-100);
+  font-size: 0.95rem;
+}
+
+/* ERROR CARD */
+.error-card {
+  border-color: rgba(255, 70, 70, 0.35);
+  box-shadow: 0 0 18px rgba(255, 70, 70, 0.2);
+}
+
+.error-card .card-title {
+  color: #ff6b6b;
+}
+
+/* WARNING CARD */
+.warning-card {
+  border-color: rgba(255, 200, 55, 0.4);
+  box-shadow: 0 0 18px rgba(255, 200, 55, 0.2);
+}
+
+.warning-card .card-title {
+  color: #ffd65b;
+}
+
+.card-title {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+/* ============================================ */
+/*   CLEAN AUTO-ADVANCE STATE                   */
+/* ============================================ */
+
+.preflight-clean-card {
+  background: var(--charcoal-800, #11171d);
+  padding: 30px;
+  border-radius: 14px;
+  text-align: center;
+  border: 1px solid rgba(0, 255, 170, 0.3);
+  box-shadow: 0 0 25px rgba(0, 255, 170, 0.18);
+  animation: pulseGlow 1.5s infinite;
+}
+
+.preflight-clean-card h2 {
+  font-size: 1.6rem;
+  margin-bottom: 10px;
+  color: var(--emerald-300);
+}
+
+.preflight-clean-card p {
+  font-size: 1rem;
+  color: var(--charcoal-200);
+}
+
+/* ============================================ */
+/*   ACTIONS                                    */
+/* ============================================ */
+
+.preflight-actions {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 25px;
+}
+
+.preflight-btn {
+  background: var(--charcoal-700, #1a232b);
+  padding: 12px 20px;
+  border-radius: 10px;
+  border: 1px solid var(--charcoal-500);
+  color: #fff;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: 0.25s ease;
+}
+
+.preflight-btn:hover {
+  background: var(--charcoal-600);
+  transform: translateY(-2px);
+}
+
+/* PRIMARY BUTTON */
+.preflight-btn-primary {
+  background: linear-gradient(90deg, var(--emerald-500), var(--emerald-400));
+  padding: 12px 22px;
+  border-radius: 10px;
+  border: none;
+  color: #000;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: 0.25s ease;
+  box-shadow: 0 0 18px rgba(0, 255, 170, 0.25);
+}
+
+.preflight-btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 25px rgba(0, 255, 170, 0.35);
+}
+
+/* ============================================ */
+/*   KEYFRAME ANIMATIONS                        */
+/* ============================================ */
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(25px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulseGlow {
+  0% {
+    box-shadow: 0 0 20px rgba(0, 255, 170, 0.18);
+  }
+  50% {
+    box-shadow: 0 0 28px rgba(0, 255, 170, 0.28);
+  }
+  100% {
+    box-shadow: 0 0 20px rgba(0, 255, 170, 0.18);
+  }
+}
+
+/* ============================================ */
+/*   RESPONSIVE                                 */
+/* ============================================ */
+
+@media (max-width: 480px) {
+  .preflight-actions {
+    flex-direction: column;
+  }
+
+  .preflight-btn,
+  .preflight-btn-primary {
+    width: 100%;
+    text-align: center;
+  }
+}

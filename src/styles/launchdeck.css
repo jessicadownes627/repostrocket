@@ -1,0 +1,149 @@
+.deck-shell {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  backdrop-filter: blur(18px) brightness(0.45);
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  z-index: 9998;
+}
+
+.deck-track {
+  display: flex;
+  width: 500%;
+  transition: transform 0.4s cubic-bezier(0.4, 0.1, 0.1, 1);
+  padding: 2rem 1.2rem;
+}
+
+.deck-card {
+  width: 100%;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 28px;
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 1.6rem;
+  box-shadow: 0 0 24px rgba(0, 255, 120, 0.25);
+}
+
+.deck-header {
+  font-family: "Cormorant Garamond", serif;
+  font-size: 1.4rem;
+  margin-bottom: 1rem;
+  color: #e7ffe8;
+}
+
+.deck-text {
+  color: #f0fff5;
+  margin-bottom: 1rem;
+  white-space: pre-wrap;
+}
+
+.deck-sub {
+  color: #cfdad1;
+}
+
+.description-block {
+  max-height: 160px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.tags-block {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tags-block .tag-pill {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 6px 12px;
+  border-radius: 14px;
+  color: #e6ffe8;
+  font-size: 0.85rem;
+}
+
+.photo-section {
+  text-align: center;
+}
+
+.main-photo {
+  width: 90%;
+  border-radius: 14px;
+  margin-bottom: 0.8rem;
+}
+
+.thumbs img {
+  width: 18%;
+  border-radius: 8px;
+  margin: 3px;
+}
+
+.deck-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: -6px;
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+  cursor: pointer;
+}
+
+.dot.active {
+  background: #6dffab;
+}
+
+.deck-nav {
+  margin-top: auto;
+  padding: 1rem;
+  display: flex;
+  justify-content: space-between;
+}
+
+.deck-nav button {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #e6ffe8;
+  padding: 0.8rem 1.4rem;
+  border-radius: 14px;
+}
+
+.confirm-launch-btn {
+  margin-top: 1.4rem;
+  width: 100%;
+  background: linear-gradient(180deg, #0d2016, #163528);
+  padding: 1rem;
+  border-radius: 16px;
+  color: #e6ffe8;
+  border: 1px solid rgba(224, 200, 160, 0.35);
+}
+
+.confirm-launch-btn .micro-rocket {
+  margin-right: 6px;
+}
+
+.badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.launch-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: rgba(0, 255, 180, 0.12);
+  border: 1px solid rgba(0, 255, 180, 0.4);
+  color: #e4fff6;
+  font-size: 13px;
+  margin-top: 6px;
+}

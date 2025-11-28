@@ -1,0 +1,201 @@
+/* -------------------------------------------- */
+/*  Repost Rocket — Global Luxe Token System    */
+/*  Palette: Emerald Noir Premium               */
+/*  Usage: Safe, global polish (no breaking)    */
+/* -------------------------------------------- */
+
+:root {
+  --charcoal: #0b0c0d;
+  --charcoal-soft: #111315;
+  --charcoal-card: #141618;
+  --charcoal-border: #1b1d1f;
+
+  --emerald: #00e699;
+  --emerald-soft: rgba(0, 230, 153, 0.3);
+  --emerald-glow: rgba(0, 230, 153, 0.5);
+  --emerald-text: #00ffa6;
+
+  --gold: #e6c888;
+  --gold-soft: rgba(230, 200, 136, 0.25);
+
+  --radius-card: 14px;
+  --radius-pill: 10px;
+
+  --transition-fast: 0.18s ease;
+  --transition-mid: 0.3s ease;
+  --transition-slow: 0.45s ease;
+}
+
+/* -------------------------------------------- */
+/*  Global Reset + Base                         */
+/* -------------------------------------------- */
+
+body {
+  background: var(--charcoal);
+  color: #fff;
+  font-family: Inter, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--emerald-text);
+  text-decoration: none;
+}
+
+/* -------------------------------------------- */
+/*  UNIVERSAL CARDS                             */
+/* -------------------------------------------- */
+
+.luxe-card {
+  background: var(--charcoal-card);
+  border: 1px solid var(--charcoal-border);
+  border-radius: var(--radius-card);
+  padding: 16px 20px;
+  transition: var(--transition-mid);
+}
+
+.luxe-card:hover {
+  border-color: var(--emerald);
+  box-shadow: 0 0 20px var(--emerald-soft);
+}
+
+/* -------------------------------------------- */
+/*  UNIVERSAL BUTTONS                           */
+/* -------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  padding: 12px 18px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  border: 1px solid var(--emerald-soft);
+  background: var(--charcoal-soft);
+  color: #fff;
+  transition: var(--transition-mid);
+}
+
+.btn:hover {
+  border-color: var(--emerald);
+  color: var(--emerald-text);
+  box-shadow: 0 0 12px var(--emerald-soft);
+}
+
+.btn-primary {
+  background: var(--emerald);
+  color: #000;
+  border-color: var(--emerald);
+}
+
+.btn-primary:hover {
+  background: var(--emerald-text);
+  border-color: var(--emerald-text);
+  box-shadow: 0 0 16px var(--emerald-glow);
+}
+
+/* -------------------------------------------- */
+/*  INPUTS + TEXTAREAS                          */
+/* -------------------------------------------- */
+
+input, textarea, select {
+  width: 100%;
+  background: var(--charcoal-soft);
+  border: 1px solid var(--charcoal-border);
+  border-radius: var(--radius-card);
+  padding: 12px 14px;
+  color: #fff;
+  font-size: 15px;
+  transition: var(--transition-mid);
+}
+
+input:focus, textarea:focus, select:focus {
+  border-color: var(--emerald);
+  box-shadow: 0 0 10px var(--emerald-soft);
+  outline: none;
+}
+
+textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+/* -------------------------------------------- */
+/*  GLOW UTILITIES                              */
+/* -------------------------------------------- */
+
+.glow-emerald {
+  box-shadow: 0 0 18px var(--emerald-soft);
+}
+
+.text-emerald {
+  color: var(--emerald-text);
+}
+
+.border-emerald {
+  border-color: var(--emerald);
+}
+
+/* -------------------------------------------- */
+/*  LISTS + SECTIONS                            */
+/* -------------------------------------------- */
+
+.section-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+  color: #fff;
+}
+
+.subtle {
+  opacity: 0.7;
+  font-size: 14px;
+}
+
+/* -------------------------------------------- */
+/*  TOAST (GLOBAL)                              */
+/* -------------------------------------------- */
+
+.toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #0f1213;
+  padding: 14px 18px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--emerald-soft);
+  color: #fff;
+  font-size: 14px;
+  box-shadow: 0 0 14px var(--emerald-soft);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-mid), transform var(--transition-mid);
+  z-index: 9999;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* -------------------------------------------- */
+/*  ANIMATIONS                                  */
+/* -------------------------------------------- */
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-up {
+  animation: fadeUp 0.35s ease forwards;
+}

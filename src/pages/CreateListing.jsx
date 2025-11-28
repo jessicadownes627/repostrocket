@@ -5,47 +5,44 @@ import { useListingStore } from "../store/useListingStore";
 import { generateResizedVariants, resizeImage } from "../utils/imageTools";
 import { mockAnalyzePhotos } from "../utils/aiSmartFill";
 import { convertHeicToJpeg } from "../utils/heicConverter";
+import { useTitleParser } from "../hooks/useTitleParser";
+import { runMagicFill } from "../engines/MagicFillEngine";
+import AIDiffPanel from "../components/AIDiffPanel";
+import AIReviewPanel from "../components/AIReviewPanel";
+import { aiReviewEngine } from "../engines/aiReviewEngine";
+import { generateAIDiffReport } from "../engines/aiDiffEngine";
+import { scorePhotoQuality } from "../engines/photoQualityEngine";
+import { predictFit } from "../engines/fitPredictorEngine";
+import { detectListingRisks } from "../engines/riskEngine";
+import AIPremiumReviewPanel from "../components/AIPremiumReviewPanel";
+import PreflightModal from "../components/PreflightModal";
+import { runPreflightChecks } from "../utils/preflightChecks";
 
-// --- CATEGORY-BASED SHIPPING HINTS ---
-const getShippingHints = (category) => {
-  switch ((category || "").toLowerCase()) {
-    case "books":
-    case "media":
-      return [
-        "Books, DVDs, and educational items often ship most affordably via USPS Media Mail.",
-        "Media Mail is slower but can save significant money for heavier books.",
-        "Buyer Pays is common for books due to predictable weight.",
-      ];
-    case "tops":
-    case "bottoms":
-    case "dresses":
-    case "outerwear":
-    case "activewear":
-      return [
-        "Lightweight items under 1 lb can often ship USPS First Class at a lower cost.",
-        "Seller Pays may boost visibility on some marketplaces.",
-        "Flat Rate envelopes can sometimes save money for heavy clothing.",
-      ];
-    case "shoes":
-      return [
-        "Shoes are often heavy — prepaid marketplace labels may be cheaper.",
-        "Flat Rate Priority boxes can save money for certain weights.",
-        "Buyer Pays is common for shoe listings.",
-      ];
-    case "electronics":
-      return [
-        "Electronics may ship cheaper with prepaid marketplace labels.",
-        "Priority Mail includes insurance for many items.",
-        "Consider the weight — heavy electronics may cost more than expected.",
-      ];
-    default:
-      return [
-        "Compare costs between USPS First Class and marketplace prepaid labels.",
-        "Offering Seller Pays can increase buyer interest.",
-        "Always confirm postage at your local post office.",
-      ];
+// --- Dynamic Shipping Tips ---
+function getShippingHints(category, shippingChoice) {
+  const baseTips = [
+    "Compare costs between USPS First Class and marketplace prepaid labels.",
+    "Always confirm postage at your local post office.",
+  ];
+
+  if (shippingChoice === "buyer pays") {
+    return [
+      "Offering Buyer Pays keeps your price competitive.",
+      "Great for lightweight items under 1 lb.",
+      ...baseTips,
+    ];
   }
-};
+
+  if (shippingChoice === "seller pays") {
+    return [
+      "Seller Pays can increase buyer interest.",
+      "Ideal for higher-priced or fast-moving items.",
+      ...baseTips,
+    ];
+  }
+
+  return baseTips;
+}
 const shippingOptions = ["buyer pays", "seller pays", "skip"];
 const CATEGORY_OPTIONS = [
   // Apparel
@@ -96,6 +93,65 @@ const TAG_OPTIONS = [
   "Sporty",
 ];
 
+// --- UNIVERSAL SIZE OPTIONS ---
+const UNIVERSAL_SIZE_OPTIONS = [
+  "XXS",
+  "XS",
+  "S",
+  "M",
+  "L",
+  "XL",
+  "XXL",
+  "0",
+  "2",
+  "4",
+  "6",
+  "8",
+  "10",
+  "12",
+  "14",
+  "16",
+  "Plus 1X",
+  "Plus 2X",
+  "Plus 3X",
+];
+
+// Shoes
+const SHOE_SIZES = ["5", "5.5", "6", "6.5", "7", "7.5", "8", "8.5", "9", "9.5", "10", "11"];
+
+// Kids sizes
+const KIDS_SIZES = [
+  "0–3m",
+  "3–6m",
+  "6–9m",
+  "9–12m",
+  "12–18m",
+  "18–24m",
+  "2T",
+  "3T",
+  "4T",
+  "5",
+  "6",
+  "7",
+  "8",
+  "10",
+  "12",
+  "14",
+];
+
+// Bag types
+const BAG_TYPES = [
+  "Clutch",
+  "Shoulder Bag",
+  "Crossbody",
+  "Tote",
+  "Diaper Bag",
+  "Backpack",
+  "Satchel",
+  "Hobo Bag",
+  "Mini Bag",
+];
+
 // --- SMART PRICE SUGGESTION LOGIC ---
 const getPriceSuggestions = (listing) => {
   const base = Number(listing.price) || 0;
@@ -140,8 +196,55 @@ function CreateListing() {
   const [isDragging, setIsDragging] = useState(false);
   const [autoFillLoading, setAutoFillLoading] = useState(false);
   const [photoPreviews, setPhotoPreviews] = useState([]);
+  const parsed = useTitleParser(listingData.title);
+  const [magicLoading, setMagicLoading] = useState(false);
+  const [showDiffPanel, setShowDiffPanel] = useState(false);
+  const [diffReport, setDiffReport] = useState([]);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewResults, setReviewResults] = useState(null);
+  const [showReviewPill, setShowReviewPill] = useState(false);
+  const [review, setReview] = useState(null);
+  const [showReviewPanel, setShowReviewPanel] = useState(false);
+  const [showPreflight, setShowPreflight] = useState(false);
+  const [preflightResults, setPreflightResults] = useState([]);
 
   const triggerUpload = () => fileInputRef.current?.click();
+
+  const isSizeRelevant = (cat = "") => {
+    cat = cat.toLowerCase();
+    return (
+      cat.includes("tops") ||
+      cat.includes("bottoms") ||
+      cat.includes("dresses") ||
+      cat.includes("outerwear") ||
+      cat.includes("activewear") ||
+      cat.includes("accessories") ||
+      cat.includes("kids") ||
+      cat.includes("shoes")
+    );
+  };
+
+  const runReview = (overrides = {}) => {
+    const merged = { ...listingData, ...overrides };
+    const platforms = (selectedPlatforms || []).map((p) => p.toLowerCase());
+    const result = aiReviewEngine(merged, parsed, platforms);
+    setReviewResults(result);
+    setReviewOpen(true);
+  };
+
+  // Auto-apply AI parsed size/bag type when relevant
+  useEffect(() => {
+    if (!parsed) return;
+
+    if (parsed.size && !listingData.size && isSizeRelevant(listingData.category)) {
+      setListingField("size", parsed.size.toUpperCase());
+    }
+
+    if (parsed.bagType && listingData.category === "Bags" && !listingData.bagType) {
+      const cap = parsed.bagType.charAt(0).toUpperCase() + parsed.bagType.slice(1);
+      setListingField("bagType", cap);
+    }
+  }, [parsed, listingData.category, listingData.size, listingData.bagType, setListingField]);
 
   const parsedTags = useMemo(() => {
     if (Array.isArray(listingData.tags)) {
@@ -309,6 +412,15 @@ function CreateListing() {
     setAutoFillLoading(true);
 
     const sourcePhotos = displayPhotos;
+    const originalSnapshot = {
+      title: listingData.title,
+      description: listingData.description,
+      category: listingData.category,
+      condition: listingData.condition,
+      color: parsed?.color,
+      size: listingData.size || parsed?.size,
+      tags: Array.isArray(listingData.tags) ? listingData.tags.join(", ") : listingData.tags || "",
+    };
     const suggestions = await mockAnalyzePhotos(sourcePhotos);
     if (suggestions) {
       const { category, condition, description, title, tags } = suggestions;
@@ -327,6 +439,18 @@ function CreateListing() {
           .filter((w) => w.length > 3);
         return words.slice(0, 8).join(", ");
       };
+      const proposed = {
+        title: deriveTitle(),
+        description: description || listingData.description,
+        category: category || listingData.category,
+        condition: condition || listingData.condition,
+        color: parsed?.color,
+        size: parsed?.size,
+        tags: Array.isArray(tags) ? tags.join(", ") : deriveTags(),
+      };
+      const diff = generateAIDiffReport(originalSnapshot, proposed);
+      setDiffReport(diff);
+      if (diff.length) setShowDiffPanel(true);
       if (category) setListingField("category", category);
       if (condition) setListingField("condition", condition);
       if (description) setListingField("description", description);
@@ -335,17 +459,79 @@ function CreateListing() {
       if (tags && Array.isArray(tags)) {
         setListingField("tags", tags.join(", "));
       }
+      setShowReviewPill(true);
+      runReview(proposed);
     }
 
     setAutoFillLoading(false);
   };
 
+  const handleMagicFill = async () => {
+    setMagicLoading(true);
+    try {
+      const updated = await runMagicFill(listingData);
+      Object.entries(updated).forEach(([key, val]) => {
+        if (val !== undefined && val !== null && val !== "") {
+          setListingField(key, val);
+        }
+      });
+      setShowReviewPill(true);
+      runReview(updated);
+    } catch (err) {
+      console.warn("Magic Fill failed:", err);
+      alert("Magic Fill couldn't complete — using your existing details.");
+    }
+    setMagicLoading(false);
+  };
+
+  const handleAIReview = () => {
+    const photo = scorePhotoQuality(displayPhotos);
+    const fit = predictFit(listingData);
+    const risks = detectListingRisks(listingData);
+    const overallScore = Math.round((photo.score + 80 - risks.length * 5) / 2);
+    setReview({
+      photo,
+      fit,
+      risks,
+      overallScore,
+      overallNote:
+        overallScore > 85
+          ? "Excellent — this listing is ready to shine."
+          : overallScore > 60
+          ? "Looking strong — just a few tweaks to maximize buyer confidence."
+          : "Let’s boost this listing for better visibility.",
+    });
+    setShowReviewPanel(true);
+  };
+
+  const handleClearListing = () => {
+    resetListing();
+    setPhotoPreviews([]);
+    setShowReviewPill(false);
+    setReview(null);
+    setReviewResults(null);
+    setDiffReport([]);
+    setShowDiffPanel(false);
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!listingData.title || !listingData.description || !listingData.price || !photos.length) {
-      alert("Please complete title, description, price, and upload at least one photo.");
-      return;
-    }
+
+    if (!listingData.title?.trim())
+      return alert("Please enter a title before continuing.");
+
+    if (!listingData.description?.trim())
+      return alert("Please enter a description.");
+
+    if (!listingData.price) return alert("Please enter a price.");
+
+    if (!photos.length) return alert("Please upload at least one photo.");
+
+    if (!listingData.category)
+      return alert("Please choose a category.");
+
+    if (isSizeRelevant(listingData.category) && !listingData.size)
+      return alert("Please choose a size.");
 
     const draft = {
       ...listingData,
@@ -355,7 +541,13 @@ function CreateListing() {
     };
 
     addDraft(draft);
-    navigate("/launch");
+    navigate("/preflight");
+  };
+
+  const triggerPreflight = () => {
+    const results = runPreflightChecks(listingData);
+    setPreflightResults(results);
+    setShowPreflight(true);
   };
 
   const saveDraftOnly = () => {
@@ -374,9 +566,10 @@ function CreateListing() {
   };
 
   return (
-    <div className="create-page">
-      <div className="create-shell">
-        <div className="create-card">
+    <>
+      <div className="create-page">
+        <div className="create-shell">
+          <div className="create-card">
 
           {/* HEADER */}
           <div className="create-header">
@@ -463,23 +656,77 @@ function CreateListing() {
             </section>
 
             {/* SMART FILL */}
-            <section className="section-wrapper">
+            <section className="section-wrapper spaced-section">
               <h2 className="section-title">Smart Fill (Optional)</h2>
-              <p className="section-subtitle">AI can suggest category, condition, description, and tags.</p>
-              <div className="autofill-row">
+              <div className="smartfill-stack">
                 <button
                   type="button"
-                  className="autofill-btn"
+                  className="smartfill-btn gold-fill-btn"
+                  onClick={handleMagicFill}
+                  disabled={magicLoading}
+                >
+                  ✨ Magic Fill My Listing
+                  <span className="smartfill-sub">
+                    Uses your photos + basics to fill category, size, color, and tags.
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  className="smartfill-btn emerald-fill-btn"
                   onClick={handleAutoFill}
                   disabled={autoFillLoading}
                 >
-                  {autoFillLoading ? "Generating…" : "⚡ Auto-Fill Listing With AI"}
+                  ⚡ Full AI Auto-Fill
+                  <span className="smartfill-sub">
+                    Builds the entire listing automatically — title, description, tags, category, condition.
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  className="smartfill-btn review-fill-btn"
+                  onClick={handleAIReview}
+                >
+                  🛠 Optimize Listing (AI Review)
+                  <span className="smartfill-sub">
+                    Improves what you’ve written — clarity, keywords, formatting.
+                  </span>
+                  <span className="review-powered">Review powered by Repost Rocket AI</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="smartfill-btn clear-fill-btn"
+                  onClick={handleClearListing}
+                >
+                  🧹 Clear Listing Fields
+                  <span className="smartfill-sub">
+                    Resets everything so you can start fresh.
+                  </span>
                 </button>
               </div>
+              {diffReport.length > 0 && (
+                <div className="autofill-row">
+                  <button
+                    type="button"
+                    className="autofill-btn ghost"
+                    onClick={() => setShowDiffPanel(true)}
+                    style={{ marginTop: "0.75rem" }}
+                  >
+                    See AI Changes
+                  </button>
+                </div>
+              )}
+              {showReviewPill && (
+                <div className="ai-review-pill" onClick={() => setReviewOpen(true)}>
+                  ✨ Listing enhancements available — tap to view
+                </div>
+              )}
             </section>
 
             {/* TITLE */}
-            <section className="section-wrapper">
+            <section className="section-wrapper spaced-section">
               <h2 className="section-title">Listing Details</h2>
               <p className="section-subtitle">Universal details that feed every platform.</p>
               <label className="input-label">Title</label>
@@ -488,10 +735,24 @@ function CreateListing() {
                 value={listingData.title || ""}
                 onChange={(e) => setListingField("title", e.target.value)}
               />
+
+              {parsed && (
+                <div className="ai-parse-preview">
+                  <h4 className="ai-parse-title">AI Parsed Details</h4>
+                  <div className="ai-parse-grid">
+                    <div><strong>Brand:</strong> {parsed.brand || "—"}</div>
+                    <div><strong>Model:</strong> {parsed.model || "—"}</div>
+                    <div><strong>Color:</strong> {parsed.color || "—"}</div>
+                    <div><strong>Size:</strong> {parsed.size || "—"}</div>
+                    <div><strong>Condition:</strong> {parsed.condition || "—"}</div>
+                    <div><strong>Category:</strong> {parsed.category || "—"}</div>
+                  </div>
+                </div>
+              )}
             </section>
 
             {/* CATEGORY */}
-            <section className="section-wrapper">
+            <section className="section-wrapper spaced-section">
               <h2 className="section-title">Category</h2>
               <p className="section-subtitle">Tap to choose the best match.</p>
               <div className="category-grid">
@@ -509,7 +770,7 @@ function CreateListing() {
             </section>
 
             {/* CONDITION */}
-            <section className="section-wrapper">
+            <section className="section-wrapper spaced-section">
               <h2 className="section-title">Condition</h2>
               <p className="section-subtitle">Tap to select — we’ll map it per platform.</p>
               <div className="tap-grid">
@@ -529,8 +790,87 @@ function CreateListing() {
               </div>
             </section>
 
+            {/* SIZE (Dynamic) */}
+            {isSizeRelevant(listingData.category) && (
+              <section className="section-wrapper spaced-section">
+                <h2 className="section-title">Size</h2>
+                <p className="section-subtitle">
+                  Pick the correct size so buyers don’t ask later.
+                </p>
+
+                {listingData.category?.toLowerCase().includes("shoes") && (
+                  <div className="size-grid">
+                    {SHOE_SIZES.map((sz) => (
+                      <button
+                        key={sz}
+                        type="button"
+                        className={`size-pill ${listingData.size === sz ? "active" : ""}`}
+                        onClick={() => setListingField("size", sz)}
+                      >
+                        {sz}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {listingData.category?.toLowerCase().includes("kids") && (
+                  <div className="size-grid">
+                    {KIDS_SIZES.map((sz) => (
+                      <button
+                        key={sz}
+                        type="button"
+                        className={`size-pill ${listingData.size === sz ? "active" : ""}`}
+                        onClick={() => setListingField("size", sz)}
+                      >
+                        {sz}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {!listingData.category?.toLowerCase().includes("kids") &&
+                  !listingData.category?.toLowerCase().includes("shoes") && (
+                    <div className="size-grid">
+                      {UNIVERSAL_SIZE_OPTIONS.map((sz) => (
+                        <button
+                          key={sz}
+                          type="button"
+                          className={`size-pill ${listingData.size === sz ? "active" : ""}`}
+                          onClick={() => setListingField("size", sz)}
+                        >
+                          {sz}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+              </section>
+            )}
+
+            {/* BAG TYPE (Dynamic) */}
+            {listingData.category === "Bags" && (
+              <section className="section-wrapper spaced-section">
+                <h2 className="section-title">Bag Type</h2>
+                <p className="section-subtitle">
+                  Helps match your item with the right shoppers.
+                </p>
+
+                <div className="bagtype-grid">
+                  {BAG_TYPES.map((bt) => (
+                    <button
+                      key={bt}
+                      type="button"
+                      className={`size-pill ${listingData.bagType === bt ? "active" : ""}`}
+                      onClick={() => setListingField("bagType", bt)}
+                    >
+                      {bt}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
+
             {/* DESCRIPTION */}
-            <section className="section-wrapper">
+            <section className="section-wrapper spaced-section">
               <h2 className="section-title">Description</h2>
               <p className="section-subtitle">Add fit, flaws, measurements, and helpful buyer info.</p>
               <textarea
@@ -542,7 +882,7 @@ function CreateListing() {
             </section>
 
             {/* SMART TAGS */}
-            <section className="section-wrapper">
+            <section className="section-wrapper spaced-section">
               <h2 className="section-title center">Smart Tags</h2>
               <p className="section-subtitle center">Tap all that apply — these help refine your listing everywhere.</p>
               <div className="tag-grid">
@@ -571,7 +911,7 @@ function CreateListing() {
             </section>
 
             {/* SMART PRICING */}
-            <section className="section-wrapper">
+            <section className="section-wrapper spaced-section">
               <h2 className="section-title">Pricing</h2>
               <p className="section-subtitle">Tap a suggested price or enter your own.</p>
               <div className="price-grid">
@@ -613,10 +953,10 @@ function CreateListing() {
             </section>
 
             {/* SHIPPING */}
-            <section className="section-wrapper">
+            <section className="section-wrapper spaced-section">
               <h2 className="section-title">Shipping</h2>
               <p className="section-subtitle">Choose who pays. Tips update automatically.</p>
-              <div className="shipping-pill-row">
+              <div className="shipping-pill-row shipping-pill-row-spaced">
                 {shippingOptions.map((option) => (
                   <button
                     key={option}
@@ -631,12 +971,12 @@ function CreateListing() {
                 ))}
               </div>
 
-              {listingData.shipping && (
+              {listingData.shipping && listingData.shipping !== "skip" && (
                 <div className="shipping-tips-card">
                   <p className="tips-title">✨ Smart Shipping Tips</p>
 
                 <ul className="tips-list">
-                  {getShippingHints(listingData.category).map((hint, i) => (
+                  {getShippingHints(listingData.category, listingData.shipping).map((hint, i) => (
                     <li key={i}>{hint}</li>
                   ))}
                 </ul>
@@ -649,38 +989,65 @@ function CreateListing() {
             )}
           </section>
 
-            {/* ACTIONS */}
-            <section className="section-wrapper">
+            <section className="section-wrapper spaced-section">
               <h2 className="section-title">Ready to Launch</h2>
-              <p className="section-subtitle">See how your listing looks on each platform.</p>
-              <div className="actions">
-                <button type="button" className="ghost-link discard" onClick={discardDraft}>
-                  Discard Draft
-                </button>
-                <button type="button" className="btn-secondary create-cta" onClick={saveDraftOnly}>
-                  Save Draft
-                </button>
-                <button type="submit" className="btn-glass-gold create-cta">
-                  Continue to Launch →
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary create-cta"
-                  onClick={() => navigate("/platform-prep")}
-                >
-                  🚀 Next → Platform Versions
-                </button>
-              </div>
-              <div className="next-step-wrapper">
-                <div className="next-step-label">Next → Platform Versions</div>
-                <div className="next-step-sub">See how your listing looks on each platform.</div>
-              </div>
+              <p className="section-subtitle">Preview your listing and launch to your selected platforms.</p>
+
+              <p className="discard-draft" onClick={discardDraft}>Discard Draft</p>
+
+              <button
+                type="button"
+                className="cta-btn cta-btn-outline"
+                onClick={saveDraftOnly}
+              >
+                Save Draft
+              </button>
+
+              <button
+                type="button"
+                className="cta-btn cta-btn-primary"
+                onClick={triggerPreflight}
+              >
+                Preview Listing →
+              </button>
+
+              <button
+                type="button"
+                className="cta-btn cta-btn-outline"
+                onClick={() => navigate("/launch")}
+              >
+                Launch to Platforms →
+              </button>
             </section>
 
           </form>
         </div>
       </div>
     </div>
+    {reviewOpen && (
+      <AIReviewPanel
+        open={reviewOpen}
+        onClose={() => setReviewOpen(false)}
+        results={reviewResults}
+        onApply={() => setReviewOpen(false)}
+      />
+    )}
+    {showReviewPanel && (
+      <AIPremiumReviewPanel review={review} onClose={() => setShowReviewPanel(false)} />
+    )}
+    {showDiffPanel && (
+      <AIDiffPanel diff={diffReport} onClose={() => setShowDiffPanel(false)} />
+    )}
+    <PreflightModal
+      open={showPreflight}
+      results={preflightResults}
+      onClose={() => setShowPreflight(false)}
+      onFix={(proceed) => {
+        setShowPreflight(false);
+        if (proceed) navigate("/preflight");
+      }}
+    />
+    </>
   );
 }
 

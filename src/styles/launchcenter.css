@@ -1,0 +1,57 @@
+/* Launch Center Layout */
+.launch-center-wrapper {
+  padding: 40px;
+  color: #eafff7;
+  text-align: center;
+}
+
+.launch-center-title {
+  font-size: 2.4rem;
+  font-weight: 700;
+  color: #b8ffd9;
+  margin-bottom: 10px;
+}
+
+.launch-center-subtitle {
+  font-size: 1.1rem;
+  opacity: 0.8;
+  margin-bottom: 40px;
+}
+
+/* Grid */
+.platform-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 24px;
+  padding: 0 20px;
+}
+
+/* Cards */
+.platform-card {
+  background: rgba(8, 20, 12, 0.6);
+  border: 1px solid rgba(0, 255, 140, 0.25);
+  padding: 28px 20px;
+  border-radius: 18px;
+  cursor: pointer;
+  transition: 0.25s ease;
+  backdrop-filter: blur(8px);
+}
+
+.platform-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 0 18px rgba(0, 255, 140, 0.45);
+  border-color: rgba(0, 255, 140, 0.4);
+}
+
+.platform-icon {
+  width: 52px;
+  height: 52px;
+  filter: drop-shadow(0 0 6px rgba(0, 255, 140, 0.45));
+  margin-bottom: 16px;
+}
+
+.platform-name {
+  font-size: 1.2rem;
+  color: #d6ffe8;
+  font-weight: 600;
+}
