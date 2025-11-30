@@ -3,6 +3,7 @@ export function generatePlatformTitles(listingData = {}) {
   const baseTitle = title || "";
   const casedCondition = condition ? condition.toLowerCase() : "";
 
+  
   return {
     poshmark: `${baseTitle} – ${condition}`.trim(),
     mercari: `${baseTitle} | ${condition} | ${category}`.trim(),
