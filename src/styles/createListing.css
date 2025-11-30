@@ -2884,3 +2884,92 @@ input[readOnly] {
   letter-spacing: 0.3px;
   box-sizing: border-box;
 }
+.rr-smart-helper {
+  color: #d6d1c7;
+  font-size: 0.95rem;
+  margin-top: -10px;
+  margin-bottom: 20px;
+  opacity: 0.85;
+}
+
+.rr-usage-box {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 14px 18px;
+  border-radius: 10px;
+  margin-bottom: 25px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.rr-usage-label {
+  font-size: 0.8rem;
+  color: #9ea5ad;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.rr-smart-card {
+  padding: 20px;
+  border-radius: 12px;
+  cursor: pointer;
+  margin-bottom: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(20, 20, 20, 0.4);
+  transition: all 0.25s ease;
+  color: #f5f3e9;
+}
+
+.rr-smart-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 0 14px rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.rr-magic-card:hover {
+  box-shadow: 0 0 18px rgba(255, 215, 130, 0.55);
+}
+
+.rr-auto-card:hover {
+  box-shadow: 0 0 20px rgba(0, 255, 170, 0.45);
+}
+
+.rr-review-card:hover {
+  box-shadow: 0 0 20px rgba(255, 165, 120, 0.35);
+}
+
+.rr-clear-card:hover {
+  opacity: 0.65;
+}
+
+.rr-smart-header {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 5px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.rr-smart-desc {
+  font-size: 0.9rem;
+  color: #cccccc;
+  line-height: 1.4;
+}
+
+.rr-premium-tag {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+}
+
+.rr-premium-tag.premium {
+  background: linear-gradient(90deg, #00ffbb40, #00775540);
+  color: #00ffbb;
+}
+
+.rr-powered-tag {
+  font-size: 0.75rem;
+  color: #b8b2a7;
+  margin-left: 6px;
+}

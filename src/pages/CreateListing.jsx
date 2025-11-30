@@ -16,7 +16,12 @@ import { predictFit } from "../engines/fitPredictorEngine";
 import { detectListingRisks } from "../engines/riskEngine";
 import AIPremiumReviewPanel from "../components/AIPremiumReviewPanel";
 import PreflightModal from "../components/PreflightModal";
+import PremiumModal from "../components/PremiumModal";
 import { runPreflightChecks } from "../utils/preflightChecks";
+import usePaywallGate from "../hooks/usePaywallGate";
+import UpgradeBanner from "../components/UpgradeBanner";
+import { getUsage, getLimit } from "../utils/usageTracker";
+import UsageMeter from "../components/UsageMeter";
 
 // --- Dynamic Shipping Tips ---
 function getShippingHints(category, shippingChoice) {
@@ -190,6 +195,7 @@ function CreateListing() {
     resetListing,
     addDraft,
     setSelectedPlatforms,
+    setListing,
   } = useListingStore();
 
   const photos = listingData.photos || [];
@@ -205,8 +211,30 @@ function CreateListing() {
   const [showReviewPill, setShowReviewPill] = useState(false);
   const [review, setReview] = useState(null);
   const [showReviewPanel, setShowReviewPanel] = useState(false);
+  const [tempMessage, setTempMessage] = useState("");
+
+  // helper to show paywall message before modal appears
+  const showPremiumHint = (msg) => {
+    setTempMessage(msg);
+    setTimeout(() => setTempMessage(""), 4000);
+  };
+
+  const HINTS = {
+    auto: "⚡ Auto-Fill is a Premium Feature — instantly build titles, descriptions, tags, category, and condition with AI.",
+    magic: "✨ Magic Fill is Premium — auto-guess categories, colors, sizes, & smart tags from photos.",
+    review: "🛠 AI Review is Premium — enhance clarity, keywords, formatting, and buyer trust.",
+  };
   const [showPreflight, setShowPreflight] = useState(false);
   const [preflightResults, setPreflightResults] = useState([]);
+  const { gate, paywallState, closePaywall } = usePaywallGate();
+  const smartUsage = getUsage("smartFill");
+  const smartLimit = getLimit("smartFill");
+  const showSmartBanner =
+    smartLimit > 0 && smartUsage / smartLimit >= 0.8 && smartUsage < smartLimit;
+  const launchUsage = getUsage("launches");
+  const launchLimit = getLimit("launches");
+  const showLaunchBanner =
+    launchLimit > 0 && launchUsage / launchLimit >= 0.8 && launchUsage < launchLimit;
 
   const triggerUpload = () => fileInputRef.current?.click();
 
@@ -655,75 +683,88 @@ function CreateListing() {
               </div>
             </section>
 
-            {/* SMART FILL */}
-            <section className="section-wrapper spaced-section">
-              <h2 className="section-title">Smart Fill (Optional)</h2>
-              <div className="smartfill-stack">
-                <button
-                  type="button"
-                  className="smartfill-btn gold-fill-btn"
-                  onClick={handleMagicFill}
-                  disabled={magicLoading}
-                >
-                  ✨ Magic Fill My Listing
-                  <span className="smartfill-sub">
-                    Uses your photos + basics to fill category, size, color, and tags.
-                  </span>
-                </button>
+            {/* SMART FILL — PREMIUM AI CONCIERGE */}
+            <div className="rr-smartfill-wrapper">
+              <h2 className="rr-smart-title">Smart Fill (Optional)</h2>
+              <p className="rr-smart-helper">
+                Choose how much help you want — from a quick polish to full AI automation.
+              </p>
 
-                <button
-                  type="button"
-                  className="smartfill-btn emerald-fill-btn"
-                  onClick={handleAutoFill}
-                  disabled={autoFillLoading}
-                >
-                  ⚡ Full AI Auto-Fill
-                  <span className="smartfill-sub">
-                    Builds the entire listing automatically — title, description, tags, category, condition.
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  className="smartfill-btn review-fill-btn"
-                  onClick={handleAIReview}
-                >
-                  🛠 Optimize Listing (AI Review)
-                  <span className="smartfill-sub">
-                    Improves what you’ve written — clarity, keywords, formatting.
-                  </span>
-                  <span className="review-powered">Review powered by Repost Rocket AI</span>
-                </button>
-
-                <button
-                  type="button"
-                  className="smartfill-btn clear-fill-btn"
-                  onClick={handleClearListing}
-                >
-                  🧹 Clear Listing Fields
-                  <span className="smartfill-sub">
-                    Resets everything so you can start fresh.
-                  </span>
-                </button>
+              <div className="rr-usage-box">
+                <div className="rr-usage-label">Your AI Usage Today</div>
+                <p>
+                  Smart Fill {usage.smartFill}/0&nbsp;&nbsp;
+                  Auto Fill {usage.autoFill}/0&nbsp;&nbsp;
+                  AI Review {usage.aiReview}/0&nbsp;&nbsp;
+                  Launches {usage.launches}/2
+                </p>
               </div>
-              {diffReport.length > 0 && (
-                <div className="autofill-row">
-                  <button
-                    type="button"
-                    className="autofill-btn ghost"
-                    onClick={() => setShowDiffPanel(true)}
-                    style={{ marginTop: "0.75rem" }}
-                  >
-                    See AI Changes
-                  </button>
+
+              <div
+                className="rr-smart-card rr-magic-card"
+                onClick={() => {
+                  incrementUsage("smartFill");
+                  handleMagicFill()
+                    .then(() => toast("✨ Magic Fill complete — review below"))
+                    .catch(() => toast("Magic Fill couldn't complete — using your details."));
+                }}
+              >
+                <div className="rr-smart-header">
+                  ✨ Magic Fill My Listing
+                  <span className="rr-premium-tag">Free • 1/day</span>
                 </div>
-              )}
-              {showReviewPill && (
-                <div className="ai-review-pill" onClick={() => setReviewOpen(true)}>
-                  ✨ Listing enhancements available — tap to view
+                <p className="rr-smart-desc">
+                  <strong>What it does:</strong> Uses your photos to auto-detect category, color, size, and tags.<br />
+                  <strong>Best for:</strong> A fast jumpstart before polishing.
+                </p>
+              </div>
+
+              <div
+                className="rr-smart-card rr-auto-card"
+                onClick={() => {
+                  incrementUsage("autoFill");
+                  handleAutoFill()
+                    .then(() => toast("⚡ Auto-Fill complete — your listing is now fully built"))
+                    .catch(() => toast("Auto-Fill couldn't complete."));
+                }}
+              >
+                <div className="rr-smart-header">
+                  ⚡ Full AI Auto-Fill
+                  <span className="rr-premium-tag premium">Premium</span>
                 </div>
-              )}
-            </section>
+                <p className="rr-smart-desc">
+                  <strong>What it does:</strong> Builds the entire listing automatically — title, description, category, tags, condition.<br />
+                  <strong>Best for:</strong> “Do it all for me” mode.
+                </p>
+              </div>
+
+              <div
+                className="rr-smart-card rr-review-card"
+                onClick={() => {
+                  incrementUsage("aiReview");
+                  handleAIReview()
+                    .then(() => toast("🛠 AI Review complete — see suggested improvements"))
+                    .catch(() => toast("AI Review couldn't complete."));
+                }}
+              >
+                <div className="rr-smart-header">
+                  🛠 Optimize Listing (AI Review)
+                  <span className="rr-premium-tag">Free • 1/day</span>
+                </div>
+                <p className="rr-smart-desc">
+                  <strong>What it does:</strong> Improves clarity, keywords, formatting, and boosts visibility.
+                  <span className="rr-powered-tag">Review powered by Repost Rocket AI</span>
+                </p>
+              </div>
+
+              <div
+                className="rr-smart-card rr-clear-card"
+                onClick={handleClearListing}
+              >
+                <div className="rr-smart-header">🧹 Clear Listing Fields</div>
+                <p className="rr-smart-desc">Resets everything so you can start fresh.</p>
+              </div>
+            </div>
 
             {/* TITLE */}
             <section className="section-wrapper spaced-section">
@@ -1003,20 +1044,42 @@ function CreateListing() {
                 Save Draft
               </button>
 
+              {showLaunchBanner && <UpgradeBanner feature="Launches" />}
               <button
                 type="button"
-                className="cta-btn cta-btn-primary"
-                onClick={triggerPreflight}
+                className={`cta-btn cta-btn-primary ${launchUsage >= launchLimit && launchLimit > 0 ? "pulse-upgrade" : ""
+                  }`}
+                onClick={() => gate("launches", triggerPreflight)}
               >
                 Preview Listing →
               </button>
 
               <button
                 type="button"
-                className="cta-btn cta-btn-outline"
-                onClick={() => navigate("/launch")}
+                className={`cta-btn cta-btn-outline ${launchUsage >= launchLimit && launchLimit > 0 ? "pulse-upgrade" : ""
+                  }`}
+                onClick={() => gate("launches", () => navigate("/loading"))}
               >
                 Launch to Platforms →
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setListing(listingData);
+                  navigate("/launch-deck");
+                }}
+                style={{
+                  width: "100%",
+                  padding: "1rem",
+                  background: "#111",
+                  color: "white",
+                  border: "1px solid #333",
+                  borderRadius: "12px",
+                  marginTop: "1rem",
+                  fontSize: "1rem",
+                }}
+              >
+                🚀 Launch to Platforms Deck
               </button>
             </section>
 
@@ -1047,7 +1110,21 @@ function CreateListing() {
         if (proceed) navigate("/preflight");
       }}
     />
-    </>
+    <PremiumModal
+      open={paywallState.open}
+      reason={paywallState.reason}
+      usage={paywallState.usage}
+      limit={paywallState.limit}
+      tempMessage={tempMessage}
+      onClose={() => {
+        closePaywall();
+        setTempMessage("");
+      }}
+      onUpgrade={() => {
+        window.location.href = "/upgrade";
+      }}
+    />
+  </>
   );
 }
 

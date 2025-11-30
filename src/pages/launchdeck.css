@@ -1,0 +1,66 @@
+.launchdeck-hero-frame {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 1rem;
+}
+
+.launchdeck-hero-frame img {
+  width: 100%;
+  max-width: 380px;
+  border-radius: 14px;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(214, 199, 161, 0.35);
+}
+.launchdeck-platform-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  margin: 2rem auto;
+  padding: 0 1rem;
+  max-width: 500px;
+}
+
+.platform-tile {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(214, 199, 161, 0.35);
+  padding: 1rem;
+  border-radius: 14px;
+  font-size: 0.95rem;
+  color: #d6c7a1;
+  transition: all 0.2s ease;
+  text-align: center;
+  min-height: 70px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-weight: 500;
+  letter-spacing: 0.4px;
+  line-height: 1.2;
+  touch-action: manipulation;
+}
+
+.platform-tile:hover {
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: 0 0 12px rgba(214, 199, 161, 0.4);
+  transform: translateY(-2px);
+}
+
+@media (min-width: 640px) {
+  .launchdeck-platform-row {
+    grid-template-columns: repeat(3, 1fr);
+    max-width: 700px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .launchdeck-platform-row {
+    grid-template-columns: repeat(4, 1fr);
+    max-width: 900px;
+  }
+
+  .platform-tile {
+    min-height: 90px;
+    font-size: 1rem;
+  }
+}

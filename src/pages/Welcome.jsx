@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "../styles/welcome.css";
 import { useListingStore } from "../store/useListingStore";
+import { setUserPhone } from "../store/premiumStore";
 
 const platformOptions = [
   { id: "mercari", name: "Mercari", icon: "/icons/mercari.png" },
@@ -20,6 +21,23 @@ function Welcome() {
   const { selectedPlatforms, setSelectedPlatforms, resetListing } = useListingStore();
   const navigate = useNavigate();
   const normalizedSelected = selectedPlatforms.map((p) => p.toLowerCase());
+  useEffect(() => {
+    // Auto-enable premium for Jess & husband
+    const devPhones = ["15164104363", "17189082021"];
+
+    // Pick whichever is currently stored OR default to Jess
+    const stored = localStorage.getItem("rr_userPhone") || localStorage.getItem("rr_user_phone");
+    const activePhone = stored || devPhones[0];
+
+    setUserPhone(activePhone);
+  }, []);
+
+  useEffect(() => {
+    const current = localStorage.getItem("rr_user_phone");
+    if (!current) {
+      setUserPhone("15164104363");
+    }
+  }, []);
 
   const togglePlatform = (platform) => {
     const next = normalizedSelected.includes(platform)

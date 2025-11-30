@@ -2,11 +2,21 @@ import React, { useEffect, useState } from "react";
 import { useListingStore } from "../store/useListingStore";
 import { runPreflightChecks } from "../utils/preflightChecks";
 import { useNavigate } from "react-router-dom";
+import PremiumModal from "../components/PremiumModal";
+import usePaywallGate from "../hooks/usePaywallGate";
+import UsageMeter from "../components/UsageMeter";
+import UpgradeBanner from "../components/UpgradeBanner";
+import { getUsage, getLimit } from "../utils/usageTracker";
 import "../styles/preflight.css";
 
 export default function Preflight() {
   const navigate = useNavigate();
+  const { gate, paywallState, closePaywall } = usePaywallGate();
   const listingData = useListingStore((state) => state.listingData);
+  const launchUsage = getUsage("launches");
+  const launchLimit = getLimit("launches");
+  const showLaunchBanner =
+    launchLimit > 0 && launchUsage / launchLimit >= 0.8 && launchUsage < launchLimit;
   const [results, setResults] = useState(null);
   const [isClean, setIsClean] = useState(false);
 
@@ -39,6 +49,7 @@ export default function Preflight() {
             <p className="preflight-subtitle">
               Fix what matters. Continue when you're confident.
             </p>
+            {showLaunchBanner && <UpgradeBanner feature="Launches" />}
 
             {results.errors.length > 0 && (
               <div className="preflight-card error-card">
@@ -67,13 +78,23 @@ export default function Preflight() {
                 Fix Items
               </button>
 
-              <button className="preflight-btn-primary" onClick={() => navigate("/loading")}>
+              <button className="preflight-btn-primary" onClick={() => gate("launches", () => navigate("/launch-deck"))}>
                 Continue Anyway
               </button>
             </div>
+
+            <UsageMeter />
           </>
         )}
       </div>
+      <PremiumModal
+        open={paywallState.open}
+        reason={paywallState.reason}
+        usage={paywallState.usage}
+        limit={paywallState.limit}
+        onClose={closePaywall}
+        onUpgrade={() => window.location.href = "/upgrade"}
+      />
     </div>
   );
 }

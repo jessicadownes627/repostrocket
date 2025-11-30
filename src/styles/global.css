@@ -95,6 +95,16 @@ a {
   box-shadow: 0 0 16px var(--emerald-glow);
 }
 
+.pulse-upgrade {
+  animation: pulseUp 1.6s infinite ease-in-out;
+}
+
+@keyframes pulseUp {
+  0% { box-shadow: 0 0 0 rgba(0,255,200,0.0); }
+  50% { box-shadow: 0 0 12px rgba(0,255,200,0.45); }
+  100% { box-shadow: 0 0 0 rgba(0,255,200,0.0); }
+}
+
 /* -------------------------------------------- */
 /*  INPUTS + TEXTAREAS                          */
 /* -------------------------------------------- */

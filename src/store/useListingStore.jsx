@@ -132,12 +132,17 @@ export function ListingProvider({ children }) {
       return draft;
     };
 
+    const setListing = (data) => {
+      setListingData(data || defaultListing);
+    };
+
     return {
       selectedPlatforms,
       listingData,
       savedDrafts,
       setSelectedPlatforms,
       setListingField,
+      setListing,
       addPhotos,
       removePhoto,
       resetListing,

@@ -1,0 +1,163 @@
+.premium-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(10px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 5000;
+}
+
+.premium-modal {
+  background: #0a0d0f;
+  color: white;
+  width: 90%;
+  max-width: 420px;
+  border-radius: 18px;
+  padding: 28px;
+  box-shadow: 0 0 40px rgba(0,255,200,0.15);
+  border: 1px solid rgba(0,255,200,0.25);
+  animation: modalPop 0.25s ease-out;
+}
+
+@keyframes modalPop {
+  from { transform: scale(0.92); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+
+.premium-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+.premium-title {
+  font-size: 1.4rem;
+  margin: 10px 0;
+  font-weight: 700;
+}
+.premium-reason {
+  font-size: 0.95rem;
+  margin-top: 6px;
+  opacity: 0.85;
+}
+.premium-usage {
+  font-size: 0.85rem;
+  margin-top: 2px;
+  opacity: 0.65;
+}
+
+.rocket-ring {
+  width: 80px;
+  height: 80px;
+  background: radial-gradient(circle, rgba(0,255,200,0.25), rgba(0,255,200,0));
+  border-radius: 50%;
+  margin: 0 auto 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.rocket-icon {
+  font-size: 2rem;
+  animation: floatRocket 2.5s infinite ease-in-out;
+}
+
+@keyframes floatRocket {
+  0%   { transform: translateY(0); }
+  50%  { transform: translateY(-4px); }
+  100% { transform: translateY(0); }
+}
+
+.premium-features h3 {
+  margin-bottom: 10px;
+  font-size: 1.1rem;
+  text-align: center;
+}
+
+.premium-features ul {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 20px;
+}
+
+.premium-features li {
+  padding: 6px 0;
+  font-size: 0.95rem;
+  opacity: 0.9;
+}
+
+.premium-features .tease {
+  opacity: 0.5;
+  font-style: italic;
+}
+
+.premium-plans {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.premium-plan {
+  background: #111617;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,255,200,0.25);
+  color: white;
+  text-align: center;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.premium-plan:hover {
+  background: rgba(0,255,200,0.08);
+}
+
+.premium-plan-highlight {
+  background: rgba(0,255,200,0.15);
+  border-color: rgba(0,255,200,0.35);
+}
+
+.premium-plan-highlight:hover {
+  background: rgba(0,255,200,0.22);
+}
+
+.plan-price {
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.plan-note {
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+
+.plan-note.saving {
+  color: #00ffc8;
+  opacity: 1;
+}
+
+.premium-footer {
+  text-align: center;
+}
+
+.premium-close {
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,0.5);
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 4px 10px;
+  transition: 0.2s ease;
+}
+
+.premium-close:hover {
+  color: white;
+}
+
+.rr-paywall-message {
+  font-size: 0.9rem;
+  color: #e8f7ea;
+  text-align: center;
+  line-height: 1.4;
+}
