@@ -97,6 +97,9 @@ export const getLimit = (key) => {
   return getLimitFor(key, false);
 };
 
+// Hook-friendly reference (simple function)
+export const useUsage = () => getUsage();
+
 // =============================
 //  INCREMENT HANDLERS
 // =============================

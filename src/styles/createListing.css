@@ -2973,3 +2973,85 @@ input[readOnly] {
   color: #b8b2a7;
   margin-left: 6px;
 }
+.rr-usage-line {
+  font-size: 0.95rem;
+  color: #f1f1f1;
+}
+
+.rr-smart-card {
+  padding: 18px 20px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 20px;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.rr-smart-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.rr-magic-card {
+  background: linear-gradient(135deg, rgba(255, 215, 150, 0.2), rgba(0, 0, 0, 0.4));
+  border-color: rgba(255, 215, 150, 0.5);
+}
+
+.rr-auto-card {
+  background: linear-gradient(135deg, rgba(0, 255, 170, 0.2), rgba(0, 0, 0, 0.4));
+  border-color: rgba(0, 255, 170, 0.5);
+}
+
+.rr-review-card {
+  background: linear-gradient(135deg, rgba(255, 165, 120, 0.2), rgba(0, 0, 0, 0.4));
+  border-color: rgba(255, 165, 120, 0.5);
+}
+
+.rr-clear-card {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.rr-smart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.rr-smart-desc {
+  line-height: 1.45;
+  font-size: 0.95rem;
+}
+
+.rr-badge {
+  font-size: 0.75rem;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 220, 150, 0.35);
+  color: #f5e6cf;
+}
+
+.rr-premium-tag {
+  font-size: 0.75rem;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 220, 150, 0.35);
+}
+
+.rr-premium-tag.premium {
+  color: #c6ffd0;
+  border-color: rgba(130, 255, 170, 0.4);
+  background: rgba(0, 255, 186, 0.15);
+}
+
+.rr-powered-tag {
+  font-size: 0.75rem;
+  opacity: 0.7;
+  margin-left: 6px;
+}

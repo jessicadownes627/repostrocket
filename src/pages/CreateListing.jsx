@@ -20,7 +20,7 @@ import PremiumModal from "../components/PremiumModal";
 import { runPreflightChecks } from "../utils/preflightChecks";
 import usePaywallGate from "../hooks/usePaywallGate";
 import UpgradeBanner from "../components/UpgradeBanner";
-import { getUsage, getLimit } from "../utils/usageTracker";
+import { getUsage, getLimit, useUsage } from "../utils/usageTracker";
 import UsageMeter from "../components/UsageMeter";
 
 // --- Dynamic Shipping Tips ---
@@ -227,12 +227,16 @@ function CreateListing() {
   const [showPreflight, setShowPreflight] = useState(false);
   const [preflightResults, setPreflightResults] = useState([]);
   const { gate, paywallState, closePaywall } = usePaywallGate();
-  const smartUsage = getUsage("smartFill");
-  const smartLimit = getLimit("smartFill");
+  const usage = useUsage?.() || {};
+  const magicCount = String(usage.magicFill ?? "0");
+  const autoCount = String(usage.autoFill ?? "0");
+  const reviewCount = String(usage.aiReview ?? "0");
+  const smartUsage = usage.smartFill || getUsage("smartFill");
+  const smartLimit = usage.smartFillLimit || getLimit("smartFill");
   const showSmartBanner =
     smartLimit > 0 && smartUsage / smartLimit >= 0.8 && smartUsage < smartLimit;
-  const launchUsage = getUsage("launches");
-  const launchLimit = getLimit("launches");
+  const launchUsage = usage.launches || getUsage("launches");
+  const launchLimit = usage.launchLimit || getLimit("launches");
   const showLaunchBanner =
     launchLimit > 0 && launchUsage / launchLimit >= 0.8 && launchUsage < launchLimit;
 
@@ -690,16 +694,21 @@ function CreateListing() {
                 Choose how much help you want — from a quick polish to full AI automation.
               </p>
 
+              {/* Usage box */}
               <div className="rr-usage-box">
                 <div className="rr-usage-label">Your AI Usage Today</div>
-                <p>
-                  Smart Fill {usage.smartFill}/0&nbsp;&nbsp;
-                  Auto Fill {usage.autoFill}/0&nbsp;&nbsp;
-                  AI Review {usage.aiReview}/0&nbsp;&nbsp;
-                  Launches {usage.launches}/2
+                <p className="rr-usage-line">
+                  Smart Fill {smartUsage}/{smartLimit}
+                  &nbsp;&nbsp;•&nbsp;&nbsp;
+                  Auto Fill {autoCount}/0
+                  &nbsp;&nbsp;•&nbsp;&nbsp;
+                  AI Review {reviewCount}/0
+                  &nbsp;&nbsp;•&nbsp;&nbsp;
+                  Launches {launchUsage}/{launchLimit}
                 </p>
               </div>
 
+              {/* Magic Fill */}
               <div
                 className="rr-smart-card rr-magic-card"
                 onClick={() => {
@@ -710,7 +719,7 @@ function CreateListing() {
                 }}
               >
                 <div className="rr-smart-header">
-                  ✨ Magic Fill My Listing
+                  <span className="rr-smart-title-inline">✨ Magic Fill My Listing</span>
                   <span className="rr-premium-tag">Free • 1/day</span>
                 </div>
                 <p className="rr-smart-desc">
@@ -719,6 +728,7 @@ function CreateListing() {
                 </p>
               </div>
 
+              {/* Auto Fill */}
               <div
                 className="rr-smart-card rr-auto-card"
                 onClick={() => {
@@ -729,7 +739,7 @@ function CreateListing() {
                 }}
               >
                 <div className="rr-smart-header">
-                  ⚡ Full AI Auto-Fill
+                  <span className="rr-smart-title-inline">⚡ Full AI Auto-Fill</span>
                   <span className="rr-premium-tag premium">Premium</span>
                 </div>
                 <p className="rr-smart-desc">
@@ -738,6 +748,7 @@ function CreateListing() {
                 </p>
               </div>
 
+              {/* AI Review */}
               <div
                 className="rr-smart-card rr-review-card"
                 onClick={() => {
@@ -748,7 +759,7 @@ function CreateListing() {
                 }}
               >
                 <div className="rr-smart-header">
-                  🛠 Optimize Listing (AI Review)
+                  <span className="rr-smart-title-inline">🛠 Optimize Listing (AI Review)</span>
                   <span className="rr-premium-tag">Free • 1/day</span>
                 </div>
                 <p className="rr-smart-desc">
@@ -757,12 +768,17 @@ function CreateListing() {
                 </p>
               </div>
 
+              {/* Clear Listing */}
               <div
                 className="rr-smart-card rr-clear-card"
                 onClick={handleClearListing}
               >
-                <div className="rr-smart-header">🧹 Clear Listing Fields</div>
-                <p className="rr-smart-desc">Resets everything so you can start fresh.</p>
+                <div className="rr-smart-header">
+                  <span className="rr-smart-title-inline">🧹 Clear Listing Fields</span>
+                </div>
+                <p className="rr-smart-desc">
+                  Resets everything so you can start fresh.
+                </p>
               </div>
             </div>
 
