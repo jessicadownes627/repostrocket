@@ -108,7 +108,15 @@ export const runPreflightChecks = (listing) => {
     });
   }
 
-  return issues;
+  const errors = issues
+    .filter((issue) => issue.type === "error")
+    .map((issue) => issue.message);
+
+  const warnings = issues
+    .filter((issue) => issue.type === "warning")
+    .map((issue) => issue.message);
+
+  return { errors, warnings };
 };
 
 // -----------------------------------------

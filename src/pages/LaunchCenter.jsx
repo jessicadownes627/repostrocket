@@ -14,17 +14,23 @@ export default function LaunchCenter() {
 
   const launchUsage = getUsage("launches");
   const launchLimit = getLimit("launches");
-  const showLaunchBanner = launchLimit > 0 && launchUsage / launchLimit >= 0.8 && launchUsage < launchLimit;
+  const showLaunchBanner =
+    launchLimit > 0 &&
+    launchUsage / launchLimit >= 0.8 &&
+    launchUsage < launchLimit;
 
   return (
     <div className="launch-center-wrapper">
+
       <h1 className="launch-center-title">Launch Your Listing</h1>
       <p className="launch-center-subtitle">
-        Choose a marketplace to copy your formatted listing.
+        Choose a marketplace to launch your formatted listing.
       </p>
+
       {showLaunchBanner && <UpgradeBanner feature="Launches" />}
       <UsageMeter feature="launches" />
 
+      {/* LUXURY CARD GRID */}
       <div className="platform-grid">
         {Object.values(platformConfigs).map((p) => (
           <div
@@ -37,7 +43,6 @@ export default function LaunchCenter() {
               })
             }
           >
-            <img src={p.icon} alt={p.name} className="platform-icon" />
             <h2 className="platform-name">{p.name}</h2>
           </div>
         ))}

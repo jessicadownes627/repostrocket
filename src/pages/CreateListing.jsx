@@ -20,7 +20,7 @@ import PremiumModal from "../components/PremiumModal";
 import { runPreflightChecks } from "../utils/preflightChecks";
 import usePaywallGate from "../hooks/usePaywallGate";
 import UpgradeBanner from "../components/UpgradeBanner";
-import { getUsage, getLimit, useUsage } from "../utils/usageTracker";
+import { getUsageCount, getLimit, useUsage } from "../utils/usageTracker";
 import UsageMeter from "../components/UsageMeter";
 
 // --- Dynamic Shipping Tips ---
@@ -231,11 +231,11 @@ function CreateListing() {
   const magicCount = String(usage.magicFill ?? "0");
   const autoCount = String(usage.autoFill ?? "0");
   const reviewCount = String(usage.aiReview ?? "0");
-  const smartUsage = usage.smartFill || getUsage("smartFill");
+  const smartUsage = usage.smartFill ?? getUsageCount("smartFill");
   const smartLimit = usage.smartFillLimit || getLimit("smartFill");
   const showSmartBanner =
     smartLimit > 0 && smartUsage / smartLimit >= 0.8 && smartUsage < smartLimit;
-  const launchUsage = usage.launches || getUsage("launches");
+  const launchUsage = usage.launches ?? getUsageCount("launches");
   const launchLimit = usage.launchLimit || getLimit("launches");
   const showLaunchBanner =
     launchLimit > 0 && launchUsage / launchLimit >= 0.8 && launchUsage < launchLimit;

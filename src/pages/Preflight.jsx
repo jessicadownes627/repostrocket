@@ -6,14 +6,14 @@ import PremiumModal from "../components/PremiumModal";
 import usePaywallGate from "../hooks/usePaywallGate";
 import UsageMeter from "../components/UsageMeter";
 import UpgradeBanner from "../components/UpgradeBanner";
-import { getUsage, getLimit } from "../utils/usageTracker";
+import { getUsageCount, getLimit } from "../utils/usageTracker";
 import "../styles/preflight.css";
 
 export default function Preflight() {
   const navigate = useNavigate();
   const { gate, paywallState, closePaywall } = usePaywallGate();
   const listingData = useListingStore((state) => state.listingData);
-  const launchUsage = getUsage("launches");
+  const launchUsage = getUsageCount("launches");
   const launchLimit = getLimit("launches");
   const showLaunchBanner =
     launchLimit > 0 && launchUsage / launchLimit >= 0.8 && launchUsage < launchLimit;
