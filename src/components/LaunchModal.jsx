@@ -58,11 +58,11 @@ export default function LaunchModal({ platform, onClose, onLaunch }) {
           </button>
 
           <button className="btn-secondary" onClick={onClose}>
-            Cancel
+            cancel 
           </button>
         </div>
       </div>
     </div>
-  ); 
+  );  
 }
 
