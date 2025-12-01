@@ -63,5 +63,6 @@ export default function LaunchModal({ platform, onClose, onLaunch }) {
         </div>
       </div>
     </div>
-  );
+  ); 
 }
+
