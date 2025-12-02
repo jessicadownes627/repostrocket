@@ -86,6 +86,7 @@ function Welcome() {
     <div className="welcome-page">
       <div className="welcome-card welcome-wrapper">
         <div className="welcome-container">
+          <p className="step-label">Step 1</p>
           <h1 className="welcome-title">
             Choose Your Selling Platforms
           </h1>
@@ -95,7 +96,7 @@ function Welcome() {
             Repost Rocket handles formatting across every platform.
             <br /><br />
             <span style={{ opacity: 0.8, fontSize: "0.9rem" }}>
-              (Note: You must have active accounts on these marketplaces to publish listings.)
+              (Note: You must have active accounts on these marketplaces to publish listings)
             </span>
           </p>
 
@@ -104,34 +105,34 @@ function Welcome() {
             {platformOptions.map((p) => {
               const isActive = normalizedSelected.includes(p.id);
               return (
-                <div
-                  key={p.id}
-                  className={`platform-card ${isActive ? "selected" : ""}`}
-                  onClick={() => togglePlatform(p.id)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      togglePlatform(p.id);
-                    }
-                  }}
-                >
-                  <div className="platform-title">{p.name}</div>
-                  <div className="platform-check">
-                    {isActive && (
-                      <svg viewBox="0 0 24 24">
-                        <path
-                          fill="currentColor"
-                          d="M20.285 6.709a1 1 0 0 0-1.414-1.414l-9.192 9.193-4.242-4.243A1 1 0 0 0 4.023 11.66l4.95 4.95a1 1 0 0 0 1.414 0l9.898-9.9Z"
-                        />
-                      </svg>
-                    )}
-                  </div>
+              <div
+                key={p.id}
+                className={`platform-card ${isActive ? "selected" : ""}`}
+                onClick={() => togglePlatform(p.id)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    togglePlatform(p.id);
+                  }
+                }}
+              >
+                <div className="platform-icon-ring">
+                  {isActive && (
+                    <svg viewBox="0 0 24 24" width="18" height="18">
+                      <path
+                        fill="currentColor"
+                        d="M20.285 6.709a1 1 0 0 0-1.414-1.414l-9.192 9.193-4.242-4.243A1 1 0 0 0 4.023 11.66l4.95 4.95a1 1 0 0 0 1.414 0l9.898-9.9Z"
+                      />
+                    </svg>
+                  )}
                 </div>
-              );
-            })}
-          </div>
+                <div className="platform-name">{p.name}</div>
+              </div>
+            );
+          })}
+        </div>
 
           {/* Bottom Buttons */}
           <button

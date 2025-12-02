@@ -650,6 +650,15 @@ function CreateListing() {
     setSizeInput("");
   };
 
+  const handleDiscard = () => discardDraft();
+  const handleSaveDraft = () => saveDraftOnly();
+  const handlePreviewListing = () => gate("launches", triggerPreflight);
+  const handleLaunch = () => gate("launches", () => navigate("/loading"));
+  const handleDeck = () => {
+    setListing(listingData);
+    navigate("/launch-deck");
+  };
+
   return (
     <>
       <div className="create-page">
@@ -670,13 +679,13 @@ function CreateListing() {
 
           <form className="create-form" onSubmit={handleSubmit}>
             {/* TITLE */}
-            <section className="section-wrapper spaced-section">
+            <section className="section-wrapper spaced-section description-block">
               <h2 className="section-title">Listing Details</h2>
               <p className="section-subtitle">Universal details that feed every platform.</p>
               <p className="section-subtitle listing-question">What are you selling?</p>
               <label className="input-label">Title</label>
               <input
-                className="input-neon"
+                className="input-neon title-highlight"
                 value={listingData.title || ""}
                 onChange={(e) => setListingField("title", e.target.value)}
               />
@@ -864,14 +873,17 @@ function CreateListing() {
 
             {/* DESCRIPTION */}
             <section className="section-wrapper spaced-section">
-              <h2 className="section-title">Description</h2>
-              <p className="section-subtitle">Add fit, flaws, measurements, and helpful buyer info.</p>
-              <textarea
-                rows={5}
-                className="input-neon"
-                value={listingData.description || ""}
-                onChange={(e) => setListingField("description", e.target.value)}
-              />
+              <div className="section-card">
+                <h2 className="section-title">Description</h2>
+                <p className="section-sub">Tell buyers what makes this item great.</p>
+                <textarea
+                  rows={6}
+                  className="input-neon description-box"
+                  value={listingData.description || ""}
+                  onChange={(e) => setListingField("description", e.target.value)}
+                  placeholder="Write a clear, helpful description..."
+                />
+              </div>
             </section>
 
             {/* CATEGORY */}
@@ -889,27 +901,6 @@ function CreateListing() {
                     {cat}
                   </button>
                 ))}
-              </div>
-            </section>
-
-            {/* CONDITION */}
-            <section className="section-wrapper spaced-section">
-              <h2 className="section-title">Condition</h2>
-              <p className="section-subtitle">Tap to select — we’ll map it per platform.</p>
-              <div className="tap-grid">
-                {tapConditions.map((cond) => {
-                  const active = (listingData.condition || "").toLowerCase() === cond.toLowerCase();
-                  return (
-                    <button
-                      key={cond}
-                      type="button"
-                      className={`tap-btn ${active ? "active" : ""}`}
-                      onClick={() => setListingField("condition", cond)}
-                    >
-                      {cond}
-                    </button>
-                  );
-                })}
               </div>
             </section>
 
@@ -1073,6 +1064,27 @@ function CreateListing() {
               />
             </section>
 
+            {/* CONDITION */}
+            <section className="section-wrapper spaced-section">
+              <h2 className="section-title">Condition</h2>
+              <p className="section-subtitle">Tap to select — we’ll map it per platform.</p>
+              <div className="tap-grid">
+                {tapConditions.map((cond) => {
+                  const active = (listingData.condition || "").toLowerCase() === cond.toLowerCase();
+                  return (
+                    <button
+                      key={cond}
+                      type="button"
+                      className={`tap-btn ${active ? "active" : ""}`}
+                      onClick={() => setListingField("condition", cond)}
+                    >
+                      {cond}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
             {/* SMART PRICING */}
             <section className="section-wrapper spaced-section">
               <h2 className="section-title">Pricing</h2>
@@ -1153,56 +1165,22 @@ function CreateListing() {
           </section>
 
             <section className="section-wrapper spaced-section">
-              <h2 className="section-title">Ready to Launch</h2>
-              <p className="section-subtitle">Preview your listing and launch to your selected platforms.</p>
+              <div className="section-card ready-launch">
+                <h2 className="section-title">Ready to Launch</h2>
+                <p className="section-sub">Preview your listing and launch to your selected platforms.</p>
 
-              <p className="discard-draft" onClick={discardDraft}>Discard Draft</p>
+                <button className="utility-link discard-draft" onClick={handleDiscard}>
+                  Delete Listing
+                </button>
 
-              <button
-                type="button"
-                className="cta-btn cta-btn-outline"
-                onClick={saveDraftOnly}
-              >
-                Save Draft
-              </button>
+                <button className="btn-outline-champagne" onClick={handlePreviewListing}>
+                  PREVIEW LISTING →
+                </button>
 
-              {showLaunchBanner && <UpgradeBanner feature="Launches" />}
-              <button
-                type="button"
-                className={`cta-btn cta-btn-primary ${launchUsage >= launchLimit && launchLimit > 0 ? "pulse-upgrade" : ""
-                  }`}
-                onClick={() => gate("launches", triggerPreflight)}
-              >
-                Preview Listing →
-              </button>
-
-              <button
-                type="button"
-                className={`cta-btn cta-btn-outline ${launchUsage >= launchLimit && launchLimit > 0 ? "pulse-upgrade" : ""
-                  }`}
-                onClick={() => gate("launches", () => navigate("/loading"))}
-              >
-                Launch to Platforms →
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setListing(listingData);
-                  navigate("/launch-deck");
-                }}
-                style={{
-                  width: "100%",
-                  padding: "1rem",
-                  background: "#111",
-                  color: "white",
-                  border: "1px solid #333",
-                  borderRadius: "12px",
-                  marginTop: "1rem",
-                  fontSize: "1rem",
-                }}
-              >
-                🚀 Launch to Platforms Deck
-              </button>
+                <button className="btn-primary-champagne" onClick={handleLaunch}>
+                  🚀 LAUNCH TO PLATFORMS →
+                </button>
+              </div>
             </section>
 
           </form>
