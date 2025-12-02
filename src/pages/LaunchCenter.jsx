@@ -5,14 +5,14 @@ import PremiumModal from "../components/PremiumModal";
 import { incrementLaunch } from "../utils/usageTracker";
 import usePaywallGate from "../hooks/usePaywallGate";
 import UpgradeBanner from "../components/UpgradeBanner";
-import { getUsage, getLimit } from "../utils/usageTracker";
+import { getUsageCount, getLimit } from "../utils/usageTracker";
 import UsageMeter from "../components/UsageMeter";
 
 export default function LaunchCenter() {
   const navigate = useNavigate();
   const { gate, paywallState, closePaywall } = usePaywallGate();
 
-  const launchUsage = getUsage("launches");
+  const launchUsage = getUsageCount("launches");
   const launchLimit = getLimit("launches");
   const showLaunchBanner =
     launchLimit > 0 &&

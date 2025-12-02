@@ -20,8 +20,12 @@ import PremiumModal from "../components/PremiumModal";
 import { runPreflightChecks } from "../utils/preflightChecks";
 import usePaywallGate from "../hooks/usePaywallGate";
 import UpgradeBanner from "../components/UpgradeBanner";
-import { getUsageCount, getLimit, useUsage } from "../utils/usageTracker";
+import { getUsage, getLimit, useUsage } from "../utils/usageTracker";
 import UsageMeter from "../components/UsageMeter";
+import { useSmartFill } from "../hooks/useSmartFill";
+import { mergeAndCleanTags } from "../utils/mergeAndCleanTags";
+import { convertSize } from "../utils/convertSize";
+import { babySizeGuide } from "../utils/babySizeGuide";
 
 // --- Dynamic Shipping Tips ---
 function getShippingHints(category, shippingChoice) {
@@ -192,7 +196,7 @@ function CreateListing() {
     addPhotos,
     removePhoto,
     selectedPlatforms,
-    resetListing,
+    resetListing: resetListingStore,
     addDraft,
     setSelectedPlatforms,
     setListing,
@@ -202,6 +206,7 @@ function CreateListing() {
   const [isDragging, setIsDragging] = useState(false);
   const [autoFillLoading, setAutoFillLoading] = useState(false);
   const [photoPreviews, setPhotoPreviews] = useState([]);
+  const [sizeInput, setSizeInput] = useState(listingData.size || "");
   const parsed = useTitleParser(listingData.title);
   const [magicLoading, setMagicLoading] = useState(false);
   const [showDiffPanel, setShowDiffPanel] = useState(false);
@@ -239,8 +244,26 @@ function CreateListing() {
   const launchLimit = usage.launchLimit || getLimit("launches");
   const showLaunchBanner =
     launchLimit > 0 && launchUsage / launchLimit >= 0.8 && launchUsage < launchLimit;
+  const primaryPlatform = selectedPlatforms[0]?.toLowerCase() || "mercari";
+  const {
+    tags,
+    setTags: setSmartTags,
+    handleCategorySelect,
+    resetListing: resetSmartFillTags,
+    showTags,
+    handleRemoveTag,
+  } = useSmartFill(listingData, primaryPlatform);
 
   const triggerUpload = () => fileInputRef.current?.click();
+  const convertedSize = useMemo(() => convertSize(sizeInput), [sizeInput]);
+  const babyInfo = useMemo(() => {
+    if (!sizeInput) return null;
+    return babySizeGuide[sizeInput.toLowerCase()] || null;
+  }, [sizeInput]);
+  const handleSizeSelect = (value) => {
+    setListingField("size", value);
+    setSizeInput(value);
+  };
 
   const isSizeRelevant = (cat = "") => {
     cat = cat.toLowerCase();
@@ -278,6 +301,10 @@ function CreateListing() {
     }
   }, [parsed, listingData.category, listingData.size, listingData.bagType, setListingField]);
 
+  useEffect(() => {
+    setSizeInput(listingData.size || "");
+  }, [listingData.size]);
+
   const parsedTags = useMemo(() => {
     if (Array.isArray(listingData.tags)) {
       return listingData.tags;
@@ -299,6 +326,28 @@ function CreateListing() {
     const next = exists ? currentTags.filter((t) => t !== tag) : [...currentTags, tag];
 
     setListingField("tags", next.join(", "));
+  };
+
+  const addCustomTag = (value) => {
+    const text = (value || "").trim();
+    if (!text) return;
+    const nextTags = mergeAndCleanTags({
+      curatedTags: tags,
+      customTags: [text],
+    });
+    setSmartTags(nextTags);
+    setListingField("tags", nextTags.join(", "));
+  };
+
+  const handleRemoveTagChip = (tag) => {
+    const nextTags = handleRemoveTag(tag);
+    setListingField("tags", nextTags.join(", "));
+  };
+
+  const handleCategoryClick = (cat) => {
+    const nextTags = handleCategorySelect(cat);
+    setListingField("category", cat);
+    setListingField("tags", nextTags.join(", "));
   };
 
   /** UNIVERSAL PREVIEW (1 grid for all platforms) */
@@ -537,13 +586,15 @@ function CreateListing() {
   };
 
   const handleClearListing = () => {
-    resetListing();
+    resetListingStore();
+    resetSmartFillTags();
     setPhotoPreviews([]);
     setShowReviewPill(false);
     setReview(null);
     setReviewResults(null);
     setDiffReport([]);
     setShowDiffPanel(false);
+    setSizeInput("");
   };
 
   const handleSubmit = (e) => {
@@ -593,8 +644,10 @@ function CreateListing() {
   };
 
   const discardDraft = () => {
-    resetListing();
+    resetListingStore();
+    resetSmartFillTags();
     setPhotoPreviews([]);
+    setSizeInput("");
   };
 
   return (
@@ -616,6 +669,33 @@ function CreateListing() {
           </div>
 
           <form className="create-form" onSubmit={handleSubmit}>
+            {/* TITLE */}
+            <section className="section-wrapper spaced-section">
+              <h2 className="section-title">Listing Details</h2>
+              <p className="section-subtitle">Universal details that feed every platform.</p>
+              <p className="section-subtitle listing-question">What are you selling?</p>
+              <label className="input-label">Title</label>
+              <input
+                className="input-neon"
+                value={listingData.title || ""}
+                onChange={(e) => setListingField("title", e.target.value)}
+              />
+
+              {parsed && (
+                <div className="ai-parse-preview">
+                  <h4 className="ai-parse-title">AI Parsed Details</h4>
+                  <div className="ai-parse-grid">
+                    <div><strong>Brand:</strong> {parsed.brand || "—"}</div>
+                    <div><strong>Model:</strong> {parsed.model || "—"}</div>
+                    <div><strong>Color:</strong> {parsed.color || "—"}</div>
+                    <div><strong>Size:</strong> {parsed.size || "—"}</div>
+                    <div><strong>Condition:</strong> {parsed.condition || "—"}</div>
+                    <div><strong>Category:</strong> {parsed.category || "—"}</div>
+                  </div>
+                </div>
+              )}
+            </section>
+
             {/* PHOTOS */}
             <section className="section-wrapper">
               <div className="section-head">
@@ -782,30 +862,16 @@ function CreateListing() {
               </div>
             </div>
 
-            {/* TITLE */}
+            {/* DESCRIPTION */}
             <section className="section-wrapper spaced-section">
-              <h2 className="section-title">Listing Details</h2>
-              <p className="section-subtitle">Universal details that feed every platform.</p>
-              <label className="input-label">Title</label>
-              <input
+              <h2 className="section-title">Description</h2>
+              <p className="section-subtitle">Add fit, flaws, measurements, and helpful buyer info.</p>
+              <textarea
+                rows={5}
                 className="input-neon"
-                value={listingData.title || ""}
-                onChange={(e) => setListingField("title", e.target.value)}
+                value={listingData.description || ""}
+                onChange={(e) => setListingField("description", e.target.value)}
               />
-
-              {parsed && (
-                <div className="ai-parse-preview">
-                  <h4 className="ai-parse-title">AI Parsed Details</h4>
-                  <div className="ai-parse-grid">
-                    <div><strong>Brand:</strong> {parsed.brand || "—"}</div>
-                    <div><strong>Model:</strong> {parsed.model || "—"}</div>
-                    <div><strong>Color:</strong> {parsed.color || "—"}</div>
-                    <div><strong>Size:</strong> {parsed.size || "—"}</div>
-                    <div><strong>Condition:</strong> {parsed.condition || "—"}</div>
-                    <div><strong>Category:</strong> {parsed.category || "—"}</div>
-                  </div>
-                </div>
-              )}
             </section>
 
             {/* CATEGORY */}
@@ -818,7 +884,7 @@ function CreateListing() {
                     key={cat}
                     type="button"
                     className={`category-pill ${listingData.category === cat ? "active" : ""}`}
-                    onClick={() => setListingField("category", cat)}
+                    onClick={() => handleCategoryClick(cat)}
                   >
                     {cat}
                   </button>
@@ -862,7 +928,7 @@ function CreateListing() {
                         key={sz}
                         type="button"
                         className={`size-pill ${listingData.size === sz ? "active" : ""}`}
-                        onClick={() => setListingField("size", sz)}
+                    onClick={() => handleSizeSelect(sz)}
                       >
                         {sz}
                       </button>
@@ -877,7 +943,7 @@ function CreateListing() {
                         key={sz}
                         type="button"
                         className={`size-pill ${listingData.size === sz ? "active" : ""}`}
-                        onClick={() => setListingField("size", sz)}
+                      onClick={() => handleSizeSelect(sz)}
                       >
                         {sz}
                       </button>
@@ -893,13 +959,34 @@ function CreateListing() {
                           key={sz}
                           type="button"
                           className={`size-pill ${listingData.size === sz ? "active" : ""}`}
-                          onClick={() => setListingField("size", sz)}
+                          onClick={() => handleSizeSelect(sz)}
                         >
                           {sz}
                         </button>
                       ))}
                     </div>
                   )}
+              {convertedSize && (
+                <div className="size-intel-box">
+                  {convertedSize.us_women && <p>Women’s US: {convertedSize.us_women}</p>}
+                  {convertedSize.us_men && <p>Men’s US: {convertedSize.us_men}</p>}
+                  {convertedSize.eu && <p>EU: {convertedSize.eu}</p>}
+                  {convertedSize.uk && <p>UK: {convertedSize.uk}</p>}
+                  {convertedSize.cm && <p>CM: {convertedSize.cm}</p>}
+                  {convertedSize.us_alpha && <p>US Alpha: {convertedSize.us_alpha}</p>}
+                  {convertedSize.us_numeric && <p>US Numeric: {convertedSize.us_numeric}</p>}
+                </div>
+              )}
+              {babyInfo && (
+                <div className="baby-size-tooltip">
+                  <p><strong>Fits:</strong> {babyInfo.weight}</p>
+                  <p>{babyInfo.notes}</p>
+                  <p style={{ opacity: 0.7 }}>
+                    Tip: Babies grow 1 size every 2–3 months. 
+                    Shopping ahead? Choose the next size up for future seasons.
+                  </p>
+                </div>
+              )}
               </section>
             )}
 
@@ -926,22 +1013,41 @@ function CreateListing() {
               </section>
             )}
 
-            {/* DESCRIPTION */}
-            <section className="section-wrapper spaced-section">
-              <h2 className="section-title">Description</h2>
-              <p className="section-subtitle">Add fit, flaws, measurements, and helpful buyer info.</p>
-              <textarea
-                rows={5}
-                className="input-neon"
-                value={listingData.description || ""}
-                onChange={(e) => setListingField("description", e.target.value)}
-              />
-            </section>
-
             {/* SMART TAGS */}
             <section className="section-wrapper spaced-section">
               <h2 className="section-title center">Smart Tags</h2>
               <p className="section-subtitle center">Tap all that apply — these help refine your listing everywhere.</p>
+              {showTags && (
+                <div className="curated-style-tags">
+                  <div className="tag-chip-wrapper">
+                    {tags.map((tag) => (
+                      <span key={tag} className="tag-chip">
+                        <span>{tag}</span>
+                        <button
+                          type="button"
+                          className="tag-chip-remove"
+                          onClick={() => handleRemoveTagChip(tag)}
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <input
+                    type="text"
+                    className="input-neon custom-tag-input"
+                    placeholder="Add custom tag"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addCustomTag(e.target.value);
+                        e.target.value = "";
+                      }
+                    }}
+                  />
+                </div>
+              )}
+
               <div className="tag-grid">
                 {TAG_OPTIONS.map((tag) => {
                   const active = parsedTags.includes(tag);

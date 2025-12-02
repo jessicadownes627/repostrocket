@@ -1005,6 +1005,71 @@ textarea[readonly],
   margin: 10px 0 16px;
 }
 
+.tag-chip-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.tag-chip {
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #f7f1da;
+}
+
+.tag-chip-remove {
+  background: transparent;
+  border: none;
+  color: #f7f1da;
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0;
+  line-height: 1;
+  font-size: 0.9rem;
+}
+
+.custom-tag-input {
+  margin-bottom: 1.2rem;
+}
+
+.size-intel-box {
+  background: rgba(255, 255, 255, 0.06);
+  padding: 12px 16px;
+  border-radius: 12px;
+  margin-top: 8px;
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.size-intel-box p {
+  margin: 4px 0;
+  opacity: 0.9;
+}
+
+.baby-size-tooltip {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 12px 16px;
+  border-radius: 12px;
+  margin-top: 8px;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  backdrop-filter: blur(8px);
+}
+
+.baby-size-tooltip p {
+  margin: 4px 0;
+}
+
 .tag-grid {
   display: flex;
   flex-wrap: wrap;

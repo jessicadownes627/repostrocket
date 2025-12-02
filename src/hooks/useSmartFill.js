@@ -1,7 +1,9 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { extractDominantColor } from "../utils/extractDominantColor";
 import { mapColorToName } from "../utils/colorNameMap";
 import { enhanceStyle } from "../utils/enhanceStyle";
+import { updateTagsForCategory } from "../utils/updateTagsForCategory";
+import { mergeAndCleanTags } from "../utils/mergeAndCleanTags";
 
 /* -------------------------------------------
    CATEGORY DETECTION (Deep rules)
@@ -26,10 +28,6 @@ function detectCategory(listing = {}) {
 
   return "Clothing → Other";
 }
-
-/* -------------------------------------------
-   FEATURE EXTRACTION (Safe + predictable)
--------------------------------------------- */
 
 function extractFeatures(listing = {}) {
   const text = `${listing.title || ""} ${listing.description || ""}`.toLowerCase();
@@ -81,20 +79,40 @@ Ships fast from a smoke-free home.
 -------------------------------------------- */
 
 function generateTags(listing, f, category) {
-  const base = [
+  const splitTokens = (value) =>
+    String(value || "")
+      .toLowerCase()
+      .split(/[^a-z0-9]+/i)
+      .filter(Boolean);
+
+  const seeds = [
     f.color,
     f.material,
     f.style,
     f.length,
-    category.replace(/ → /g, " "),
+    category,
     listing.brand,
     listing.size,
+    listing.condition,
+    listing.shipping,
   ];
 
-  return base
-    .filter(Boolean)
-    .map((t) => t.toLowerCase().replace(/\s+/g, ""))
-    .slice(0, 12);
+  const tokens = seeds.flatMap((seed) => splitTokens(seed));
+
+  const custom = Array.isArray(listing.tags)
+    ? listing.tags.flatMap((tag) => splitTokens(tag))
+    : splitTokens(listing.tags);
+
+  const combined = [...tokens, ...custom];
+
+  const unique = [];
+  combined.forEach((tag) => {
+    if (!unique.includes(tag)) {
+      unique.push(tag);
+    }
+  });
+
+  return unique.slice(0, 12);
 }
 
 /* -------------------------------------------
@@ -125,6 +143,8 @@ export function useSmartFill(listingData, platform = "mercari") {
   const [dominantColor, setDominantColor] = useState(null);
   const [colorName, setColorName] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [tags, setTags] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState(null);
 
   // Extract dominant color from image
   useEffect(() => {
@@ -172,6 +192,49 @@ export function useSmartFill(listingData, platform = "mercari") {
     [listingData, features, category, platform, refreshKey]
   );
 
+  const handleCategorySelect = useCallback(
+    (cat) => {
+      setSelectedCategory(cat);
+      const curated = updateTagsForCategory(cat);
+      setTags(curated);
+      return curated;
+    },
+    []
+  );
+
+  const showTags = Boolean(category);
+  const handleRemoveTag = useCallback(
+    (tag) => {
+      const next = tags.filter((t) => t !== tag);
+      setTags(next);
+      return next;
+    },
+    [tags]
+  );
+
+  useEffect(() => {
+    if (!selectedCategory && category) {
+      handleCategorySelect(category);
+    }
+  }, [category, selectedCategory, handleCategorySelect]);
+
+  const resetListing = useCallback(() => {
+    setTags([]);
+    setSelectedCategory(null);
+  }, []);
+
+  useEffect(() => {
+    if (!selectedCategory || !smartFillBundle.tags?.length) return;
+
+    const merged = mergeAndCleanTags({
+      curatedTags: tags,
+      aiTags: smartFillBundle.tags,
+    });
+    if (merged.join(",") !== tags.join(",")) {
+      setTags(merged);
+    }
+  }, [selectedCategory, smartFillBundle.tags, tags]);
+
   const autoCopyBundle = () =>
     navigator.clipboard.writeText(JSON.stringify(smartFillBundle, null, 2));
 
@@ -186,6 +249,13 @@ export function useSmartFill(listingData, platform = "mercari") {
     colorName,
     autoCopyBundle,
     smartFillTrigger,
+    tags,
+    setTags,
+    handleCategorySelect,
+    resetListing,
+    selectedCategory,
+    showTags,
+    handleRemoveTag,
   };
 }
 
