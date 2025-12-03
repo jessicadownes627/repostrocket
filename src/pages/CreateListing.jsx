@@ -3,13 +3,10 @@ import { useNavigate } from "react-router-dom";
 import "../styles/createListing.css";
 import { useListingStore } from "../store/useListingStore";
 import { generateResizedVariants, resizeImage } from "../utils/imageTools";
-import { mockAnalyzePhotos } from "../utils/aiSmartFill";
 import { convertHeicToJpeg } from "../utils/heicConverter";
 import { useTitleParser } from "../hooks/useTitleParser";
-import { runMagicFill } from "../engines/MagicFillEngine";
 import AIDiffPanel from "../components/AIDiffPanel";
 import AIReviewPanel from "../components/AIReviewPanel";
-import { aiReviewEngine } from "../engines/aiReviewEngine";
 import { generateAIDiffReport } from "../engines/aiDiffEngine";
 import { scorePhotoQuality } from "../engines/photoQualityEngine";
 import { predictFit } from "../engines/fitPredictorEngine";
@@ -224,6 +221,46 @@ function CreateListing() {
     setTimeout(() => setTempMessage(""), 4000);
   };
 
+  const safeParseJSON = async (response) => {
+    try {
+      return await response.json();
+    } catch {
+      return {};
+    }
+  };
+
+  const postToAIFunction = async (fn, body) => {
+    const response = await fetch(`/.netlify/functions/${fn}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    const data = await safeParseJSON(response);
+    if (!response.ok || data?.error) {
+      throw new Error(data?.error || `${fn} failed`);
+    }
+    return data;
+  };
+
+  const analyzeListingPhotos = async (photos = []) => {
+    if (!Array.isArray(photos) || photos.length === 0) {
+      throw new Error("No photos provided for analysis.");
+    }
+    return postToAIFunction("analyzePhotos", { photos });
+  };
+
+  const autoFillWithAI = async (photoResults) => {
+    if (!photoResults || typeof photoResults !== "object") {
+      throw new Error("No photo analysis available.");
+    }
+    return postToAIFunction("autoFill", { photoResults });
+  };
+
+  const fetchAIReview = async (listing) => {
+    return postToAIFunction("aiReview", { listing });
+  };
+
   const HINTS = {
     auto: "⚡ Auto-Fill is a Premium Feature — instantly build titles, descriptions, tags, category, and condition with AI.",
     magic: "✨ Magic Fill is Premium — auto-guess categories, colors, sizes, & smart tags from photos.",
@@ -279,12 +316,49 @@ function CreateListing() {
     );
   };
 
-  const runReview = (overrides = {}) => {
+  const createReviewPanelData = (improved = {}) => {
+    const titleAudit = improved.betterTitle
+      ? [`Title idea: ${improved.betterTitle}`]
+      : [];
+    const descriptionAudit = improved.betterDescription
+      ? [`Description idea: ${improved.betterDescription}`]
+      : [];
+    const highlights =
+      Array.isArray(improved.betterTags) && improved.betterTags.length
+        ? [`Tag ideas: ${improved.betterTags.join(", ")}`]
+        : [];
+    const priceAudit =
+      typeof improved.price === "number"
+        ? `Suggested price: $${improved.price.toFixed(2)}`
+        : "Pricing looks balanced.";
+
+    return {
+      confidence: {},
+      titleAudit,
+      descriptionAudit,
+      highlights,
+      platformWarnings: {},
+      priceAudit,
+    };
+  };
+
+  const runReview = async (overrides = {}) => {
     const merged = { ...listingData, ...overrides };
-    const platforms = (selectedPlatforms || []).map((p) => p.toLowerCase());
-    const result = aiReviewEngine(merged, parsed, platforms);
-    setReviewResults(result);
-    setReviewOpen(true);
+    let improvedData = {};
+    let reviewError = null;
+
+    try {
+      improvedData = await fetchAIReview(merged);
+    } catch (err) {
+      reviewError = err;
+      console.error("AI Review failed:", err);
+    } finally {
+      setReviewResults(createReviewPanelData(improvedData));
+      setReviewOpen(true);
+      if (reviewError) {
+        throw reviewError;
+      }
+    }
   };
 
   // Auto-apply AI parsed size/bag type when relevant
@@ -486,86 +560,110 @@ function CreateListing() {
   };
 
   const handleAutoFill = async () => {
-    if (!displayPhotos.length) {
+    if (!displayPhotos.length || !(listingData.photos || []).length) {
       alert("Please upload at least one photo to run Auto-Fill.");
       return;
     }
     setAutoFillLoading(true);
 
-    const sourcePhotos = displayPhotos;
-    const originalSnapshot = {
-      title: listingData.title,
-      description: listingData.description,
-      category: listingData.category,
-      condition: listingData.condition,
-      color: parsed?.color,
-      size: listingData.size || parsed?.size,
-      tags: Array.isArray(listingData.tags) ? listingData.tags.join(", ") : listingData.tags || "",
-    };
-    const suggestions = await mockAnalyzePhotos(sourcePhotos);
-    if (suggestions) {
-      const { category, condition, description, title, tags } = suggestions;
-      const deriveTitle = () => {
-        if (title) return title;
-        if (listingData.title) return listingData.title;
-        const firstWords = (description || "").split(/\s+/).slice(0, 6).join(" ");
-        return firstWords || "Auto-filled Listing";
-      };
-      const deriveTags = () => {
-        if (tags && Array.isArray(tags)) return tags.join(", ");
-        if (typeof listingData.tags === "string") return listingData.tags;
-        const words = (description || listingData.description || "")
-          .toLowerCase()
-          .split(/[^a-z0-9]+/i)
-          .filter((w) => w.length > 3);
-        return words.slice(0, 8).join(", ");
-      };
-      const proposed = {
-        title: deriveTitle(),
-        description: description || listingData.description,
-        category: category || listingData.category,
-        condition: condition || listingData.condition,
+    try {
+      const photoPayload = (listingData.photos || []).slice(0, 4);
+      const originalSnapshot = {
+        title: listingData.title,
+        description: listingData.description,
+        category: listingData.category,
+        condition: listingData.condition,
         color: parsed?.color,
-        size: parsed?.size,
-        tags: Array.isArray(tags) ? tags.join(", ") : deriveTags(),
+        size: listingData.size || parsed?.size,
+        tags: Array.isArray(listingData.tags) ? listingData.tags.join(", ") : listingData.tags || "",
       };
-      const diff = generateAIDiffReport(originalSnapshot, proposed);
-      setDiffReport(diff);
-      if (diff.length) setShowDiffPanel(true);
-      if (category) setListingField("category", category);
-      if (condition) setListingField("condition", condition);
-      if (description) setListingField("description", description);
-      setListingField("title", deriveTitle());
-      setListingField("tags", deriveTags());
-      if (tags && Array.isArray(tags)) {
-        setListingField("tags", tags.join(", "));
+      const photoAnalysis = await analyzeListingPhotos(photoPayload);
+      const suggestions = await autoFillWithAI(photoAnalysis);
+      if (suggestions) {
+        const { category, condition, description, title, tags, price } = suggestions;
+        const deriveTitle = () => {
+          if (title) return title;
+          if (listingData.title) return listingData.title;
+          const firstWords = (description || "").split(/\s+/).slice(0, 6).join(" ");
+          return firstWords || "Auto-filled Listing";
+        };
+        const deriveTags = () => {
+          if (tags && Array.isArray(tags)) return tags.join(", ");
+          if (typeof listingData.tags === "string") return listingData.tags;
+          const words = (description || listingData.description || "")
+            .toLowerCase()
+            .split(/[^a-z0-9]+/i)
+            .filter((w) => w.length > 3);
+          return words.slice(0, 8).join(", ");
+        };
+        const pricing = typeof price === "number" ? Math.round(price) : listingData.price;
+        const proposed = {
+          title: deriveTitle(),
+          description: description || listingData.description,
+          category: category || listingData.category,
+          condition: condition || listingData.condition,
+          color: parsed?.color,
+          size: parsed?.size,
+          tags: Array.isArray(tags) ? tags.join(", ") : deriveTags(),
+          price: pricing,
+        };
+        const diff = generateAIDiffReport(originalSnapshot, proposed);
+        setDiffReport(diff);
+        if (diff.length) setShowDiffPanel(true);
+        if (category) setListingField("category", category);
+        if (condition) setListingField("condition", condition);
+        if (description) setListingField("description", description);
+        setListingField("title", deriveTitle());
+        setListingField("tags", deriveTags());
+        if (tags && Array.isArray(tags)) {
+          setListingField("tags", tags.join(", "));
+        }
+        if (pricing !== undefined && pricing !== null) {
+          setListingField("price", pricing);
+        }
+        setShowReviewPill(true);
+        await runReview(proposed);
       }
-      setShowReviewPill(true);
-      runReview(proposed);
+    } catch (err) {
+      console.warn("Auto Fill failed:", err);
+      throw err;
+    } finally {
+      setAutoFillLoading(false);
     }
-
-    setAutoFillLoading(false);
   };
-
   const handleMagicFill = async () => {
+    if (!(listingData.photos || []).length) {
+      alert("Please upload at least one photo to run Magic Fill.");
+      return;
+    }
     setMagicLoading(true);
     try {
-      const updated = await runMagicFill(listingData);
-      Object.entries(updated).forEach(([key, val]) => {
+      const photoPayload = (listingData.photos || []).slice(0, 4);
+      const analysis = await analyzeListingPhotos(photoPayload);
+      const updates = {};
+      if (analysis.category) updates.category = analysis.category;
+      if (analysis.condition) updates.condition = analysis.condition;
+      if (analysis.description) updates.description = analysis.description;
+      if (analysis.color) updates.color = analysis.color;
+      if (Array.isArray(analysis.tags) && analysis.tags.length) {
+        updates.tags = analysis.tags.join(", ");
+      }
+      Object.entries(updates).forEach(([key, val]) => {
         if (val !== undefined && val !== null && val !== "") {
           setListingField(key, val);
         }
       });
       setShowReviewPill(true);
-      runReview(updated);
+      await runReview(updates);
     } catch (err) {
       console.warn("Magic Fill failed:", err);
       alert("Magic Fill couldn't complete — using your existing details.");
+      throw err;
+    } finally {
+      setMagicLoading(false);
     }
-    setMagicLoading(false);
   };
-
-  const handleAIReview = () => {
+  const handleAIReview = async () => {
     const photo = scorePhotoQuality(displayPhotos);
     const fit = predictFit(listingData);
     const risks = detectListingRisks(listingData);
@@ -582,7 +680,11 @@ function CreateListing() {
           ? "Looking strong — just a few tweaks to maximize buyer confidence."
           : "Let’s boost this listing for better visibility.",
     });
-    setShowReviewPanel(true);
+    try {
+      await runReview();
+    } finally {
+      setShowReviewPanel(true);
+    }
   };
 
   const handleClearListing = () => {
