@@ -1,36 +1,9 @@
 /* eslint-env node */
 /* global process */
-import OpenAI from "openai";
 
-const client = new OpenAI({
-  apiKey: process.env.VITE_OPENAI_API_KEY,
-});
+const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
-const defaultResult = {
-  betterTitle: "",
-  betterDescription: "",
-  betterTags: [],
-  price: null,
-};
-
-const jsonResponse = (payload, statusCode = 200) => ({
-  statusCode,
-  headers: {
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify(payload),
-});
-
-const parseBody = (event) => {
-  if (!event.body) return {};
-  try {
-    return JSON.parse(event.body);
-  } catch {
-    return {};
-  }
-};
-
-export const handler = async (event) => {
+exports.handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return {
       statusCode: 405,
@@ -38,72 +11,74 @@ export const handler = async (event) => {
     };
   }
 
-  const { listing = {} } = parseBody(event);
-
-  if (!listing || typeof listing !== "object") {
-    return jsonResponse(
-      {
-        ...defaultResult,
-        error: "Missing listing data.",
-      },
-      400
-    );
+  const apiKey = process.env.VITE_OPENAI_API_KEY;
+  if (!apiKey) {
+    console.warn("Missing OpenAI API key (aiReview)");
+    return {
+      statusCode: 503,
+      body: JSON.stringify({ error: "AI Review service unavailable." }),
+    };
   }
 
-  if (!process.env.VITE_OPENAI_API_KEY) {
-    console.warn("aiReview: missing OpenAI API key");
-    return jsonResponse(
-      {
-        ...defaultResult,
-        error: "AI Review service unavailable.",
-      },
-      503
-    );
+  let body = {};
+  try {
+    body = JSON.parse(event.body || "{}");
+  } catch {}
+
+  const { listing } = body;
+
+  if (!listing) {
+    return {
+      statusCode: 400,
+      body: JSON.stringify({ error: "Missing listing data." }),
+    };
   }
 
   try {
-    const response = await client.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You improve resale listings. Output JSON with: betterTitle, betterDescription, betterTags[].",
-        },
-        {
-          role: "user",
-          content: `Optimize this listing: ${JSON.stringify(listing)}`,
-        },
-      ],
-      response_format: { type: "json_object" },
+    const resp = await fetch(OPENAI_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content:
+              "You improve resale listings. Return JSON with: betterTitle, betterDescription, betterTags[], price.",
+          },
+          {
+            role: "user",
+            content: `Optimize this listing: ${JSON.stringify(listing)}`,
+          },
+        ],
+      }),
     });
 
-    const content = response.choices?.[0]?.message?.content;
-    let parsed = {};
-    if (typeof content === "string") {
-      try {
-        parsed = JSON.parse(content);
-      } catch {
-        parsed = {};
-      }
-    }
+    const data = await resp.json();
 
-    return jsonResponse(
-      {
-        betterTitle: parsed.betterTitle || defaultResult.betterTitle,
-        betterDescription: parsed.betterDescription || defaultResult.betterDescription,
-        betterTags: Array.isArray(parsed.betterTags) ? parsed.betterTags : defaultResult.betterTags,
-        price: typeof parsed.price === "number" ? parsed.price : defaultResult.price,
-      }
-    );
+    let parsed = {};
+    try {
+      parsed = JSON.parse(data.choices?.[0]?.message?.content || "{}");
+    } catch {}
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        betterTitle: parsed.betterTitle || "",
+        betterDescription: parsed.betterDescription || "",
+        betterTags: Array.isArray(parsed.betterTags) ? parsed.betterTags : [],
+        price: typeof parsed.price === "number" ? parsed.price : null,
+      }),
+    };
   } catch (err) {
     console.error("aiReview failed:", err);
-    return jsonResponse(
-      {
-        ...defaultResult,
-        error: "AI Review service unavailable.",
-      },
-      503
-    );
+    return {
+      statusCode: 503,
+      body: JSON.stringify({ error: "AI Review service unavailable." }),
+    };
   }
 };

@@ -1,10 +1,7 @@
 /* eslint-env node */
 /* global process */
-import OpenAI from "openai";
 
-const client = new OpenAI({
-  apiKey: process.env.VITE_OPENAI_API_KEY,
-});
+const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
 const defaultResult = {
   category: "Clothing",
@@ -17,32 +14,7 @@ const defaultResult = {
   price: 20,
 };
 
-const jsonResponse = (payload) => ({
-  statusCode: 200,
-  headers: {
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify(payload),
-});
-
-const parseBody = (event) => {
-  if (!event.body) return {};
-  try {
-    return JSON.parse(event.body);
-  } catch {
-    return {};
-  }
-};
-
-const extractBase64 = (value) => {
-  if (!value || typeof value !== "string") return null;
-  if (value.includes(",")) {
-    return value.split(",")[1];
-  }
-  return value;
-};
-
-export const handler = async (event) => {
+exports.handler = async (event) => {
   if (event.httpMethod !== "POST") {
     return {
       statusCode: 405,
@@ -50,68 +22,93 @@ export const handler = async (event) => {
     };
   }
 
-  const { photos } = parseBody(event) || {};
-  const image = Array.isArray(photos) ? photos.find(Boolean) : null;
-  const base64 = extractBase64(image);
-
-  if (!base64) {
-    return jsonResponse({
-      ...defaultResult,
-      error: "No photo data provided",
-    });
+  const apiKey = process.env.VITE_OPENAI_API_KEY;
+  if (!apiKey) {
+    console.warn("Missing OpenAI API key (analyzePhotos)");
+    return {
+      statusCode: 503,
+      body: JSON.stringify({ error: "Vision service unavailable." }),
+    };
   }
 
-  if (!process.env.VITE_OPENAI_API_KEY) {
-    console.warn("❌ analyzePhotos: missing OpenAI API key");
-    return jsonResponse({
-      ...defaultResult,
-      error: "Vision service unavailable",
-    });
+  let body = {};
+  try {
+    body = JSON.parse(event.body || "{}");
+  } catch {}
+
+  const { photos } = body;
+  const first = Array.isArray(photos) ? photos[0] : null;
+
+  if (!first) {
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ error: "No photo provided" }),
+    };
   }
+
+  const base64 = first.includes(",") ? first.split(",")[1] : first;
 
   try {
-    const response = await client.responses.create({
-      model: "gpt-4.1", // ⭐ supports vision
-      input: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "input_text",
-              text:
-                "Analyze this clothing item photo and return strictly JSON with: category, color, material, condition, style, tags[], description, priceEstimate."
-            },
-            {
-              type: "input_image",
-              b64_json: base64,
-            },
-          ],
-        },
-      ],
-      response_format: { type: "json_object" },
+    const resp = await fetch(OPENAI_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are an expert clothing classifier. Return JSON with: category, color, material, condition, style, tags[], description, priceEstimate.",
+          },
+          {
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text: "Analyze this clothing item photo.",
+              },
+              {
+                type: "input_image",
+                image_url: `data:image/jpeg;base64,${base64}`,
+              },
+            ],
+          },
+        ],
+      }),
     });
 
-    const output = response.output[0].content[0]?.json ?? {};
-    const parsed = output || {};
+    const data = await resp.json();
 
-    return jsonResponse({
-      category: parsed.category || defaultResult.category,
-      color: parsed.color || defaultResult.color,
-      material: parsed.material || defaultResult.material,
-      condition: parsed.condition || defaultResult.condition,
-      style: parsed.style || defaultResult.style,
-      description: parsed.description || defaultResult.description,
-      tags: Array.isArray(parsed.tags) ? parsed.tags : defaultResult.tags,
-      price:
-        typeof parsed.priceEstimate === "number"
-          ? parsed.priceEstimate
-          : defaultResult.price,
-    });
+    let parsed = {};
+    try {
+      parsed = JSON.parse(data.choices?.[0]?.message?.content || "{}");
+    } catch {}
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        category: parsed.category || defaultResult.category,
+        color: parsed.color || defaultResult.color,
+        material: parsed.material || defaultResult.material,
+        condition: parsed.condition || defaultResult.condition,
+        style: parsed.style || defaultResult.style,
+        description: parsed.description || defaultResult.description,
+        tags: Array.isArray(parsed.tags) ? parsed.tags : [],
+        price:
+          typeof parsed.priceEstimate === "number"
+            ? parsed.priceEstimate
+            : defaultResult.price,
+      }),
+    };
   } catch (err) {
-    console.error("❌ analyzePhotos failed:", err);
-    return jsonResponse({
-      ...defaultResult,
-      error: "Vision service unavailable",
-    });
+    console.error("analyzePhotos failed:", err);
+    return {
+      statusCode: 503,
+      body: JSON.stringify({ error: "Vision service unavailable." }),
+    };
   }
 };
