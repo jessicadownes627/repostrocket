@@ -13,7 +13,7 @@ import { scorePhotoQuality } from "../engines/photoQualityEngine";
 import { predictFit } from "../engines/fitPredictorEngine";
 import { detectListingRisks } from "../engines/riskEngine";
 import AIPremiumReviewPanel from "../components/AIPremiumReviewPanel";
-import PreflightModal from "../components/PreflightModal";
+import PreflightModal from "../components/PreflightModal"; 
 import PremiumModal from "../components/PremiumModal";
 import { runPreflightChecks } from "../utils/preflightChecks";
 import usePaywallGate from "../hooks/usePaywallGate";
