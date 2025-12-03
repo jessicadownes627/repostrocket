@@ -8,7 +8,8 @@ const client = new OpenAI({
 
 const defaultResult = {
   title: "Auto-filled Listing",
-  description: "An item worth sharing — please add any extra details before publishing.",
+  description:
+    "An item worth sharing — please add any extra details before publishing.",
   category: "Clothing",
   tags: [],
   condition: "Gently used",
@@ -18,9 +19,7 @@ const defaultResult = {
 
 const jsonResponse = (payload, statusCode = 200) => ({
   statusCode,
-  headers: {
-    "Content-Type": "application/json",
-  },
+  headers: { "Content-Type": "application/json" },
   body: JSON.stringify(payload),
 });
 
@@ -45,10 +44,7 @@ export const handler = async (event) => {
 
   if (!photoResults || typeof photoResults !== "object") {
     return jsonResponse(
-      {
-        ...defaultResult,
-        error: "Missing photo analysis.",
-      },
+      { ...defaultResult, error: "Missing photo analysis." },
       400
     );
   }
@@ -56,42 +52,33 @@ export const handler = async (event) => {
   if (!process.env.VITE_OPENAI_API_KEY) {
     console.warn("autoFill: missing OpenAI API key");
     return jsonResponse(
-      {
-        ...defaultResult,
-        error: "Auto-fill service unavailable.",
-      },
+      { ...defaultResult, error: "Auto-fill service unavailable." },
       503
     );
   }
 
   try {
-    const response = await client.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are an expert resale listing generator. Output JSON with: title, description, category, tags[], condition, material, price.",
-        },
+    const response = await client.responses.create({
+      model: "gpt-4.1", // ⭐ Strong & stable for structured text generation
+      input: [
         {
           role: "user",
-          content: `Generate a resale listing using these detected attributes: ${JSON.stringify(
-            photoResults
-          )}`,
+          content: [
+            {
+              type: "input_text",
+              text:
+                "Generate a polished resale marketplace listing. Output strictly JSON with: title, description, category, tags[], condition, material, price. Use these detected attributes: " +
+                JSON.stringify(photoResults),
+            },
+          ],
         },
       ],
       response_format: { type: "json_object" },
     });
 
-    const content = response.choices?.[0]?.message?.content;
-    let parsed = {};
-    if (typeof content === "string") {
-      try {
-        parsed = JSON.parse(content);
-      } catch {
-        parsed = {};
-      }
-    }
+    // Structured output — clean and consistent
+    const parsed =
+      response?.output?.[0]?.content?.[0]?.json || {};
 
     return jsonResponse({
       title: parsed.title || defaultResult.title,
@@ -100,15 +87,15 @@ export const handler = async (event) => {
       tags: Array.isArray(parsed.tags) ? parsed.tags : defaultResult.tags,
       condition: parsed.condition || defaultResult.condition,
       material: parsed.material || defaultResult.material,
-      price: typeof parsed.price === "number" ? parsed.price : defaultResult.price,
+      price:
+        typeof parsed.price === "number"
+          ? parsed.price
+          : defaultResult.price,
     });
   } catch (err) {
     console.error("autoFill failed:", err);
     return jsonResponse(
-      {
-        ...defaultResult,
-        error: "Auto-fill service unavailable.",
-      },
+      { ...defaultResult, error: "Auto-fill service unavailable." },
       503
     );
   }
