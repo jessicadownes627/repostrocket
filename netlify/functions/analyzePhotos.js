@@ -57,37 +57,33 @@ export const handler = async (event) => {
   if (!base64) {
     return jsonResponse({
       ...defaultResult,
-      error: "No photo data provided.",
+      error: "No photo data provided",
     });
   }
 
   if (!process.env.VITE_OPENAI_API_KEY) {
-    console.warn("analyzePhotos: missing OpenAI API key");
+    console.warn("❌ analyzePhotos: missing OpenAI API key");
     return jsonResponse({
       ...defaultResult,
-      error: "Vision service unavailable.",
+      error: "Vision service unavailable",
     });
   }
 
   try {
-    const response = await client.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are an expert clothing classifier for resale marketplaces. Output JSON with: category, color, material, condition, style, tags[], description, priceEstimate.",
-        },
+    const response = await client.responses.create({
+      model: "gpt-4.1", // ⭐ supports vision
+      input: [
         {
           role: "user",
           content: [
             {
               type: "input_text",
-              text: "Analyze this clothing item photo.",
+              text:
+                "Analyze this clothing item photo and return strictly JSON with: category, color, material, condition, style, tags[], description, priceEstimate."
             },
             {
               type: "input_image",
-              image_url: `data:image/jpeg;base64,${base64}`,
+              b64_json: base64,
             },
           ],
         },
@@ -95,15 +91,8 @@ export const handler = async (event) => {
       response_format: { type: "json_object" },
     });
 
-    const content = response.choices?.[0]?.message?.content;
-    let parsed = {};
-    if (typeof content === "string") {
-      try {
-        parsed = JSON.parse(content);
-      } catch {
-        parsed = {};
-      }
-    }
+    const output = response.output[0].content[0]?.json ?? {};
+    const parsed = output || {};
 
     return jsonResponse({
       category: parsed.category || defaultResult.category,
@@ -113,13 +102,16 @@ export const handler = async (event) => {
       style: parsed.style || defaultResult.style,
       description: parsed.description || defaultResult.description,
       tags: Array.isArray(parsed.tags) ? parsed.tags : defaultResult.tags,
-      price: typeof parsed.priceEstimate === "number" ? parsed.priceEstimate : defaultResult.price,
+      price:
+        typeof parsed.priceEstimate === "number"
+          ? parsed.priceEstimate
+          : defaultResult.price,
     });
   } catch (err) {
-    console.error("analyzePhotos failed:", err);
+    console.error("❌ analyzePhotos failed:", err);
     return jsonResponse({
       ...defaultResult,
-      error: "Vision service unavailable.",
+      error: "Vision service unavailable",
     });
   }
 };
