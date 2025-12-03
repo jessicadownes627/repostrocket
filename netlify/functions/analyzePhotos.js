@@ -64,19 +64,18 @@ exports.handler = async (event) => {
             content:
               "You are an expert clothing classifier. Return JSON with: category, color, material, condition, style, tags[], description, priceEstimate.",
           },
-          {
-            role: "user",
-            content: [
-              {
-                type: "input_text",
-                text: "Analyze this clothing item photo.",
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Analyze this clothing item photo." },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:image/jpeg;base64,${base64}`,
               },
-              {
-                type: "input_image",
-                image_url: `data:image/jpeg;base64,${base64}`,
-              },
-            ],
-          },
+            },
+          ],
+        },
         ],
       }),
     });

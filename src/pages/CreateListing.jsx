@@ -13,7 +13,7 @@ import { scorePhotoQuality } from "../engines/photoQualityEngine";
 import { predictFit } from "../engines/fitPredictorEngine";
 import { detectListingRisks } from "../engines/riskEngine";
 import AIPremiumReviewPanel from "../components/AIPremiumReviewPanel";
-import PreflightModal from "../components/PreflightModal"; 
+import PreflightModal from "../components/PreflightModal";
 import PremiumModal from "../components/PremiumModal";
 import { runPreflightChecks } from "../utils/preflightChecks";
 import usePaywallGate from "../hooks/usePaywallGate";
@@ -24,6 +24,15 @@ import { useSmartFill } from "../hooks/useSmartFill";
 import { mergeAndCleanTags } from "../utils/mergeAndCleanTags";
 import { convertSize } from "../utils/convertSize";
 import { babySizeGuide } from "../utils/babySizeGuide";
+import { runTrendSense } from "../utils/trendSenseEngine";
+
+function forceString(value) {
+  if (value == null) return "";
+  if (typeof value === "string") return value.trim();
+  if (Array.isArray(value)) return value.map((v) => forceString(v)).join(", ");
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
 
 // --- Dynamic Shipping Tips ---
 function getShippingHints(category, shippingChoice) {
@@ -207,6 +216,8 @@ function CreateListing() {
   const [sizeInput, setSizeInput] = useState(listingData.size || "");
   const parsed = useTitleParser(listingData.title);
   const [magicLoading, setMagicLoading] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState(listingData.category || "");
+  const [pulseCategory, setPulseCategory] = useState(null);
   const [showDiffPanel, setShowDiffPanel] = useState(false);
   const [diffReport, setDiffReport] = useState([]);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -354,7 +365,11 @@ function CreateListing() {
       reviewError = err;
       console.error("AI Review failed:", err);
     } finally {
-      setReviewResults(createReviewPanelData(improvedData));
+      const sanitizedReview = {};
+      Object.keys(improvedData || {}).forEach((key) => {
+        sanitizedReview[key] = forceString(improvedData[key]);
+      });
+      setReviewResults(createReviewPanelData(sanitizedReview));
       setReviewOpen(true);
       if (reviewError) {
         throw reviewError;
@@ -379,6 +394,24 @@ function CreateListing() {
   useEffect(() => {
     setSizeInput(listingData.size || "");
   }, [listingData.size]);
+
+  useEffect(() => {
+    if (listingData.category) {
+      setSelectedCategory(listingData.category);
+    }
+  }, [listingData.category]);
+
+  useEffect(() => {
+    async function testTrendSense() {
+      const headlines = [
+        { title: "Summer reissue for Air Max", description: "Nike surprises sneakerheads with the Dakar pack." },
+        { title: "Vintage Levi's spikes", description: "90s denim and cargo jackets lead new resale buzz." },
+      ];
+      const result = await runTrendSense(headlines, listingData ? [listingData] : []);
+      console.log("TREND SENSE RESULT →", result);
+    }
+    testTrendSense();
+  }, [listingData]);
 
   const parsedTags = useMemo(() => {
     if (Array.isArray(listingData.tags)) {
@@ -423,6 +456,7 @@ function CreateListing() {
     const nextTags = handleCategorySelect(cat);
     setListingField("category", cat);
     setListingField("tags", nextTags.join(", "));
+    setSelectedCategory(cat);
   };
 
   /** UNIVERSAL PREVIEW (1 grid for all platforms) */
@@ -581,7 +615,7 @@ function CreateListing() {
       const photoAnalysis = await analyzeListingPhotos(photoPayload);
       const suggestions = await autoFillWithAI(photoAnalysis);
       if (suggestions) {
-        const { category, condition, description, title, tags, price } = suggestions;
+        const { category, condition, description, title, tags, price, color, size } = suggestions;
         const deriveTitle = () => {
           if (title) return title;
           if (listingData.title) return listingData.title;
@@ -611,13 +645,19 @@ function CreateListing() {
         const diff = generateAIDiffReport(originalSnapshot, proposed);
         setDiffReport(diff);
         if (diff.length) setShowDiffPanel(true);
-        if (category) setListingField("category", category);
-        if (condition) setListingField("condition", condition);
-        if (description) setListingField("description", description);
-        setListingField("title", deriveTitle());
-        setListingField("tags", deriveTags());
+        if (category) {
+          const sanitizedCategory = forceString(category);
+          setListingField("category", sanitizedCategory);
+          setSelectedCategory(sanitizedCategory);
+        }
+        if (condition) setListingField("condition", forceString(condition));
+        if (description) setListingField("description", forceString(description));
+        if (color) setListingField("color", forceString(color));
+        if (size) setListingField("size", forceString(size));
+        setListingField("title", forceString(deriveTitle()));
+        setListingField("tags", forceString(deriveTags()));
         if (tags && Array.isArray(tags)) {
-          setListingField("tags", tags.join(", "));
+          setListingField("tags", forceString(tags.join(", ")));
         }
         if (pricing !== undefined && pricing !== null) {
           setListingField("price", pricing);
@@ -641,21 +681,22 @@ function CreateListing() {
     try {
       const photoPayload = (listingData.photos || []).slice(0, 4);
       const analysis = await analyzeListingPhotos(photoPayload);
-      const updates = {};
-      if (analysis.category) updates.category = analysis.category;
-      if (analysis.condition) updates.condition = analysis.condition;
-      if (analysis.description) updates.description = analysis.description;
-      if (analysis.color) updates.color = analysis.color;
-      if (Array.isArray(analysis.tags) && analysis.tags.length) {
-        updates.tags = analysis.tags.join(", ");
+      setListingField("title", forceString(analysis.title));
+      setListingField("description", forceString(analysis.description));
+      setListingField("color", forceString(analysis.color));
+      setListingField("brand", forceString(analysis.brand));
+      setListingField("size", forceString(analysis.size));
+      setListingField("condition", forceString(analysis.condition));
+      const sanitizedCategory = forceString(analysis.category);
+      setListingField("category", sanitizedCategory);
+      setListingField("tags", forceString(analysis.tags));
+      if (sanitizedCategory) {
+        setSelectedCategory(sanitizedCategory);
+        setPulseCategory(sanitizedCategory);
+        setTimeout(() => setPulseCategory(null), 1200);
       }
-      Object.entries(updates).forEach(([key, val]) => {
-        if (val !== undefined && val !== null && val !== "") {
-          setListingField(key, val);
-        }
-      });
       setShowReviewPill(true);
-      await runReview(updates);
+      await runReview(analysis);
     } catch (err) {
       console.warn("Magic Fill failed:", err);
       alert("Magic Fill couldn't complete — using your existing details.");
@@ -994,16 +1035,21 @@ function CreateListing() {
               <h2 className="section-title">Category</h2>
               <p className="section-subtitle">Tap to choose the best match.</p>
               <div className="category-grid">
-                {CATEGORY_OPTIONS.map((cat) => (
-                  <button
-                    key={cat}
-                    type="button"
-                    className={`category-pill ${listingData.category === cat ? "active" : ""}`}
-                    onClick={() => handleCategoryClick(cat)}
-                  >
-                    {cat}
-                  </button>
-                ))}
+                {CATEGORY_OPTIONS.map((cat) => {
+                  const normalized = cat.toLowerCase();
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      className={`category-pill ${listingData.category === cat ? "active" : ""} ${
+                        pulseCategory === normalized ? "pulse" : ""
+                      }`}
+                      onClick={() => handleCategoryClick(cat)}
+                    >
+                      {cat}
+                    </button>
+                  );
+                })}
               </div>
             </section>
 

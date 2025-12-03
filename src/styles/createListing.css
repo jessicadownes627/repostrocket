@@ -2161,6 +2161,26 @@ CATEGORY BUTTONS  (category-pill)
   box-shadow: 0 0 14px rgba(224,200,160,0.4);
 }
 
+.category-pill.pulse {
+  animation: tmtPulse 0.9s ease-out forwards;
+  box-shadow: 0 0 10px rgba(255, 215, 165, 0.6), 0 0 20px rgba(255, 215, 165, 0.4);
+}
+
+@keyframes tmtPulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 4px rgba(255, 215, 165, 0.2);
+  }
+  40% {
+    transform: scale(1.08);
+    box-shadow: 0 0 18px rgba(255, 215, 165, 0.55);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 6px rgba(255, 215, 165, 0.2);
+  }
+}
+
 /* Remove default blue outline */
 .category-pill:focus {
   outline: none !important;
