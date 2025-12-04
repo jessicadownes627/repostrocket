@@ -30,6 +30,10 @@
 /*  Global Reset + Base                         */
 /* -------------------------------------------- */
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   background: var(--charcoal);
   color: #fff;
@@ -73,6 +77,20 @@ main {
   padding: 20px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: 0 0 10px rgba(0, 255, 170, 0.12);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.glass-sheen {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0));
+}
+
+.clickable {
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.clickable:active {
+  opacity: 0.6;
 }
 
 .card-content {
@@ -88,7 +106,7 @@ select {
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.15);
   padding: 10px 12px;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
 .input-field:focus,
@@ -96,7 +114,7 @@ input:focus,
 textarea:focus,
 select:focus {
   border-color: #00ffaa;
-  box-shadow: 0 0 6px rgba(0, 255, 170, 0.2);
+  box-shadow: 0 0 6px rgba(0, 255, 170, 0.5);
   outline: none;
 }
 
@@ -110,14 +128,27 @@ select:focus {
   border-radius: 10px;
   padding: 12px 18px;
   box-shadow: 0 0 8px rgba(0, 255, 170, 0.2);
-  transition: transform 0.15s ease, box-shadow 0.2s ease;
+  transition: all 0.25s ease;
 }
 
 .primary-btn:hover,
 .btn-primary:hover,
 .btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 0 12px rgba(0, 255, 170, 0.3);
+  box-shadow: 0 0 12px rgba(0, 255, 170, 0.25);
+}
+
+.fade-in-up {
+  opacity: 0;
+  transform: translateY(10px);
+  animation: fadeInUp 0.45s ease forwards;
+}
+
+@keyframes fadeInUp {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .accent {
@@ -302,6 +333,25 @@ textarea {
 .subtle {
   opacity: 0.7;
   font-size: 14px;
+}
+
+h1,
+h2,
+h3 {
+  letter-spacing: 0.5px;
+}
+
+.clickable {
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.clickable:active {
+  opacity: 0.6;
+}
+
+*:focus {
+  outline: none !important;
 }
 
 /* -------------------------------------------- */
