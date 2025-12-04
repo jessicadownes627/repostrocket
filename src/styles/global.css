@@ -37,6 +37,92 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+a,
+.link {
+  color: rgba(255, 255, 255, 0.85);
+  text-decoration: none;
+}
+
+html,
+#root,
+.page-wrapper,
+main {
+  background: #0d0d0f;
+  color: #ffffff;
+  min-height: 100%;
+}
+
+.section-wrapper {
+  background: #141416;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 22px;
+  margin-top: 24px;
+  box-shadow: 0 0 14px rgba(0, 255, 170, 0.08);
+}
+
+.section-title {
+  margin-top: 12px;
+  margin-bottom: 6px;
+}
+
+.card,
+.panel {
+  background: #141416;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 10px rgba(0, 255, 170, 0.12);
+}
+
+.card-content {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.input-field,
+input,
+textarea,
+select {
+  background-color: #141416;
+  color: #ffffff;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 10px 12px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.input-field:focus,
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: #00ffaa;
+  box-shadow: 0 0 6px rgba(0, 255, 170, 0.2);
+  outline: none;
+}
+
+.primary-btn,
+.btn,
+.btn-primary {
+  background: linear-gradient(90deg, #00c388, #00ffaa);
+  color: #ffffff;
+  font-weight: 700;
+  border: none;
+  border-radius: 10px;
+  padding: 12px 18px;
+  box-shadow: 0 0 8px rgba(0, 255, 170, 0.2);
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.primary-btn:hover,
+.btn-primary:hover,
+.btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 12px rgba(0, 255, 170, 0.3);
+}
+
+.accent {
+  color: #00ffaa;
+}
 a {
   color: var(--emerald-text);
   text-decoration: none;
@@ -93,6 +179,60 @@ a {
   background: var(--emerald-text);
   border-color: var(--emerald-text);
   box-shadow: 0 0 16px var(--emerald-glow);
+}
+
+/* -------------------------------------------- */
+/*  MAIN HEADER                                */
+/* -------------------------------------------- */
+.main-header {
+  background-color: #0d0d0f;
+  color: #ffffff;
+  padding: 12px 20px;
+  border-bottom: 1px solid rgba(0, 255, 170, 0.15);
+}
+
+.main-header a {
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  transition: color 0.2s ease;
+  margin-right: 18px;
+}
+
+.main-header a:hover {
+  color: #ffffff;
+}
+
+.main-header a.active {
+  color: #ffffff;
+  border-bottom: 2px solid #00ffaa;
+  padding-bottom: 2px;
+}
+
+footer,
+.footer,
+.main-footer {
+  background-color: #0d0d0f;
+  color: rgba(255, 255, 255, 0.75);
+  padding: 14px 20px;
+  text-align: center;
+  font-size: 0.85rem;
+  border-top: 1px solid rgba(0, 255, 170, 0.15);
+}
+
+footer a,
+.footer a,
+.main-footer a {
+  color: #00ffaa;
+  text-decoration: none;
+  opacity: 0.85;
+  transition: opacity 0.2s ease;
+}
+
+footer a:hover,
+.footer a:hover,
+.main-footer a:hover {
+  opacity: 1;
 }
 
 .pulse-upgrade {

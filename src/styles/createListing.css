@@ -132,28 +132,30 @@ body {
 }
 
 .section-wrapper {
-  background: rgba(15,17,18,0.55);
-  border: 1px solid rgba(232,213,168,0.12);
-  border-radius: 16px;
-  padding: 32px 28px !important;
-  box-shadow: 0 0 16px rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(6px);
+  background: #141416;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 22px 26px !important;
+  box-shadow: 0 0 16px rgba(0, 255, 170, 0.08);
   margin-bottom: 42px;
+  margin-top: 24px;
+  padding-bottom: 40px !important;
   overflow: visible !important;
   box-sizing: border-box !important;
 }
 
 .section-card {
-  background: rgba(10, 12, 14, 0.7);
-  border: 1px solid rgba(244, 231, 200, 0.45);
-  border-radius: 20px;
-  padding: 28px 32px;
+  background: #141416;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  padding: 22px 26px;
   box-shadow:
-    0 0 18px rgba(0,0,0,0.5),
-    inset 0 0 0 1px rgba(244, 231, 200, 0.2);
+    0 0 18px rgba(0, 255, 170, 0.08),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
   display: flex;
   flex-direction: column;
   gap: 14px;
+  padding-bottom: 40px;
 }
 
 .section-sub {
@@ -187,15 +189,93 @@ body {
   gap: 4px;
 }
 
+.photo-area {
+  background-color: #0d0d0f;
+  border: 2px dashed rgba(0, 255, 170, 0.35);
+  border-radius: 10px;
+  padding: 30px;
+  color: #ffffff;
+  text-align: center;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.photo-area.dragging,
+.photo-area:hover {
+  border-color: rgba(0, 255, 170, 0.6);
+  box-shadow: 0 0 10px rgba(0, 255, 170, 0.25);
+}
+
+.photo-area .ghost-text,
+.photo-area .ghost-plus,
+.photo-area .upload-hint {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.95rem;
+  letter-spacing: 0.3px;
+}
+
+.platform-grid > * {
+  background-color: #0d0d0f;
+  color: #ffffff;
+  padding: 18px 22px;
+  border-radius: 8px;
+  margin-top: 24px;
+  border: 1px solid transparent;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.platform-grid > *:hover,
+.platform-grid > *.active {
+  border-color: rgba(0, 255, 170, 0.4);
+  box-shadow: 0 0 8px rgba(0, 255, 170, 0.15);
+}
+
+.platform-grid > * input,
+.platform-grid > * textarea,
+.platform-grid > * select {
+  background-color: #141416;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  padding: 10px 12px;
+  width: 100%;
+  outline: none;
+  font-family: inherit;
+}
+
+.platform-grid > * input:focus,
+.platform-grid > * textarea:focus,
+.platform-grid > * select:focus {
+  border-color: rgba(0, 255, 170, 0.45);
+  box-shadow: 0 0 6px rgba(0, 255, 170, 0.25);
+}
+
+.platform-grid > * label {
+  display: block;
+  color: #ffffff;
+  font-size: 0.9rem;
+  margin-top: 12px;
+  margin-bottom: 6px;
+}
+
+.platform-grid > * h3 {
+  color: #ffffff;
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-top: 12px;
+  margin-bottom: 6px;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid rgba(0, 255, 170, 0.15);
+  padding-bottom: 4px;
+}
+
 .section-title {
-  margin: 0;
+  margin: 12px 0 6px;
   font-size: 1.4rem;
   font-weight: 600;
   color: var(--text-gold) !important;
   letter-spacing: 0.4px;
   border-bottom: 1px solid var(--border-gold);
   padding-bottom: 4px;
-  margin-bottom: 8px;
 }
 
 .section-title.center {
@@ -476,6 +556,7 @@ body {
   padding: 1.5rem 1.25rem;
   margin-top: 0.5rem;
   border-radius: 12px;
+  padding-bottom: 30px;
 }
 
 /* Fix tips list spacing */
@@ -493,7 +574,7 @@ body {
 
 /* Section titles & spacing */
 .section-title {
-  margin-bottom: 0.35rem;
+  margin: 12px 0 6px;
 }
 
 .section-subtitle {
@@ -2972,6 +3053,47 @@ textarea {
   background: #181818;
 }
 
+/* Step 4 AI Review Panel */
+.ai-review-panel {
+  background-color: #0d0d0f;
+  color: #ffffff;
+  padding: 20px 24px;
+  border-radius: 12px;
+  margin-top: 24px;
+  border: 1px solid rgba(0, 255, 170, 0.15);
+  box-shadow: 0 0 10px rgba(0, 255, 170, 0.1);
+}
+
+.ai-review-panel .ai-section,
+.ai-review-panel .ai-score-item,
+.ai-review-panel .ai-highlight-box,
+.ai-review-panel .ai-warning-block {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* Step 4 premium review cards */
+.ai-review-cardstack .ai-card {
+  background-color: #141416;
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin-top: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ai-review-cardstack .ai-card:hover {
+  border-color: rgba(0, 255, 170, 0.25);
+  box-shadow: 0 0 6px rgba(0, 255, 170, 0.15);
+}
+
+.ai-review-cardstack .ai-card-title {
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+  letter-spacing: 0.3px;
+}
+
 /* AI Parsed preview */
 .ai-parse-preview {
   margin-top: 1rem;
@@ -3283,6 +3405,11 @@ input[readOnly] {
   opacity: 0.85;
 }
 
+.rr-smartfill-wrapper {
+  margin-top: 24px;
+  padding-bottom: 44px;
+}
+
 .rr-smart-title {
   margin-bottom: 12px;
 }
@@ -3382,6 +3509,7 @@ input[readOnly] {
   transition: all 0.2s ease;
   position: relative;
   overflow: hidden;
+  padding-bottom: 30px;
 }
 
 .rr-smart-card:hover {

@@ -24,7 +24,6 @@ import { useSmartFill } from "../hooks/useSmartFill";
 import { mergeAndCleanTags } from "../utils/mergeAndCleanTags";
 import { convertSize } from "../utils/convertSize";
 import { babySizeGuide } from "../utils/babySizeGuide";
-import { runTrendSense } from "../utils/trendSenseEngine";
 
 function forceString(value) {
   if (value == null) return "";
@@ -300,7 +299,6 @@ function CreateListing() {
     handleCategorySelect,
     resetListing: resetSmartFillTags,
     showTags,
-    handleRemoveTag,
   } = useSmartFill(listingData, primaryPlatform);
 
   const triggerUpload = () => fileInputRef.current?.click();
@@ -401,18 +399,6 @@ function CreateListing() {
     }
   }, [listingData.category]);
 
-  useEffect(() => {
-    async function testTrendSense() {
-      const headlines = [
-        { title: "Summer reissue for Air Max", description: "Nike surprises sneakerheads with the Dakar pack." },
-        { title: "Vintage Levi's spikes", description: "90s denim and cargo jackets lead new resale buzz." },
-      ];
-      const result = await runTrendSense(headlines, listingData ? [listingData] : []);
-      console.log("TREND SENSE RESULT →", result);
-    }
-    testTrendSense();
-  }, [listingData]);
-
   const parsedTags = useMemo(() => {
     if (Array.isArray(listingData.tags)) {
       return listingData.tags;
@@ -426,14 +412,39 @@ function CreateListing() {
     return [];
   }, [listingData.tags]);
 
+  const normalizeTagInput = (value) => {
+    if (!value) return [];
+    if (Array.isArray(value)) return value;
+    if (typeof value === "string") {
+      return value.split(",").map((t) => t.trim()).filter(Boolean);
+    }
+    return [];
+  };
+
+  const syncTagList = (tagList) => {
+    const cleaned = tagList.map((t) => (t || "").trim()).filter(Boolean);
+    const unique = Array.from(new Set(cleaned));
+    setListingField("tags", unique.join(", "));
+    setSmartTags(unique);
+  };
+
+  const mergeAIProvidedTags = (incoming) => {
+    const incomingTags = normalizeTagInput(incoming);
+    if (!incomingTags.length) return;
+    const merged = Array.from(new Set([...parsedTags, ...incomingTags]));
+    syncTagList(merged);
+  };
+
   const toggleTag = (tag) => {
-    const currentTags = parsedTags;
+    const normalizedTag = (tag || "").trim();
+    if (!normalizedTag) return;
 
-    const exists = currentTags.includes(tag);
+    const exists = parsedTags.includes(tag);
+    const next = exists
+      ? parsedTags.filter((t) => t !== tag)
+      : [...parsedTags, tag];
 
-    const next = exists ? currentTags.filter((t) => t !== tag) : [...currentTags, tag];
-
-    setListingField("tags", next.join(", "));
+    syncTagList(next);
   };
 
   const addCustomTag = (value) => {
@@ -448,15 +459,17 @@ function CreateListing() {
   };
 
   const handleRemoveTagChip = (tag) => {
-    const nextTags = handleRemoveTag(tag);
-    setListingField("tags", nextTags.join(", "));
+    const next = parsedTags.filter((t) => t !== tag);
+    syncTagList(next);
   };
 
   const handleCategoryClick = (cat) => {
-    const nextTags = handleCategorySelect(cat);
+    const nextTags = handleCategorySelect(cat).map((t) => (t || "").trim()).filter(Boolean);
+    const mergedTags = Array.from(new Set([...nextTags, cat.trim()]));
     setListingField("category", cat);
-    setListingField("tags", nextTags.join(", "));
+    syncTagList(mergedTags);
     setSelectedCategory(cat);
+    setPulseCategory(cat.toLowerCase());
   };
 
   /** UNIVERSAL PREVIEW (1 grid for all platforms) */
@@ -655,10 +668,8 @@ function CreateListing() {
         if (color) setListingField("color", forceString(color));
         if (size) setListingField("size", forceString(size));
         setListingField("title", forceString(deriveTitle()));
-        setListingField("tags", forceString(deriveTags()));
-        if (tags && Array.isArray(tags)) {
-          setListingField("tags", forceString(tags.join(", ")));
-        }
+        const incomingTags = tags && Array.isArray(tags) && tags.length ? tags : deriveTags();
+        mergeAIProvidedTags(incomingTags);
         if (pricing !== undefined && pricing !== null) {
           setListingField("price", pricing);
         }
@@ -689,7 +700,7 @@ function CreateListing() {
       setListingField("condition", forceString(analysis.condition));
       const sanitizedCategory = forceString(analysis.category);
       setListingField("category", sanitizedCategory);
-      setListingField("tags", forceString(analysis.tags));
+      mergeAIProvidedTags(analysis.tags);
       if (sanitizedCategory) {
         setSelectedCategory(sanitizedCategory);
         setPulseCategory(sanitizedCategory);
@@ -1035,21 +1046,18 @@ function CreateListing() {
               <h2 className="section-title">Category</h2>
               <p className="section-subtitle">Tap to choose the best match.</p>
               <div className="category-grid">
-                {CATEGORY_OPTIONS.map((cat) => {
-                  const normalized = cat.toLowerCase();
-                  return (
-                    <button
-                      key={cat}
-                      type="button"
-                      className={`category-pill ${listingData.category === cat ? "active" : ""} ${
-                        pulseCategory === normalized ? "pulse" : ""
-                      }`}
-                      onClick={() => handleCategoryClick(cat)}
-                    >
-                      {cat}
-                    </button>
-                  );
-                })}
+                {CATEGORY_OPTIONS.map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    className={`category-pill ${listingData.category === cat ? "active" : ""} ${
+                      pulseCategory === cat.toLowerCase() ? "pulse" : ""
+                    }`}
+                    onClick={() => handleCategoryClick(cat)}
+                  >
+                    {cat}
+                  </button>
+                ))}
               </div>
             </section>
 
