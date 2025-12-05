@@ -11,7 +11,7 @@ exports.handler = async (event) => {
     };
   }
 
-  const apiKey = process.env.VITE_OPENAI_API_KEY;
+  const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     console.warn("Missing OpenAI API key (autoFill)");
     return {

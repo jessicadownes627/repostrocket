@@ -1,6 +1,5 @@
-import { initializeApp, getApps, getApp } from "firebase/app";
+import { db } from "./firebase";
 import {
-  getFirestore,
   collection,
   doc,
   setDoc,
@@ -8,35 +7,6 @@ import {
   getDoc,
   serverTimestamp,
 } from "firebase/firestore";
-
-let dbInstance = null;
-
-function getFirebaseConfig() {
-  return {
-    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-    appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  };
-}
-
-function getDb() {
-  if (dbInstance) return dbInstance;
-
-  const config = getFirebaseConfig();
-
-  if (!config.projectId) {
-    console.warn("InventoryBrain: Firebase config missing (VITE_FIREBASE_PROJECT_ID). Skipping Firestore.");
-    return null;
-  }
-
-  const apps = getApps();
-  const app = apps.length ? getApp() : initializeApp(config);
-  dbInstance = getFirestore(app);
-  return dbInstance;
-}
 
 /**
  * saveInventoryItem
@@ -50,8 +20,6 @@ function getDb() {
  * @param {string} [rawNotes] - Optional notes
  */
 export async function saveInventoryItem(userId, magicFillData, imageUrls = [], rawTitle = "", rawNotes = "") {
-  const db = getDb();
-  if (!db) return null;
   if (!userId) {
     console.warn("InventoryBrain: saveInventoryItem called without userId. Skipping save.");
     return null;
@@ -90,8 +58,7 @@ export async function saveInventoryItem(userId, magicFillData, imageUrls = [], r
  * @returns {Promise<Array<{id: string} & Object>>}
  */
 export async function getInventory(userId) {
-  const db = getDb();
-  if (!db || !userId) return [];
+  if (!userId) return [];
 
   try {
     const itemsCol = collection(db, "inventory", userId, "items");
@@ -113,8 +80,7 @@ export async function getInventory(userId) {
  * @returns {Promise<({id: string} & Object) | null>}
  */
 export async function getItem(userId, itemId) {
-  const db = getDb();
-  if (!db || !userId || !itemId) return null;
+  if (!userId || !itemId) return null;
 
   try {
     const itemRef = doc(db, "inventory", userId, "items", itemId);
@@ -126,4 +92,3 @@ export async function getItem(userId, itemId) {
     return null;
   }
 }
-
