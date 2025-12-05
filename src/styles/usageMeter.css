@@ -31,6 +31,12 @@
   overflow: hidden;
 }
 
+.usage-bar label {
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0.2px;
+}
+
 .usage-fill {
   height: 6px;
   background: #00ffc8;

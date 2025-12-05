@@ -106,12 +106,19 @@
 }
 
 .ghost-link {
-  border: none;
-  background: transparent;
-  color: #0f8a3f;
-  font-weight: 700;
+  border: 1px solid #000 !important;
+  background: #f3e8d3 !important;  /* champagne background */
+  color: #000 !important;          /* black text */
+  padding: 8px 12px !important;
+  border-radius: 8px !important;
+  font-weight: 600 !important;
   cursor: pointer;
-  padding: 6px 8px;
+  transition: all 0.2s ease-in-out;
+}
+
+.ghost-link:hover {
+  background: #e9dcc4 !important; /* softer champagne hover */
+  transform: translateY(-1px);
 }
 
 .action-row {

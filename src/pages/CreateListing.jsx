@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import "../styles/overrides.css";
 import "../styles/createListing.css";
 import { useListingStore } from "../store/useListingStore";
 import { generateResizedVariants, resizeImage } from "../utils/imageTools";
@@ -24,6 +25,8 @@ import { useSmartFill } from "../hooks/useSmartFill";
 import { mergeAndCleanTags } from "../utils/mergeAndCleanTags";
 import { convertSize } from "../utils/convertSize";
 import { babySizeGuide } from "../utils/babySizeGuide";
+import { generateFullListing } from "../ai/MagicFillEngine";
+import { saveInventoryItem } from "../db/InventoryBrain";
 
 function forceString(value) {
   if (value == null) return "";
@@ -192,6 +195,23 @@ const getPriceSuggestions = (listing) => {
   return { low, recommended, ambitious };
 };
 
+function getLocalUserId() {
+  if (typeof window === "undefined") return "local-demo-user";
+  try {
+    const key = "rr_user_id";
+    const existing = window.localStorage.getItem(key);
+    if (existing) return existing;
+    const next =
+      (window.crypto && typeof window.crypto.randomUUID === "function"
+        ? window.crypto.randomUUID()
+        : `local-${Date.now()}`);
+    window.localStorage.setItem(key, next);
+    return next;
+  } catch {
+    return "local-demo-user";
+  }
+}
+
 function CreateListing() {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
@@ -206,6 +226,8 @@ function CreateListing() {
     addDraft,
     setSelectedPlatforms,
     setListing,
+    savedDrafts,
+    loadDraft,
   } = useListingStore();
 
   const photos = listingData.photos || [];
@@ -225,6 +247,15 @@ function CreateListing() {
   const [review, setReview] = useState(null);
   const [showReviewPanel, setShowReviewPanel] = useState(false);
   const [tempMessage, setTempMessage] = useState("");
+  const [showToast, setShowToast] = useState(false);
+  const userId = useMemo(() => getLocalUserId(), []);
+
+  useEffect(() => {
+    if (showToast) {
+      const timer = setTimeout(() => setShowToast(false), 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [showToast]);
 
   // helper to show paywall message before modal appears
   const showPremiumHint = (msg) => {
@@ -284,6 +315,9 @@ function CreateListing() {
   const magicCount = String(usage.magicFill ?? "0");
   const autoCount = String(usage.autoFill ?? "0");
   const reviewCount = String(usage.aiReview ?? "0");
+  const magicUsage = magicCount;
+  const autoUsage = autoCount;
+  const reviewUsage = reviewCount;
   const smartUsage = usage.smartFill ?? getUsageCount("smartFill");
   const smartLimit = usage.smartFillLimit || getLimit("smartFill");
   const showSmartBanner =
@@ -507,6 +541,14 @@ function CreateListing() {
     return () => inputs.forEach((i) => i.removeEventListener("focus", fixIOSInput));
   }, []);
 
+  const restoreDraft = () => {
+    if (!savedDrafts || !savedDrafts.length) return;
+    const latest = savedDrafts[0];
+    if (!latest?.id) return;
+    loadDraft(latest.id);
+    setShowToast(true);
+  };
+
   /** Convert selected images to DataURLs */
   const readFilesAsDataUrls = async (files) => {
     const arr = Array.from(files || []);
@@ -614,67 +656,170 @@ function CreateListing() {
     }
     setAutoFillLoading(true);
 
+    const photoPayload = (listingData.photos || []).slice(0, 4);
+    const originalSnapshot = {
+      title: listingData.title,
+      description: listingData.description,
+      category: listingData.category,
+      condition: listingData.condition,
+      color: parsed?.color,
+      size: listingData.size || parsed?.size,
+      tags: Array.isArray(listingData.tags) ? listingData.tags.join(", ") : listingData.tags || "",
+      price: listingData.price,
+      shipping: listingData.shipping,
+    };
+
     try {
-      const photoPayload = (listingData.photos || []).slice(0, 4);
-      const originalSnapshot = {
-        title: listingData.title,
-        description: listingData.description,
-        category: listingData.category,
-        condition: listingData.condition,
-        color: parsed?.color,
-        size: listingData.size || parsed?.size,
-        tags: Array.isArray(listingData.tags) ? listingData.tags.join(", ") : listingData.tags || "",
-      };
-      const photoAnalysis = await analyzeListingPhotos(photoPayload);
-      const suggestions = await autoFillWithAI(photoAnalysis);
-      if (suggestions) {
-        const { category, condition, description, title, tags, price, color, size } = suggestions;
-        const deriveTitle = () => {
-          if (title) return title;
-          if (listingData.title) return listingData.title;
-          const firstWords = (description || "").split(/\s+/).slice(0, 6).join(" ");
-          return firstWords || "Auto-filled Listing";
-        };
-        const deriveTags = () => {
-          if (tags && Array.isArray(tags)) return tags.join(", ");
-          if (typeof listingData.tags === "string") return listingData.tags;
-          const words = (description || listingData.description || "")
-            .toLowerCase()
-            .split(/[^a-z0-9]+/i)
-            .filter((w) => w.length > 3);
-          return words.slice(0, 8).join(", ");
-        };
-        const pricing = typeof price === "number" ? Math.round(price) : listingData.price;
-        const proposed = {
-          title: deriveTitle(),
-          description: description || listingData.description,
-          category: category || listingData.category,
-          condition: condition || listingData.condition,
-          color: parsed?.color,
-          size: parsed?.size,
-          tags: Array.isArray(tags) ? tags.join(", ") : deriveTags(),
-          price: pricing,
-        };
-        const diff = generateAIDiffReport(originalSnapshot, proposed);
-        setDiffReport(diff);
-        if (diff.length) setShowDiffPanel(true);
-        if (category) {
-          const sanitizedCategory = forceString(category);
-          setListingField("category", sanitizedCategory);
-          setSelectedCategory(sanitizedCategory);
+      let usedMagicEngine = false;
+
+      try {
+        const fullListing = await generateFullListing({
+          images: photoPayload,
+          userTitle: listingData.title,
+          userId,
+        });
+
+        if (fullListing && fullListing.title) {
+          usedMagicEngine = true;
+
+          // Fire-and-forget inventory save
+          saveInventoryItem(userId, fullListing, photoPayload, listingData.title).catch(() => {});
+
+          const {
+            title,
+            description,
+            category,
+            condition,
+            brand,
+            material,
+            color,
+            tags,
+            priceRecommendation,
+            shippingRecommendation,
+            platformVersions,
+          } = fullListing;
+
+          const derivedTitle =
+            title ||
+            listingData.title ||
+            (description || "").split(/\s+/).slice(0, 6).join(" ") ||
+            "Auto-filled Listing";
+
+          const tagString =
+            Array.isArray(tags) && tags.length
+              ? tags.join(", ")
+              : typeof listingData.tags === "string"
+              ? listingData.tags
+              : "";
+
+          const price =
+            typeof priceRecommendation === "number"
+              ? Math.round(priceRecommendation)
+              : listingData.price;
+
+          const proposed = {
+            title: derivedTitle,
+            description: description || listingData.description,
+            category: category || listingData.category,
+            condition: condition || listingData.condition,
+            color: color || parsed?.color,
+            size: listingData.size || parsed?.size,
+            tags: tagString,
+            price,
+            shipping: shippingRecommendation || listingData.shipping,
+            brand: brand || listingData.brand,
+            material: material || listingData.material,
+          };
+
+          const diff = generateAIDiffReport(originalSnapshot, proposed);
+          setDiffReport(diff);
+          if (diff.length) setShowDiffPanel(true);
+
+          if (proposed.category) {
+            const sanitizedCategory = forceString(proposed.category);
+            setListingField("category", sanitizedCategory);
+            setSelectedCategory(sanitizedCategory);
+          }
+          if (proposed.condition) setListingField("condition", forceString(proposed.condition));
+          if (proposed.description) setListingField("description", forceString(proposed.description));
+          if (proposed.color) setListingField("color", forceString(proposed.color));
+          if (proposed.size) setListingField("size", forceString(proposed.size));
+          if (proposed.brand) setListingField("brand", forceString(proposed.brand));
+          if (proposed.material) setListingField("material", forceString(proposed.material));
+          setListingField("title", forceString(derivedTitle));
+
+          if (tagString) {
+            mergeAIProvidedTags(tagString);
+          }
+          if (typeof price === "number") {
+            setListingField("price", price);
+          }
+          if (proposed.shipping) {
+            setListingField("shipping", proposed.shipping);
+          }
+          if (platformVersions && typeof platformVersions === "object") {
+            setListingField("platformVersions", platformVersions);
+          }
+
+          setShowReviewPill(true);
+          await runReview(proposed);
         }
-        if (condition) setListingField("condition", forceString(condition));
-        if (description) setListingField("description", forceString(description));
-        if (color) setListingField("color", forceString(color));
-        if (size) setListingField("size", forceString(size));
-        setListingField("title", forceString(deriveTitle()));
-        const incomingTags = tags && Array.isArray(tags) && tags.length ? tags : deriveTags();
-        mergeAIProvidedTags(incomingTags);
-        if (pricing !== undefined && pricing !== null) {
-          setListingField("price", pricing);
+      } catch (engineErr) {
+        console.warn("MagicFillEngine Auto-Fill failed, falling back to legacy flow.", engineErr);
+      }
+
+      if (!usedMagicEngine) {
+        const photoAnalysis = await analyzeListingPhotos(photoPayload);
+        const suggestions = await autoFillWithAI(photoAnalysis);
+        if (suggestions) {
+          const { category, condition, description, title, tags, price, color, size } = suggestions;
+          const deriveTitle = () => {
+            if (title) return title;
+            if (listingData.title) return listingData.title;
+            const firstWords = (description || "").split(/\s+/).slice(0, 6).join(" ");
+            return firstWords || "Auto-filled Listing";
+          };
+          const deriveTags = () => {
+            if (tags && Array.isArray(tags)) return tags.join(", ");
+            if (typeof listingData.tags === "string") return listingData.tags;
+            const words = (description || listingData.description || "")
+              .toLowerCase()
+              .split(/[^a-z0-9]+/i)
+              .filter((w) => w.length > 3);
+            return words.slice(0, 8).join(", ");
+          };
+          const pricing = typeof price === "number" ? Math.round(price) : listingData.price;
+          const proposed = {
+            title: deriveTitle(),
+            description: description || listingData.description,
+            category: category || listingData.category,
+            condition: condition || listingData.condition,
+            color: parsed?.color,
+            size: parsed?.size,
+            tags: Array.isArray(tags) ? tags.join(", ") : deriveTags(),
+            price: pricing,
+          };
+          const diff = generateAIDiffReport(originalSnapshot, proposed);
+          setDiffReport(diff);
+          if (diff.length) setShowDiffPanel(true);
+          if (category) {
+            const sanitizedCategory = forceString(category);
+            setListingField("category", sanitizedCategory);
+            setSelectedCategory(sanitizedCategory);
+          }
+          if (condition) setListingField("condition", forceString(condition));
+          if (description) setListingField("description", forceString(description));
+          if (color) setListingField("color", forceString(color));
+          if (size) setListingField("size", forceString(size));
+          setListingField("title", forceString(deriveTitle()));
+          const incomingTags = tags && Array.isArray(tags) && tags.length ? tags : deriveTags();
+          mergeAIProvidedTags(incomingTags);
+          if (pricing !== undefined && pricing !== null) {
+            setListingField("price", pricing);
+          }
+          setShowReviewPill(true);
+          await runReview(proposed);
         }
-        setShowReviewPill(true);
-        await runReview(proposed);
       }
     } catch (err) {
       console.warn("Auto Fill failed:", err);
@@ -825,11 +970,28 @@ function CreateListing() {
             <div className="create-header-card">
               <p className="create-eyebrow">Step 2</p>
               <h2 className="step-title glitter-text">Create Your Listing</h2>
+              {savedDrafts?.length > 0 && (
+                <button
+                  type="button"
+                  className="draft-header-link"
+                  onClick={() => navigate("/drafts")}
+                >
+                  View Saved Drafts
+                </button>
+              )}
               <p className="step-subtitle">
                 Repost Rocket builds the description, tags, and title for every platform you selected.
               </p>
             </div>
             <span className="create-pill">Step 2</span>
+          </div>
+
+          <div className="draft-header">
+            {savedDrafts?.length > 0 && (
+              <button className="draft-link" type="button" onClick={restoreDraft}>
+                Restore Saved Draft
+              </button>
+            )}
           </div>
 
           <form className="create-form" onSubmit={handleSubmit}>
@@ -942,13 +1104,29 @@ function CreateListing() {
               <div className="rr-usage-box">
                 <div className="rr-usage-label">Your AI Usage Today</div>
                 <p className="rr-usage-line">
-                  Smart Fill {smartUsage}/{smartLimit}
-                  &nbsp;&nbsp;•&nbsp;&nbsp;
-                  Auto Fill {autoCount}/0
-                  &nbsp;&nbsp;•&nbsp;&nbsp;
-                  AI Review {reviewCount}/0
-                  &nbsp;&nbsp;•&nbsp;&nbsp;
-                  Launches {launchUsage}/{launchLimit}
+                  Full Auto Fill {autoUsage}/1 • Magic Fill {magicUsage}/1 • AI Review {reviewUsage}/1
+                </p>
+              </div>
+              <p className="rr-monetization-note">
+                Unlock unlimited Full Auto Fill + bonus AI usage for $14.99/month.
+              </p>
+
+              {/* Auto Fill */}
+              <div
+                className="rr-smart-card rr-auto-card"
+                onClick={() => {
+                  incrementUsage("autoFill");
+                  handleAutoFill()
+                    .then(() => toast("⚡ Auto-Fill complete — your listing is now fully built"))
+                    .catch(() => toast("Auto-Fill couldn't complete."));
+                }}
+              >
+                <div className="rr-smart-header">
+                  <span className="rr-smart-title-inline">⚡ Full AI Auto-Fill</span>
+                  <span className="rr-premium-tag premium">Premium</span>
+                </div>
+                <p className="tool-badge">
+                  Most Powerful • Writes your whole listing
                 </p>
               </div>
 
@@ -966,29 +1144,8 @@ function CreateListing() {
                   <span className="rr-smart-title-inline">✨ Magic Fill My Listing</span>
                   <span className="rr-premium-tag">Free • 1/day</span>
                 </div>
-                <p className="rr-smart-desc">
-                  <strong>What it does:</strong> Uses your photos to auto-detect category, color, size, and tags.<br />
-                  <strong>Best for:</strong> A fast jumpstart before polishing.
-                </p>
-              </div>
-
-              {/* Auto Fill */}
-              <div
-                className="rr-smart-card rr-auto-card"
-                onClick={() => {
-                  incrementUsage("autoFill");
-                  handleAutoFill()
-                    .then(() => toast("⚡ Auto-Fill complete — your listing is now fully built"))
-                    .catch(() => toast("Auto-Fill couldn't complete."));
-                }}
-              >
-                <div className="rr-smart-header">
-                  <span className="rr-smart-title-inline">⚡ Full AI Auto-Fill</span>
-                  <span className="rr-premium-tag premium">Premium</span>
-                </div>
-                <p className="rr-smart-desc">
-                  <strong>What it does:</strong> Builds the entire listing automatically — title, description, category, tags, condition.<br />
-                  <strong>Best for:</strong> “Do it all for me” mode.
+                <p className="tool-badge">
+                  Helpful Boost • Pulls details from your photos
                 </p>
               </div>
 
@@ -1006,29 +1163,25 @@ function CreateListing() {
                   <span className="rr-smart-title-inline">🛠 Optimize Listing (AI Review)</span>
                   <span className="rr-premium-tag">Free • 1/day</span>
                 </div>
-                <p className="rr-smart-desc">
-                  <strong>What it does:</strong> Improves clarity, keywords, formatting, and boosts visibility.
-                  <span className="rr-powered-tag">Review powered by Repost Rocket AI</span>
+                <p className="tool-badge">
+                  Quick Tune-Up • Fixes mistakes & formatting
                 </p>
               </div>
 
-              {/* Clear Listing */}
-              <div
-                className="rr-smart-card rr-clear-card"
-                onClick={handleClearListing}
-              >
-                <div className="rr-smart-header">
-                  <span className="rr-smart-title-inline">🧹 Clear Listing Fields</span>
-                </div>
-                <p className="rr-smart-desc">
-                  Resets everything so you can start fresh.
-                </p>
+              <div className="smartfill-clear-row">
+                <button
+                  type="button"
+                  className="smartfill-clear-btn"
+                  onClick={handleClearListing}
+                >
+                  Clear Listing Fields
+                </button>
               </div>
             </div>
 
             {/* DESCRIPTION */}
             <section className="section-wrapper spaced-section">
-              <div className="section-card">
+              <div className="section-card description-block">
                 <h2 className="section-title">Description</h2>
                 <p className="section-sub">Tell buyers what makes this item great.</p>
                 <textarea
@@ -1334,8 +1487,12 @@ function CreateListing() {
                   PREVIEW LISTING →
                 </button>
 
-                <button className="btn-primary-champagne" onClick={handleLaunch}>
-                  🚀 LAUNCH TO PLATFORMS →
+                <button
+                  className="continue-btn"
+                  onClick={handleLaunch}
+                  type="button"
+                >
+                  CONTINUE →
                 </button>
               </div>
             </section>
@@ -1367,6 +1524,12 @@ function CreateListing() {
         if (proceed) navigate("/preflight");
       }}
     />
+    {showToast && (
+      <div className="toast-message">
+        Draft restored from last session.
+      </div>
+    )}
+
     <PremiumModal
       open={paywallState.open}
       reason={paywallState.reason}

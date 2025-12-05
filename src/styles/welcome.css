@@ -50,6 +50,99 @@
   margin-bottom: 28px;
 }
 
+.actions {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.btn-primary {
+  width: 100%;
+  padding: 14px 18px;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #0c2217, #103522);
+  color: #e8fbe8;
+  font-weight: 600;
+  font-size: 1rem;
+  border: 1px solid #1e4d2b;
+  box-shadow: 0 0 14px rgba(0, 255, 120, 0.15);
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  box-shadow: 0 0 22px rgba(0, 255, 120, 0.35);
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  width: 100%;
+  padding: 12px 18px;
+  border-radius: 16px;
+  background: #0d0f0e;
+  color: #e8fbe8;
+  border: 1px solid rgba(255, 215, 160, 0.25);
+  font-weight: 500;
+  font-size: 0.95rem;
+  margin-bottom: 10px;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  border-color: rgba(255, 215, 160, 0.45);
+  box-shadow: 0 0 12px rgba(255, 215, 160, 0.15);
+}
+
+.utility-buttons {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.btn-utility {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: transparent;
+  color: #dccbb3;
+  font-size: 0.85rem;
+  border: 1px solid rgba(220, 203, 179, 0.25);
+  letter-spacing: 0.5px;
+  transition: all 0.2s ease;
+}
+
+.btn-utility:hover {
+  border-color: rgba(220, 203, 179, 0.55);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.lux-animate {
+  display: inline-block;
+  position: relative;
+  background-image: linear-gradient(
+    90deg,
+    #e2d3a8 0%,
+    #f5e6c3 40%,
+    #e2d3a8 80%
+  );
+  background-size: 200% auto;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: shimmerMove 4s linear infinite;
+  font-weight: 600;
+}
+
+@keyframes shimmerMove {
+  0% {
+    background-position: 200% center;
+  }
+  100% {
+    background-position: -200% center;
+  }
+}
+
 /* ————————————————
    PLATFORM GRID — SINGLE COLUMN, ALWAYS
 ——————————————— */
@@ -331,4 +424,52 @@
 .ghost-link:hover {
   border-color: rgba(255, 241, 207, 0.5);
   box-shadow: 0 0 14px rgba(255, 241, 207, 0.2);
+}
+
+/* Compact action row under platform grid */
+.platform-tools-row {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin: 14px 0 22px 0;
+  padding: 0 2px;
+  gap: 8px;
+}
+
+.small-action-btn {
+  background: transparent;
+  color: #E8D5A8; /* champagne text */
+  border: 1px solid rgba(232,213,168,0.45);
+  padding: 6px 14px;
+  font-size: 0.85rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.small-action-btn:hover {
+  background-color: rgba(232,213,168,0.15);
+  color: #FFF6E4;
+}
+
+/* Override Luxe Continue Button — champagne + black */
+.luxe-continue-btn {
+  width: 100%;
+  background-color: #F5E7D0 !important; /* champagne */
+  color: #0A0A0A !important;             /* deep luxe black */
+  padding: 15px 20px;
+  border-radius: 10px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  text-align: center;
+  border: none;
+  display: block;
+  margin-top: 18px;
+  box-shadow: 0px 2px 4px rgba(0,0,0,0.25);
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.luxe-continue-btn:hover {
+  background-color: #ECDDC3 !important;
+  transform: translateY(-1px);
 }

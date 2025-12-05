@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import "../styles/overrides.css";
 import "../styles/welcome.css";
 import { useListingStore } from "../store/useListingStore";
 import { setUserPhone } from "../store/premiumStore";
@@ -86,18 +87,16 @@ function Welcome() {
     <div className="welcome-page">
       <div className="welcome-card welcome-wrapper">
         <div className="welcome-container">
-          <p className="step-label">Step 1</p>
-          <h1 className="welcome-title">
-            Choose Your Selling Platforms
-          </h1>
+          <p className="step-label">STEP 1:</p>
+          <h2 className="section-title">Choose Your Selling Platforms</h2>
 
-          <p className="welcome-subtext">
-            Pick every marketplace you plan to post this listing on.
-            Repost Rocket handles formatting across every platform.
-            <br /><br />
-            <span style={{ opacity: 0.8, fontSize: "0.9rem" }}>
-              (Note: You must have active accounts on these marketplaces to publish listings)
-            </span>
+          <p className="section-subtitle">
+            Pick every marketplace you plan to post this listing on. Repost Rocket handles formatting{" "}
+            <span className="lux-animate">across every platform</span>.
+          </p>
+
+          <p className="note-text">
+            (Note: You must have active accounts on these marketplaces to publish listings).
           </p>
 
           {/* Platform Grid */}
@@ -105,75 +104,64 @@ function Welcome() {
             {platformOptions.map((p) => {
               const isActive = normalizedSelected.includes(p.id);
               return (
-              <div
-                key={p.id}
-                className={`platform-card ${isActive ? "selected" : ""}`}
-                onClick={() => togglePlatform(p.id)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    togglePlatform(p.id);
-                  }
-                }}
-              >
-                <div className="platform-icon-ring">
-                  {isActive && (
-                    <svg viewBox="0 0 24 24" width="18" height="18">
-                      <path
-                        fill="currentColor"
-                        d="M20.285 6.709a1 1 0 0 0-1.414-1.414l-9.192 9.193-4.242-4.243A1 1 0 0 0 4.023 11.66l4.95 4.95a1 1 0 0 0 1.414 0l9.898-9.9Z"
-                      />
-                    </svg>
-                  )}
+                <div
+                  key={p.id}
+                  className={`platform-card ${isActive ? "selected" : ""}`}
+                  onClick={() => togglePlatform(p.id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      togglePlatform(p.id);
+                    }
+                  }}
+                >
+                  <div className="platform-icon-ring">
+                    {isActive && (
+                      <svg viewBox="0 0 24 24" width="18" height="18">
+                        <path
+                          fill="currentColor"
+                          d="M20.285 6.709a1 1 0 0 0-1.414-1.414l-9.192 9.193-4.242-4.243A1 1 0 0 0 4.023 11.66l4.95 4.95a1 1 0 0 0 1.414 0l9.898-9.9Z"
+                        />
+                      </svg>
+                    )}
+                  </div>
+                  <div className="platform-name">{p.name}</div>
                 </div>
-                <div className="platform-name">{p.name}</div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+
+          <div className="platform-tools-row">
+            <button
+              type="button"
+              className="small-action-btn"
+              onClick={selectAllPlatforms}
+            >
+              Select All
+            </button>
+
+            <button
+              type="button"
+              className="small-action-btn"
+              onClick={clearPlatforms}
+            >
+              Clear
+            </button>
+          </div>
 
           {/* Bottom Buttons */}
-          <button
-            className="select-all-platforms-btn"
-            onClick={selectAllPlatforms}
-          >
-            Select All Platforms
-          </button>
-
-          <button
-            className="luxury-button"
-            onClick={handleContinue}
-            disabled={!hasSelection}
-            style={{ opacity: hasSelection ? 1 : 0.5 }}
-          >
-            Continue →
-          </button>
+          <div className="actions">
+            <button
+              className="continue-btn"
+              onClick={handleContinue}
+              disabled={!hasSelection}
+            >
+              CONTINUE →
+            </button>
+          </div>
         </div>
-        <button
-          type="button"
-          className="discard-button"
-          onClick={clearPlatforms}
-          style={{ marginTop: "10px" }}
-        >
-          Clear Selections
-        </button>
-        <button
-          type="button"
-          className="discard-button"
-          onClick={resetListing}
-        >
-          Discard Draft
-        </button>
-        <button
-          type="button"
-          className="ghost-link"
-          style={{ marginTop: "6px" }}
-          onClick={() => navigate("/drafts")}
-        >
-          View Saved Drafts
-        </button>
       </div>
     </div>
   );
