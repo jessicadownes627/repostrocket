@@ -1,4 +1,6 @@
-export default function formatForVinted(listing = {}) {
+import { buildCollectibleDetails } from "./collectibleHelpers";
+
+export default function formatForVinted(item = {}) {
   const {
     title = "",
     description = "",
@@ -7,13 +9,30 @@ export default function formatForVinted(listing = {}) {
     color = "",
     condition = "",
     tags = [],
-  } = listing;
+    category = "",
+  } = item;
+
+  const baseTitle = title;
+  const baseDesc = description || "Nice piece in good condition.";
+
+  const collectibleBlock = buildCollectibleDetails(item);
+
+  const collectibleTitle =
+    ["Sports Cards", "Collectibles"].includes(category)
+      ? `${item.cardPlayer || ""} • ${item.cardSet || ""}${
+          item.variant ? ` • ${item.variant}` : ""
+        }${
+          item.gradingCompany
+            ? ` • ${item.gradingCompany} ${item.gradeNumber || ""}`
+            : ""
+        }`.trim()
+      : baseTitle;
 
   return `
-${title}
+${collectibleTitle}
 
-${description || "Nice piece in good condition."}
-
+${baseDesc}
+${collectibleBlock}
 Brand: ${brand || "—"}
 Size: ${size || "—"}
 Color: ${color || "—"}

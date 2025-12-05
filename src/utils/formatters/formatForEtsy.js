@@ -1,4 +1,6 @@
-export default function formatForEtsy(listing = {}) {
+import { buildCollectibleDetails } from "./collectibleHelpers";
+
+export default function formatForEtsy(item = {}) {
   const {
     title = "",
     description = "",
@@ -8,13 +10,30 @@ export default function formatForEtsy(listing = {}) {
     condition = "",
     tags = [],
     category = "",
-  } = listing;
+  } = item;
+
+  const baseTitle = title;
+  const baseDesc =
+    description || "Lovely item in good condition, ready to be enjoyed.";
+
+  const collectibleBlock = buildCollectibleDetails(item);
+
+  const collectibleTitle =
+    ["Sports Cards", "Collectibles"].includes(category)
+      ? `${item.cardPlayer || ""} • ${item.cardSet || ""}${
+          item.variant ? ` • ${item.variant}` : ""
+        }${
+          item.gradingCompany
+            ? ` • ${item.gradingCompany} ${item.gradeNumber || ""}`
+            : ""
+        }`.trim()
+      : baseTitle;
 
   return `
-${title}
+${collectibleTitle}
 
-${description || "Lovely item in good condition, ready to be enjoyed."}
-
+${baseDesc}
+${collectibleBlock}
 Details:
 • Brand: ${brand || "—"}
 • Size: ${size || "—"}
@@ -29,6 +48,6 @@ Processing + Shipping:
 Packed with care, quick dispatch.
 
 Keywords:
-${[title, brand, size, color, ...tags].filter(Boolean).join(", ")}
+${[collectibleTitle || title, brand, size, color, ...tags].filter(Boolean).join(", ")}
 `.trim();
 }

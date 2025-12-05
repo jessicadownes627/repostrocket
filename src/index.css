@@ -1,12 +1,15 @@
+/* 1️⃣ GOOGLE FONTS — must come first */
 @import url("https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap");
 
+/* 2️⃣ TAILwind Layers — must come after all imports */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ---------------------------
-   🚀 REPOSTROCKET GLOBAL THEME — Luxe Noir / Emerald / Gold
----------------------------- */
+/* 3️⃣ Your luxury CSS follows here… */
+
+
+@layer base {
 
 :root {
   /* Spacing Scale */
@@ -255,6 +258,8 @@ button {
 @keyframes starsFloat {
   0% { transform: translateY(0); }
   100% { transform: translateY(-80px); }
+}
+
 }
 
 /* ---------------------------

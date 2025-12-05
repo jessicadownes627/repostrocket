@@ -1,4 +1,6 @@
-export default function formatForPoshmark(listing = {}) {
+import { buildCollectibleDetails } from "./collectibleHelpers";
+
+export default function formatForPoshmark(item = {}) {
   const {
     title = "",
     brand = "",
@@ -7,14 +9,31 @@ export default function formatForPoshmark(listing = {}) {
     condition = "",
     description = "",
     tags = [],
-  } = listing;
+    category = "",
+  } = item;
+
+  const baseTitle = title;
+  const baseDesc = description || "Cute and comfy. Great condition!";
+
+  const collectibleBlock = buildCollectibleDetails(item);
+
+  const collectibleTitle =
+    ["Sports Cards", "Collectibles"].includes(category)
+      ? `${item.cardPlayer || ""} • ${item.cardSet || ""}${
+          item.variant ? ` • ${item.variant}` : ""
+        }${
+          item.gradingCompany
+            ? ` • ${item.gradingCompany} ${item.gradeNumber || ""}`
+            : ""
+        }`.trim()
+      : baseTitle;
 
   return `
-${title}
+${collectibleTitle}
 ${brand ? brand + " ·" : ""} ${size || ""}
 
-${description || "Cute and comfy. Great condition!"}
-
+${baseDesc}
+${collectibleBlock}
 Color: ${color || "—"}
 Condition: ${condition || "—"}
 

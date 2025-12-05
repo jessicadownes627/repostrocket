@@ -60,3 +60,36 @@ export async function generateResizedVariants(dataUrl) {
   );
   return Object.fromEntries(entries);
 }
+
+// NEW — auto-group photos into item bundles
+export function groupPhotosIntoItems(photos) {
+  const list = Array.isArray(photos) ? [...photos] : [];
+  if (!list.length) return [];
+
+  const groups = [];
+
+  // Simple initial grouping by timestamp proximity
+  list.sort(
+    (a, b) => (a.lastModified || 0) - (b.lastModified || 0)
+  );
+
+  let currentGroup = [list[0]];
+
+  for (let i = 1; i < list.length; i++) {
+    const timeDiff = Math.abs(
+      (list[i].lastModified || 0) -
+      (list[i - 1].lastModified || 0)
+    );
+
+    if (timeDiff < 5000) {
+      currentGroup.push(list[i]);
+    } else {
+      groups.push(currentGroup);
+      currentGroup = [list[i]];
+    }
+  }
+
+  groups.push(currentGroup);
+
+  return groups;
+}

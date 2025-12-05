@@ -1,7 +1,7 @@
 export default {
   name: "Poshmark",
   slug: "poshmark",
-  url: "https://poshmark.com/create-listing",
+  url: "https://poshmark.com/single-listing",
   fields: [
     { key: "title", label: "Title" },
     { key: "description", label: "Description" },

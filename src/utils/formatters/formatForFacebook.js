@@ -1,4 +1,6 @@
-export default function formatForFacebook(listing = {}) {
+import { buildCollectibleDetails } from "./collectibleHelpers";
+
+export default function formatForFacebook(item = {}) {
   const {
     title = "",
     description = "",
@@ -7,13 +9,31 @@ export default function formatForFacebook(listing = {}) {
     size = "",
     color = "",
     tags = [],
-  } = listing;
+    category = "",
+  } = item;
+
+  const baseTitle = title;
+  const baseDesc =
+    description || "Good condition. Available for pickup or local meet-up.";
+
+  const collectibleBlock = buildCollectibleDetails(item);
+
+  const collectibleTitle =
+    ["Sports Cards", "Collectibles"].includes(category)
+      ? `${item.cardPlayer || ""} • ${item.cardSet || ""}${
+          item.variant ? ` • ${item.variant}` : ""
+        }${
+          item.gradingCompany
+            ? ` • ${item.gradingCompany} ${item.gradeNumber || ""}`
+            : ""
+        }`.trim()
+      : baseTitle;
 
   return `
-${title}
+${collectibleTitle}
 
-${description || "Good condition. Available for pickup or local meet-up."}
-
+${baseDesc}
+${collectibleBlock}
 Details:
 • Brand: ${brand || "—"}
 • Size: ${size || "—"}

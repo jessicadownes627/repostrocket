@@ -1,4 +1,6 @@
-export default function formatForMercari(listing = {}) {
+import { buildCollectibleDetails } from "./collectibleHelpers";
+
+export default function formatForMercari(item = {}) {
   const {
     title = "",
     description = "",
@@ -7,18 +9,35 @@ export default function formatForMercari(listing = {}) {
     size = "",
     condition = "",
     tags = [],
-  } = listing;
+    category = "",
+  } = item;
+
+  const baseTitle = title;
+  const baseDesc = description || "Good condition. Smoke-free home.";
+
+  const collectibleBlock = buildCollectibleDetails(item);
+
+  const collectibleTitle =
+    ["Sports Cards", "Collectibles"].includes(category)
+      ? `${item.cardPlayer || ""} • ${item.cardSet || ""}${
+          item.variant ? ` • ${item.variant}` : ""
+        }${
+          item.gradingCompany
+            ? ` • ${item.gradingCompany} ${item.gradeNumber || ""}`
+            : ""
+        }`.trim()
+      : baseTitle;
 
   return `
-${title}
+${collectibleTitle}
 
 ${brand ? `Brand: ${brand}` : ""}
 ${size ? `Size: ${size}` : ""}
 ${color ? `Color: ${color}` : ""}
 ${condition ? `Condition: ${condition}` : ""}
 
-${description || "Good condition. Smoke-free home."}
-
+${baseDesc}
+${collectibleBlock}
 Details:
 ${tags?.length ? tags.map((t) => `• ${t}`).join("\n") : "• Trending\n• Great Fit"}
 `.trim();

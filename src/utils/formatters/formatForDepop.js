@@ -1,4 +1,6 @@
-export default function formatForDepop(listing = {}) {
+import { buildCollectibleDetails } from "./collectibleHelpers";
+
+export default function formatForDepop(item = {}) {
   const {
     title = "",
     brand = "",
@@ -7,13 +9,30 @@ export default function formatForDepop(listing = {}) {
     condition = "",
     description = "",
     tags = [],
-  } = listing;
+    category = "",
+  } = item;
+
+  const baseTitle = title;
+  const baseDesc = description || "Sick piece. Great condition.";
+
+  const collectibleBlock = buildCollectibleDetails(item);
+
+  const collectibleTitle =
+    ["Sports Cards", "Collectibles"].includes(category)
+      ? `${item.cardPlayer || ""} • ${item.cardSet || ""}${
+          item.variant ? ` • ${item.variant}` : ""
+        }${
+          item.gradingCompany
+            ? ` • ${item.gradingCompany} ${item.gradeNumber || ""}`
+            : ""
+        }`.trim()
+      : baseTitle;
 
   return `
-${title}
+${collectibleTitle}
 
-${description || "Sick piece. Great condition."}
-
+${baseDesc}
+${collectibleBlock}
 Brand: ${brand || "—"}
 Size: ${size || "—"}
 Color: ${color || "—"}

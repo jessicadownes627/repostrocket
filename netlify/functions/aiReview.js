@@ -1,9 +1,8 @@
 /* eslint-env node */
-/* global process */
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
-exports.handler = async (event) => {
+export async function handler(event) {
   if (event.httpMethod !== "POST") {
     return {
       statusCode: 405,
@@ -23,7 +22,9 @@ exports.handler = async (event) => {
   let body = {};
   try {
     body = JSON.parse(event.body || "{}");
-  } catch {}
+  } catch {
+    body = {};
+  }
 
   const { listing } = body;
 
@@ -63,7 +64,9 @@ exports.handler = async (event) => {
     let parsed = {};
     try {
       parsed = JSON.parse(data.choices?.[0]?.message?.content || "{}");
-    } catch {}
+    } catch {
+      parsed = {};
+    }
 
     return {
       statusCode: 200,
@@ -81,4 +84,4 @@ exports.handler = async (event) => {
       body: JSON.stringify({ error: "AI Review service unavailable." }),
     };
   }
-};
+}

@@ -2,8 +2,9 @@ import { useEffect, useRef, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import "../styles/overrides.css";
 import "../styles/createListing.css";
+import "../styles/magicUpload.css";
 import { useListingStore } from "../store/useListingStore";
-import { generateResizedVariants, resizeImage } from "../utils/imageTools";
+import { generateResizedVariants, resizeImage, groupPhotosIntoItems } from "../utils/imageTools";
 import { convertHeicToJpeg } from "../utils/heicConverter";
 import { useTitleParser } from "../hooks/useTitleParser";
 import { toast } from "react-hot-toast";
@@ -25,7 +26,7 @@ import { useSmartFill } from "../hooks/useSmartFill";
 import { mergeAndCleanTags } from "../utils/mergeAndCleanTags";
 import { convertSize } from "../utils/convertSize";
 import { babySizeGuide } from "../utils/babySizeGuide";
-import { generateFullListing } from "../ai/MagicFillEngine";
+import { generateFullListing, magicFillMultiple } from "../ai/MagicFillEngine";
 import { saveInventoryItem } from "../db/InventoryBrain";
 
 function forceString(value) {
@@ -248,6 +249,10 @@ function CreateListing() {
   const [showReviewPanel, setShowReviewPanel] = useState(false);
   const [tempMessage, setTempMessage] = useState("");
   const [showToast, setShowToast] = useState(false);
+  const [uploadedPhotos, setUploadedPhotos] = useState([]);
+  const [photoGroups, setPhotoGroups] = useState([]);
+  const [generatedListings, setGeneratedListings] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
   const userId = useMemo(() => getLocalUserId(), []);
 
   useEffect(() => {
@@ -613,9 +618,12 @@ function CreateListing() {
     }
   };
 
-  /** Handle manual upload */
-  const handleFileChange = async (event) => {
-    const rawFiles = Array.from(event.target.files || []);
+  const processUploadedFiles = async (fileList) => {
+    const rawFiles = Array.from(fileList || []);
+    if (!rawFiles.length) return;
+
+    // instantly show what was selected
+    setUploadedPhotos(rawFiles);
 
     // Convert HEIC → JPEG silently
     const processedFiles = await Promise.all(
@@ -628,7 +636,36 @@ function CreateListing() {
     // Convert to dataURLs for your existing resize logic
     const dataUrls = await readFilesAsDataUrls(processedFiles);
 
+    // keep existing platform resizing + store logic
     await addPhotosWithVariants(dataUrls, previews);
+
+    // build items with timestamp metadata for grouping
+    const photoItems = processedFiles.map((file, idx) => ({
+      dataUrl: dataUrls[idx],
+      lastModified: file.lastModified || rawFiles[idx]?.lastModified || 0,
+    }));
+
+    const groupedMeta = groupPhotosIntoItems(photoItems);
+    const groupedDataUrls = groupedMeta.map((group) => group.map((p) => p.dataUrl));
+
+    setPhotoGroups(groupedDataUrls);
+
+    // start magic fill in background
+    setIsLoading(true);
+    try {
+      const listings = await magicFillMultiple(groupedDataUrls);
+      setGeneratedListings(listings);
+      navigate("/single-listing", { state: { listings } });
+    } catch (err) {
+      console.error("Magic batch fill failed", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /** Handle manual upload */
+  const handleFileChange = async (event) => {
+    await processUploadedFiles(event.target.files);
     event.target.value = "";
   };
 
@@ -636,17 +673,7 @@ function CreateListing() {
   const handleDrop = async (event) => {
     event.preventDefault();
     setIsDragging(false);
-
-    const rawFiles = Array.from(event.dataTransfer.files || []);
-
-    const processedFiles = await Promise.all(
-      rawFiles.map(async (file) => await convertHeicToJpeg(file))
-    );
-
-    const previews = processedFiles.map((file) => URL.createObjectURL(file));
-    const dataUrls = await readFilesAsDataUrls(processedFiles);
-
-    await addPhotosWithVariants(dataUrls, previews);
+    await processUploadedFiles(event.dataTransfer.files || []);
   };
 
   const handleAutoFill = async () => {
@@ -760,6 +787,17 @@ function CreateListing() {
           if (platformVersions && typeof platformVersions === "object") {
             setListingField("platformVersions", platformVersions);
           }
+
+          try {
+            localStorage.setItem(
+              "rr_lastListing",
+              JSON.stringify({
+                ...listingData,
+                ...proposed,
+                photos: photos || [],
+              })
+            );
+          } catch {}
 
           setShowReviewPill(true);
           await runReview(proposed);
@@ -1089,6 +1127,11 @@ function CreateListing() {
                   <p className="upload-hint">
                     Drag & drop or tap to upload. Images auto-format per platform.
                   </p>
+                  {isLoading && (
+                    <div className="magic-shimmer">
+                      ✨ Generating Magic...
+                    </div>
+                  )}
                 </div>
               </div>
             </section>
@@ -1496,6 +1539,12 @@ function CreateListing() {
                 </button>
               </div>
             </section>
+
+            {generatedListings.length > 0 && (
+              <div className="fade-in">
+                {/* your listing cards go here */}
+              </div>
+            )}
 
           </form>
         </div>

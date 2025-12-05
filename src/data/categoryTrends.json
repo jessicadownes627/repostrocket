@@ -1,0 +1,48 @@
+{
+  "Activewear": {
+    "trend": 0.12,
+    "search": 0.18,
+    "season": "Winter Peak"
+  },
+  "Women's Fashion": {
+    "trend": -0.05,
+    "search": 0.07,
+    "season": "Off Peak"
+  },
+  "Kids & Baby": {
+    "trend": 0.20,
+    "search": 0.32,
+    "season": "High Demand"
+  },
+  "Home Goods": {
+    "trend": 0.04,
+    "search": 0.09,
+    "season": "Steady"
+  },
+  "Electronics": {
+    "trend": 0.11,
+    "search": 0.14,
+    "season": "Holiday Spike"
+  },
+  "Toys": {
+    "trend": 0.27,
+    "search": 0.45,
+    "season": "Gift Season"
+  },
+  "Beauty": {
+    "trend": 0.03,
+    "search": 0.05,
+    "season": "Baseline"
+  },
+  "Sneakers": {
+    "trend": 0.08,
+    "search": 0.22,
+    "season": "Back to School"
+  },
+  "Collectibles": {
+    "trend": 0.16,
+    "search": 0.19,
+    "season": "Event Driven"
+  }
+}
+

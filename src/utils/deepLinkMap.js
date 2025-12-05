@@ -1,6 +1,6 @@
 export const deepLinkMap = {
   poshmark: {
-    create: "https://poshmark.com/create-listing",
+    create: "https://poshmark.com/single-listing",
     edit: (id) => `https://poshmark.com/edit-listing/${id}`,
   },
   mercari: {

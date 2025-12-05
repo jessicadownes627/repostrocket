@@ -1,5 +1,5 @@
 export const platformLinks = {
-  poshmark: { deep: "poshmark://create", web: "https://poshmark.com/create-listing" },
+  poshmark: { deep: "poshmark://create", web: "https://poshmark.com/single-listing" },
   mercari: { deep: "mercari://sell", web: "https://www.mercari.com/sell" },
   ebay: { deep: "ebay://selling/create", web: "https://www.ebay.com/sl/sell" },
   depop: { deep: "depop://selling/create", web: "https://www.depop.com/sell/" },

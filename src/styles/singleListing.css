@@ -1,0 +1,143 @@
+.listing-editor-container {
+  padding: 20px;
+  color: #0a0a0a;
+  font-family: Inter, sans-serif;
+}
+
+.editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.back-btn,
+.launch-btn {
+  background: black;
+  color: white;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 24px;
+  font-size: 14px;
+}
+
+.batch-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.batch-counter {
+  font-weight: 600;
+}
+
+.photo-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin-bottom: 20px;
+}
+
+.item-photo {
+  width: 100px;
+  height: 100px;
+  object-fit: cover;
+  border-radius: 12px;
+}
+
+.field-block {
+  margin-bottom: 20px;
+}
+
+.field-block label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.field-block input,
+.field-block textarea {
+  width: 100%;
+  border: 1px solid #ddd;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.fade-in {
+  opacity: 0;
+  animation: fadeIn 0.3s ease forwards;
+}
+
+@keyframes fadeIn {
+  to {
+    opacity: 1;
+  }
+}
+
+/* Chip Buttons */
+.chip-group,
+.chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  padding: 8px 14px;
+  border-radius: 18px;
+  background: #f4f4f4;
+  border: 1px solid #ddd;
+  font-size: 13px;
+}
+
+.chip-active {
+  background: black;
+  color: white;
+  border-color: black;
+}
+
+/* Smart Tags */
+.tag-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag {
+  padding: 6px 12px;
+  border-radius: 14px;
+  background: #fafafa;
+  border: 1px solid #eee;
+  font-size: 12px;
+}
+
+.tag-active {
+  background: #0a0a0a;
+  color: white;
+  border-color: #0a0a0a;
+}
+
+/* AI Buttons */
+.ai-btn-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ai-btn {
+  background: #0a0a0a;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 20px;
+  border: none;
+  font-size: 13px;
+}
+
+.hint-box {
+  padding: 10px;
+  border-radius: 8px;
+  background: #f7f7f7;
+  border: 1px solid #e0e0e0;
+  font-size: 13px;
+}

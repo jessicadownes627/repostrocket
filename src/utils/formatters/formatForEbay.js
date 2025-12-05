@@ -1,4 +1,6 @@
-export default function formatForEbay(listing = {}) {
+import { buildCollectibleDetails } from "./collectibleHelpers";
+
+export default function formatForEbay(item = {}) {
   const {
     title = "",
     description = "",
@@ -8,10 +10,26 @@ export default function formatForEbay(listing = {}) {
     condition = "",
     tags = [],
     category = "",
-  } = listing;
+  } = item;
+
+  const baseTitle = title;
+  const baseDesc = description || "Great item in good condition.";
+
+  const collectibleBlock = buildCollectibleDetails(item);
+
+  const collectibleTitle =
+    ["Sports Cards", "Collectibles"].includes(category)
+      ? `${item.cardPlayer || ""} • ${item.cardSet || ""}${
+          item.variant ? ` • ${item.variant}` : ""
+        }${
+          item.gradingCompany
+            ? ` • ${item.gradingCompany} ${item.gradeNumber || ""}`
+            : ""
+        }`.trim()
+      : baseTitle;
 
   return `
-${title}
+${collectibleTitle}
 
 ${brand ? `Brand: ${brand}` : ""}
 ${size ? `Size: ${size}` : ""}
@@ -20,8 +38,8 @@ ${condition ? `Condition: ${condition}` : ""}
 ${category ? `Category: ${category}` : ""}
 
 Description:
-${description || "Great item in good condition."}
-
+${baseDesc}
+${collectibleBlock}
 Features:
 ${tags?.length ? tags.map((t) => `• ${t}`).join("\n") : "• Stylish\n• Great Quality"}
 
@@ -29,6 +47,6 @@ Shipping:
 Carefully packed and shipped fast.
 
 Search Keywords:
-${[brand, title, category, ...tags].filter(Boolean).join(", ")}
+${[brand, collectibleTitle || title, category, ...tags].filter(Boolean).join(", ")}
 `.trim();
 }

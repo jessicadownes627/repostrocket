@@ -1,41 +1,31 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+
 import Welcome from "./pages/Welcome";
 import CreateListing from "./pages/CreateListing";
-import LaunchLoading from "./pages/LaunchLoading";
-import Preflight from "./pages/Preflight";
-import Splash from "./pages/Splash";
-import Drafts from "./pages/Drafts";
-import PlatformPrep from "./pages/PlatformPrep";
-import LaunchCenter from "./pages/LaunchCenter";
-import PlatformLaunch from "./pages/PlatformLaunch";
+import SingleListing from "./pages/SingleListing";
+import BatchUpload from "./pages/Batch";
 import LaunchDeck from "./pages/LaunchDeck";
-import { Toaster } from "react-hot-toast";
+import Inventory from "./pages/Inventory";
 
-function App() {
+export default function App() {
   return (
-    <>
-      <Toaster position="top-center" />
-      <Router>
-        <Routes>
-          <Route path="/" element={<Splash />} />
-          <Route path="/welcome" element={<Welcome />} />
-          <Route path="/create" element={<CreateListing />} />
-          <Route path="/preflight" element={<Preflight />} />
+    <Router>
+      <Routes>
+        {/* Home */}
+        <Route path="/" element={<Welcome />} />
+        <Route path="/welcome" element={<Welcome />} />
 
-          {/* New clean flow */}
-          <Route path="/loading" element={<LaunchLoading />} />
-          <Route path="/launch" element={<LaunchCenter />} />
-          <Route path="/launch/:platform" element={<PlatformLaunch />} />
-          <Route path="/launch-deck" element={<LaunchDeck />} />
+        {/* NEW MAGIC FLOW */}
+        <Route path="/create" element={<CreateListing />} />
+        <Route path="/create-listing" element={<CreateListing />} />
+        <Route path="/single-listing" element={<SingleListing />} />
+        <Route path="/batch-mode" element={<BatchUpload />} />
+        <Route path="/launch" element={<LaunchDeck />} />
+        <Route path="/inventory" element={<Inventory />} />
 
-          {/* Utilities */}
-          <Route path="/preflight" element={<Preflight />} />
-          <Route path="/drafts" element={<Drafts />} />
-          <Route path="/platform-prep" element={<PlatformPrep />} />
-        </Routes>
-      </Router>
-    </>
+        {/* OPTIONAL OLD ROUTE FALLBACKS */}
+        <Route path="/batch" element={<Navigate to="/batch-mode" replace />} />
+      </Routes>
+    </Router>
   );
 }
-
-export default App;

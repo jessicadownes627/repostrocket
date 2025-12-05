@@ -30,7 +30,7 @@ export const platformConfigs = {
     id: "poshmark",
     name: "Poshmark",
     icon: "/assets/platforms/poshmark.svg",
-    url: "https://poshmark.com/create-listing",
+    url: "https://poshmark.com/single-listing",
     tips: [
       "Copy your listing fields first — Repost Rocket formats them for this platform.",
       "Photos upload best one at a time (platform quirk).",

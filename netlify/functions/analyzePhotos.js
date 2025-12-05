@@ -1,5 +1,4 @@
 /* eslint-env node */
-/* global process */
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
@@ -14,7 +13,7 @@ const defaultResult = {
   price: 20,
 };
 
-exports.handler = async (event) => {
+export async function handler(event) {
   if (event.httpMethod !== "POST") {
     return {
       statusCode: 405,
@@ -34,7 +33,9 @@ exports.handler = async (event) => {
   let body = {};
   try {
     body = JSON.parse(event.body || "{}");
-  } catch {}
+  } catch {
+    body = {};
+  }
 
   const { photos } = body;
   const first = Array.isArray(photos) ? photos[0] : null;
@@ -64,18 +65,18 @@ exports.handler = async (event) => {
             content:
               "You are an expert clothing classifier. Return JSON with: category, color, material, condition, style, tags[], description, priceEstimate.",
           },
-        {
-          role: "user",
-          content: [
-            { type: "text", text: "Analyze this clothing item photo." },
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:image/jpeg;base64,${base64}`,
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Analyze this clothing item photo." },
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:image/jpeg;base64,${base64}`,
+                },
               },
-            },
-          ],
-        },
+            ],
+          },
         ],
       }),
     });
@@ -85,7 +86,9 @@ exports.handler = async (event) => {
     let parsed = {};
     try {
       parsed = JSON.parse(data.choices?.[0]?.message?.content || "{}");
-    } catch {}
+    } catch {
+      parsed = {};
+    }
 
     return {
       statusCode: 200,
@@ -110,4 +113,4 @@ exports.handler = async (event) => {
       body: JSON.stringify({ error: "Vision service unavailable." }),
     };
   }
-};
+}
