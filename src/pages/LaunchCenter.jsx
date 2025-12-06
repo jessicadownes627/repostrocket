@@ -54,9 +54,6 @@ export default function LaunchCenter() {
         usage={paywallState.usage}
         limit={paywallState.limit}
         onClose={closePaywall}
-        onUpgrade={() => {
-          window.location.href = "/upgrade";
-        }}
       />
     </div>
   );

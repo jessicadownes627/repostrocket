@@ -1,505 +1,201 @@
-import React, { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useListingStore } from "../store/useListingStore";
-import "../styles/launchdeck.css";
-import "../styles/trendSense.css";
-
-import { runAIReview } from "../utils/safeAI/runAIReview";
-import { runMagicFill } from "../utils/safeAI/runMagicFill";
-import { runAutoFill } from "../utils/safeAI/runAutoFill";
-import { mergeAITurboSignals } from "../utils/aiTurboMerge";
-import { saveLaunchProgress, loadLaunchProgress } from "../utils/saveListing";
-import { v4 as uuidv4 } from "uuid";
-import { runTrendSense } from "../engines/trendSense";
-import { runTrendSensePro } from "../engines/trendSensePro";
-import { runTrendSenseUltra } from "../utils/trendSenseUltra";
-
-import {
-  formatEbay,
-  formatMercari,
-  formatPoshmark,
-  formatDepop,
-  formatEtsy,
-  formatFacebook,
-  formatGrailed,
-  formatVinted,
-  formatKidizen,
-} from "../utils/formatters";
+import "../styles/overrides.css";
 
 export default function LaunchDeck() {
   const location = useLocation();
-  const storeListing = useListingStore((s) => s.listingData);
+  const { listingData, setListing } = useListingStore();
 
-  // Accept batch items (from SingleListing) OR fallback to store for single-item mode
-  const incomingItems = location.state?.items || null;
-  const [items] = useState(incomingItems || (storeListing ? [storeListing] : []));
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const listings = listingData?.photos?.length ? [{ ...listingData }] : [];
 
-  const item = items[currentIndex] || null;
+  const [activeItem, setActiveItem] = useState(null);
 
-  // Treat this as the current item for launch/export
-  const currentItem = item;
+  const handleCloseModal = () => setActiveItem(null);
 
-  const outputRef = useRef(null);
-
-  const [formattedOutput, setFormattedOutput] = useState("");
-  const [enhancedOutput, setEnhancedOutput] = useState("");
-
-  const [aiReview, setAiReview] = useState(null);
-  const [aiMagic, setAiMagic] = useState(null);
-  const [aiAuto, setAiAuto] = useState(null);
-  const [aiMerged, setAiMerged] = useState(null);
-  const [aiSuggestions, setAiSuggestions] = useState([]);
-
-  const [activePlatform, setActivePlatform] = useState(null);
-  const [showAI, setShowAI] = useState(false);
-
-  const [toast, setToast] = useState("");
-  const [trendSense, setTrendSense] = useState(null);
-
-  // Launch progress (per listing, persisted to localStorage)
-  const [launchId] = useState(() => currentItem?.id || uuidv4());
-  const [launchProgress, setLaunchProgress] = useState(
-    loadLaunchProgress(launchId) || {
-      mercari: false,
-      poshmark: false,
-      depop: false,
-      ebay: false,
-      etsy: false,
-      facebook: false,
-      grailed: false,
-      vinted: false,
-      kidizen: false,
-    }
-  );
-
-  const { trendScore, trendReasons } = runTrendSense(item);
-  const trendPro = runTrendSensePro(item);
-
-  useEffect(() => {
-    async function loadTS() {
-      if (item) {
-        const ts = await runTrendSenseUltra(item);
-        setTrendSense(ts);
-      } else {
-        setTrendSense(null);
-      }
-    }
-    loadTS();
-  }, [item]);
-
-  if (!item) {
-    return (
-      <div style={{ padding: "2rem", color: "white" }}>
-        No listing found.
-      </div>
-    );
-  }
-
-  /** --------------------------
-   * Utilities
-   * -------------------------- */
-
-  function updateProgress(platformKey) {
-    const updated = {
-      ...launchProgress,
-      [platformKey]: true,
-    };
-    setLaunchProgress(updated);
-    saveLaunchProgress(launchId, updated);
-  }
-
-  function showToast(msg) {
-    setToast(msg);
-    setTimeout(() => setToast(""), 1300);
-  }
-
-  function copyText(text) {
-    navigator.clipboard.writeText(text);
-    showToast("Copied!");
-  }
-
-  function normalizeTip(raw) {
-    if (!raw) return "";
-    if (typeof raw === "string") return raw;
-    if (typeof raw.text === "string") return raw.text;
-    if (typeof raw.msg === "string") return raw.msg;
-    return JSON.stringify(raw);
-  }
-
-  function extractSuggestions(merged) {
-    if (!merged) return [];
-    const pool = [];
-    if (merged.review?.suggestions) pool.push(...merged.review.suggestions);
-    if (merged.magic?.suggestions) pool.push(...merged.magic.suggestions);
-    if (merged.auto?.suggestions) pool.push(...merged.auto.suggestions);
-    return [...new Set(pool.map(normalizeTip))].slice(0, 6);
-  }
-
-  function applySuggestionToOutput(suggestion) {
-    const base = enhancedOutput || formattedOutput;
-    const newText = `${base}\n\n${suggestion}`;
-    setEnhancedOutput(newText);
-    showToast("Suggestion added");
-  }
-
-  /** --------------------------
-   * Platform Formatter Map
-   * -------------------------- */
-  const platformFormatters = {
-    ebay: formatEbay,
-    mercari: formatMercari,
-    poshmark: formatPoshmark,
-    depop: formatDepop,
-    etsy: formatEtsy,
-    facebook: formatFacebook,
-    grailed: formatGrailed,
-    vinted: formatVinted,
-    kidizen: formatKidizen,
-  };
-
-  /** --------------------------
-   * Format Handler (per platform)
-   * -------------------------- */
-  async function handlePlatformClick(key) {
-    if (!item) return;
-
-    setActivePlatform(key);
-    setShowAI(false);
-    setEnhancedOutput("");
-
-    const formatter = platformFormatters[key];
-    const text = formatter ? formatter(item) : "Missing formatter.";
-
-    setFormattedOutput(text);
-    copyText(text);
-    updateProgress(key);
-
-    setTimeout(() => {
-      if (outputRef.current) {
-        outputRef.current.scrollIntoView({ behavior: "smooth" });
-      }
-    }, 150);
-
-    // AI review + merge
-    let review = null;
-    try {
-      review = await runAIReview(item);
-      setAiReview(review);
-    } catch {
-      setAiReview({ summary: "AI Review unavailable." });
-    }
-
-    let magic = null;
-    try {
-      magic = await runMagicFill(item);
-      setAiMagic(magic);
-    } catch {
-      setAiMagic({ summary: "Magic Fill unavailable." });
-    }
-
-    let auto = null;
-    try {
-      auto = await runAutoFill(item);
-      setAiAuto(auto);
-    } catch {
-      setAiAuto({ summary: "Auto Fill unavailable." });
-    }
-
-    const merged = mergeAITurboSignals({ review, magic, auto });
-    setAiMerged(merged);
-    setAiSuggestions(extractSuggestions(merged));
-    setShowAI(true);
-  }
-
-  /** --------------------------
-   * Batch Navigation
-   * -------------------------- */
-  function goPrev() {
-    if (currentIndex > 0) setCurrentIndex((i) => i - 1);
-  }
-
-  function goNext() {
-    if (currentIndex < items.length - 1) setCurrentIndex((i) => i + 1);
-  }
-
-  /** --------------------------
-   * Render
-   * -------------------------- */
   return (
-    <div style={{ padding: "1rem", color: "white", maxWidth: "900px", margin: "0 auto" }}>
+    <div className="min-h-screen bg-[#050807] text-[#E8E1D0] px-6 py-10">
 
-      {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: "1.2rem",
-        }}
-      >
-        <h1 style={{ fontSize: "1.6rem" }}>
-          Launch Deck — {item.title || "Untitled"}
+      {/* HEADER */}
+      <div className="mb-8">
+        <h1 className="text-[30px] font-semibold tracking-tight sparkly-header header-glitter">
+          LaunchDeck
         </h1>
-
-        {items.length > 1 && (
-          <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-            <button
-              onClick={goPrev}
-              disabled={currentIndex === 0}
-              style={{ background: "#111", border: "1px solid #333", padding: "8px 12px", borderRadius: "8px" }}
-            >
-              ◀
-            </button>
-            <span>
-              {currentIndex + 1} / {items.length}
-            </span>
-            <button
-              onClick={goNext}
-              disabled={currentIndex === items.length - 1}
-              style={{ background: "#111", border: "1px solid #333", padding: "8px 12px", borderRadius: "8px" }}
-            >
-              ▶
-            </button>
-          </div>
-        )}
+        <p className="text-sm opacity-70 mt-1">
+          Final polish before posting.
+        </p>
       </div>
 
-      {/* TrendSense ULTRA insight */}
-      {trendSense && (
-        <div
-          className="trendSense-card"
-          style={{ marginBottom: "1.5rem" }}
-        >
-          <div className="trendSense-header">TrendSense Insight</div>
-
-          <div className="trendSense-line">
-            <strong>📈 Trend:</strong>{" "}
-            {trendSense.trendScore > 0
-              ? `Up ${Math.round(trendSense.trendScore * 100)}%`
-              : `Down ${Math.round(
-                  Math.abs(trendSense.trendScore) * 100
-                )}%`}
-          </div>
-
-          <div className="trendSense-line">
-            <strong>🔍 Search:</strong>{" "}
-            {Math.round(trendSense.searchBoost * 100)}% interest
-          </div>
-
-          <div className="trendSense-line">
-            <strong>🕒 Timing:</strong> {trendSense.timingNote}
-          </div>
-
-          <div className="trendSense-line">
-            <strong>💰 Price Range:</strong>{" "}
-            ${trendSense.priceFloor}–${trendSense.priceCeiling}
-          </div>
-
-          {trendSense.luxeBadges?.length > 0 && (
-            <div className="trendSense-badges">
-              {trendSense.luxeBadges.map((b, i) => (
-                <span key={i} className="trendSense-badge">
-                  {b}
-                </span>
-              ))}
+      {/* CAROUSEL */}
+      <div
+        className="
+          flex gap-6 overflow-x-auto snap-x snap-mandatory 
+          pb-4 hide-scrollbar
+        "
+      >
+        {listings.map((item, idx) => (
+          <div
+            key={item.id || idx}
+            className="
+              min-w-[260px] snap-center 
+              bg-[rgba(16,16,16,0.55)]
+              border border-[rgba(232,213,168,0.40)]
+              rounded-2xl overflow-hidden relative
+              shadow-[0_0_18px_rgba(0,0,0,0.45)]
+              transition-all duration-300
+              hover:shadow-[0_0_22px_rgba(232,213,168,0.25)]
+            "
+            onClick={() => setActiveItem(item)}
+          >
+            {/* Image */}
+            <div className="h-48 w-full overflow-hidden">
+              <img
+                src={item.photos?.[0]}
+                className="w-full h-full object-cover"
+                alt="item"
+              />
             </div>
-          )}
 
-          <div className="trendSense-summary">{trendSense.summary}</div>
-        </div>
-      )}
-
-      {/* Item photo */}
-      {item.photos?.[0] && (
-        <img
-          src={item.photos[0]}
-          alt="main"
-          style={{
-            width: "100%",
-            maxWidth: "420px",
-            borderRadius: "16px",
-            marginBottom: "1.2rem",
-          }}
-        />
-      )}
-
-      {/* Platform cards with one-click copy */}
-      <div className="launchdeck-grid">
-        {Object.keys(platformFormatters).map((key) => {
-          const completed = launchProgress[key];
-
-          return (
-            <div key={key} className="launchdeck-card">
-              <div className="launchdeck-header">
-                <span className="launchdeck-title">{key.toUpperCase()}</span>
-                {completed ? (
-                  <span className="launchdeck-check">✓</span>
-                ) : (
-                  <span className="launchdeck-pending">•</span>
-                )}
+            {/* CONTENT */}
+            <div className="p-4 space-y-1">
+              <div className="font-semibold text-[15px] text-[#F4E9D5]">
+                {item.title || "Untitled Listing"}
               </div>
-
-              <button
-                className="launchdeck-copybtn"
-                onClick={() => handlePlatformClick(key)}
-              >
-                Copy Full Listing →
-              </button>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Output */}
-      {formattedOutput && (
-        <div style={{ marginTop: "2rem" }}>
-          <strong>Formatted Output:</strong>
-          <pre
-            ref={outputRef}
-            style={{
-              marginTop: "0.7rem",
-              whiteSpace: "pre-wrap",
-              background: "#0c0c0c",
-              padding: "1rem",
-              borderRadius: "12px",
-              border: "1px solid #222",
-            }}
-          >
-            {enhancedOutput || formattedOutput}
-          </pre>
-        </div>
-      )}
-
-      {/* AI Section */}
-      {showAI && (
-        <div
-          style={{
-            marginTop: "1.5rem",
-            background: "#111",
-            border: "1px solid #333",
-            borderRadius: "12px",
-            padding: "1rem",
-          }}
-        >
-          <button
-            onClick={() => setShowAI(!showAI)}
-            style={{
-              width: "100%",
-              background: "transparent",
-              color: "white",
-              border: "none",
-              fontSize: "1rem",
-              marginBottom: "0.5rem",
-              textAlign: "left",
-            }}
-          >
-            {showAI ? "▼ AI Turbo Insights" : "▶ AI Turbo Insights"}
-          </button>
-
-          {showAI && (
-            <div style={{ marginTop: "0.5rem" }}>
-              <p><strong>AI Review:</strong> {aiReview?.summary || "—"}</p>
-              <p><strong>Magic Fill:</strong> {aiMagic?.summary || "—"}</p>
-              <p><strong>Auto Fill:</strong> {aiAuto?.summary || "—"}</p>
-
-              {aiSuggestions.length > 0 && (
-                <div style={{ marginTop: "1rem" }}>
-                  <strong>Suggested Edits:</strong>
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: "8px",
-                      marginTop: "0.5rem",
-                    }}
-                  >
-                    {aiSuggestions.map((s, i) => (
-                      <button
-                        key={i}
-                        onClick={() => applySuggestionToOutput(s)}
-                        style={{
-                          padding: "6px 10px",
-                          background: "#1c1c1c",
-                          border: "1px solid #444",
-                          borderRadius: "8px",
-                          fontSize: "0.85rem",
-                          cursor: "pointer",
-                        }}
-                      >
-                        + {s}
-                      </button>
-                    ))}
-                  </div>
+              {item.brand && (
+                <div className="text-[11px] opacity-80">
+                  {item.brand}
+                  {item.size ? ` · ${item.size}` : ""}
                 </div>
               )}
+              {!item.brand && item.size && (
+                <div className="text-[11px] opacity-80">
+                  Size {item.size}
+                </div>
+              )}
+              <div className="text-xs opacity-70 line-clamp-2">
+                {item.description || "No description provided."}
+              </div>
+              {Array.isArray(item.tags) && item.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {item.tags.slice(0, 3).map((tag) => (
+                    <span
+                      key={tag}
+                      className="px-2 py-0.5 rounded-full border border-[rgba(232,213,168,0.35)] text-[10px] opacity-80"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Glossy shimmer */}
+              <div className="premium-gloss absolute inset-0 pointer-events-none"></div>
             </div>
-          )}
-        </div>
-      )}
-
-      {/* TrendSense PRO panel */}
-      <div className="trendpro-card">
-        <div className="trendpro-header">TrendSense PRO™</div>
-
-        <div className="trendpro-score">
-          {trendPro.trendScore}% • {trendPro.demandLabel.toUpperCase()}
-        </div>
-
-        <div className="trendpro-speed">{trendPro.saleSpeed}</div>
-
-        <div className="trendpro-priceblock">
-          <div>Smart Price Range</div>
-          <div className="trendpro-range">
-            <span>${trendPro.smartPriceRange.min}</span>
-            <span className="trendpro-target">
-              ${trendPro.smartPriceRange.target}
-            </span>
-            <span>${trendPro.smartPriceRange.max}</span>
           </div>
-        </div>
-
-        <ul className="trendpro-list">
-          {trendPro.proReasons.map((r, i) => (
-            <li key={i}>{r}</li>
-          ))}
-        </ul>
+        ))}
       </div>
 
-      {/* TrendSense panel */}
-      <div className="trend-card">
-        <div className="trend-title">TrendSense™ Score</div>
-        <div className="trend-number">{trendScore}%</div>
-        <ul className="trend-list">
-          {trendReasons.map((r, i) => (
-            <li key={i}>{r}</li>
-          ))}
-        </ul>
-      </div>
-
-      <div className="launchdeck-footer">
-        Your listing is always saved. Come back anytime.
-      </div>
-
-      {/* Toast */}
-      {toast && (
+      {/* EDIT MODAL */}
+      {activeItem && (
         <div
-          style={{
-            position: "fixed",
-            bottom: "2.2rem",
-            left: "50%",
-            transform: "translateX(-50%)",
-            background: "rgba(30,30,30,0.95)",
-            padding: "10px 18px",
-            borderRadius: "12px",
-            border: "1px solid #444",
-            color: "white",
-            fontSize: "0.9rem",
-            zIndex: 9999,
-            animation: "fadeInOut 1.2s ease",
-          }}
+          className="
+            fixed inset-0 bg-black/70 backdrop-blur-md z-50 
+            flex items-end justify-center px-4
+          "
+          onClick={handleCloseModal}
         >
-          {toast}
+          <div
+            className="
+              lux-drawer w-full max-w-lg
+              p-6 pb-10 space-y-6
+            "
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-center">
+              <h2 className="text-[22px] font-semibold mb-1 text-[#F4E9D5]">
+                Edit Listing
+              </h2>
+              <p className="text-xs opacity-60">
+                Make your final edits.
+              </p>
+            </div>
+
+            {/* IMAGE */}
+            <div className="w-full h-56 overflow-hidden rounded-xl">
+              <img
+                src={activeItem.photos?.[0]}
+                className="w-full h-full object-cover"
+              />
+            </div>
+
+            {/* TITLE */}
+            <div>
+              <label className="text-xs uppercase opacity-60">
+                Title
+              </label>
+              <input
+                className="
+                  w-full mt-1 p-3 rounded-xl bg-[#0F0F0F] 
+                  border border-[rgba(232,213,168,0.28)]
+                  text-sm lux-input
+                "
+                value={activeItem.title}
+                onChange={(e) =>
+                  setActiveItem({ ...activeItem, title: e.target.value })
+                }
+              />
+            </div>
+
+            {/* DESCRIPTION */}
+            <div>
+              <label className="text-xs uppercase opacity-60">
+                Description
+              </label>
+              <textarea
+                className="
+                  w-full mt-1 p-3 rounded-xl bg-[#0F0F0F] 
+                  border border-[rgba(232,213,168,0.28)]
+                  text-sm lux-textarea
+                  h-28
+                "
+                value={activeItem.description}
+                onChange={(e) =>
+                  setActiveItem({
+                    ...activeItem,
+                    description: e.target.value,
+                  })
+                }
+              />
+            </div>
+
+            {/* ATTRIBUTES */}
+            <div>
+              <label className="text-xs uppercase opacity-60">Attributes</label>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                {(activeItem.tags || []).map((tag) => (
+                  <div key={tag} className="lux-chip">
+                    {tag}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* SAVE */}
+            <button
+              className="
+                w-full mt-6 py-4 rounded-xl 
+                bg-gradient-to-b from-[#f5e7ce] to-[#d9c19b]
+                text-black font-semibold
+                hover:brightness-110 transition
+              "
+              onClick={() => {
+                setListing(activeItem);
+                handleCloseModal();
+              }}
+            >
+              Done
+            </button>
+          </div>
         </div>
       )}
     </div>

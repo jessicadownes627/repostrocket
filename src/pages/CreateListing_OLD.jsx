@@ -1,4 +1,3 @@
-import CreateListing from "./CreateListing";
+import MagicPhotoPrep from "./MagicPhotoPrep";
 
-export default CreateListing;
-
+export default MagicPhotoPrep;

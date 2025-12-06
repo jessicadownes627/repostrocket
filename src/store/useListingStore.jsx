@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 const ListingContext = createContext(null);
 const STORAGE_KEY = "rr_draft_listing";
 const SAVED_KEY = "rr_saved_drafts";
+const MAGIC_KEY = "rr_magic_usage";
 
 const defaultListing = {
   title: "",
@@ -11,6 +12,7 @@ const defaultListing = {
   category: "",
   condition: "",
   shipping: "buyer pays",
+  batchItems: [],
   photos: [],
   resizedPhotos: {
     poshmark: [],
@@ -26,6 +28,7 @@ export function ListingProvider({ children }) {
   const [selectedPlatforms, setSelectedPlatforms] = useState([]);
   const [listingData, setListingData] = useState(defaultListing);
   const [savedDrafts, setSavedDrafts] = useState([]);
+  const [premiumUsesRemaining, setPremiumUsesRemaining] = useState(1);
 
   // Restore from localStorage on mount
   useEffect(() => {
@@ -52,6 +55,26 @@ export function ListingProvider({ children }) {
     }
   }, []);
 
+  // Restore daily Magic Fill usage
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(MAGIC_KEY);
+      const today = new Date().toDateString();
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.date === today && typeof parsed.remaining === "number") {
+          setPremiumUsesRemaining(parsed.remaining);
+          return;
+        }
+      }
+      // default once per day
+      setPremiumUsesRemaining(1);
+    } catch (err) {
+      console.error("Failed to restore magic usage", err);
+      setPremiumUsesRemaining(1);
+    }
+  }, []);
+
   // Persist to localStorage when state changes
   useEffect(() => {
     try {
@@ -73,26 +96,43 @@ export function ListingProvider({ children }) {
     }
   }, [savedDrafts]);
 
+  // Persist Magic Fill usage with daily reset
+  useEffect(() => {
+    try {
+      const today = new Date().toDateString();
+      localStorage.setItem(
+        MAGIC_KEY,
+        JSON.stringify({ date: today, remaining: premiumUsesRemaining })
+      );
+    } catch (err) {
+      console.error("Failed to save magic usage", err);
+    }
+  }, [premiumUsesRemaining]);
+
   const value = useMemo(() => {
     const setListingField = (key, value) => {
       setListingData((prev) => ({ ...prev, [key]: value }));
     };
 
-    const addPhotos = (originals, variants = {}) => {
-      const incoming = Array.from(originals || []);
-      setListingData((prev) => {
-        const available = Math.max(0, 4 - prev.photos.length);
-        const accepted = incoming.slice(0, available);
-        const nextPhotos = [...prev.photos, ...accepted];
+    const setBatchItems = (items) => {
+      setListingData((prev) => ({ ...prev, batchItems: items || [] }));
+    };
 
-        const nextResized = { ...prev.resizedPhotos };
-        Object.entries(variants || {}).forEach(([variantKey, arr]) => {
-          const current = nextResized[variantKey] || [];
-          nextResized[variantKey] = [...current, ...Array.from(arr || []).slice(0, available)].slice(0, 4);
-        });
+    const addBatchItem = (item) => {
+      if (!item) return;
+      setListingData((prev) => ({
+        ...prev,
+        batchItems: [...(prev.batchItems || []), item],
+      }));
+    };
 
-        return { ...prev, photos: nextPhotos, resizedPhotos: nextResized };
-      });
+    const addPhotos = (files) => {
+      const incoming = Array.from(files || []);
+      const urls = incoming.map((f) => URL.createObjectURL(f));
+      setListingData((prev) => ({
+        ...prev,
+        photos: [...(prev.photos || []), ...urls],
+      }));
     };
 
     const removePhoto = (index) => {
@@ -136,12 +176,19 @@ export function ListingProvider({ children }) {
       setListingData(data || defaultListing);
     };
 
+    const consumeMagicUse = () => {
+      setPremiumUsesRemaining((prev) => (prev > 0 ? prev - 1 : 0));
+    };
+
     return {
       selectedPlatforms,
       listingData,
       savedDrafts,
+      premiumUsesRemaining,
       setSelectedPlatforms,
       setListingField,
+      setBatchItems,
+      addBatchItem,
       setListing,
       addPhotos,
       removePhoto,
@@ -149,8 +196,9 @@ export function ListingProvider({ children }) {
       addDraft,
       deleteDraft,
       loadDraft,
+      consumeMagicUse,
     };
-  }, [selectedPlatforms, listingData, savedDrafts]);
+  }, [selectedPlatforms, listingData, savedDrafts, premiumUsesRemaining]);
 
   return <ListingContext.Provider value={value}>{children}</ListingContext.Provider>;
 }

@@ -1,511 +1,81 @@
-/* 1️⃣ GOOGLE FONTS — must come first */
+/* ------------------------------------------------------ */
+/*  1️⃣ GOOGLE FONTS                                       */
+/* ------------------------------------------------------ */
 @import url("https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap");
 
-/* 2️⃣ TAILwind Layers — must come after all imports */
+/* ------------------------------------------------------ */
+/*  2️⃣ TAILWIND LAYERS                                     */
+/* ------------------------------------------------------ */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* 3️⃣ Your luxury CSS follows here… */
-
-
-@layer base {
-
+/* ------------------------------------------------------ */
+/*  3️⃣ GLOBAL TOKENS — LUXE THEME                         */
+/* ------------------------------------------------------ */
 :root {
-  /* Spacing Scale */
-  --space-xxs: 6px;
-  --space-xs: 10px;
-  --space-sm: 14px;
-  --space-md: 20px;
-  --space-lg: 28px;
-  --space-xl: 36px;
-  --space-xxl: 48px;
+  --lux-bg: #0a0a0a;
+  --lux-text: #e8e1d0;
 
-  /* Line Heights */
-  --lh-tight: 1.15;
-  --lh-normal: 1.4;
-  --lh-relaxed: 1.6;
+  --lux-border: rgba(232, 213, 168, 0.35);
+  --lux-border-strong: rgba(232, 213, 168, 0.65);
 
-  /* Premium Tracking */
-  --track-tight: -0.6px;
-  --track-medium: -0.3px;
-  --track-wide: 0.5px;
+  --lux-card-bg: linear-gradient(
+    140deg,
+    rgba(16, 16, 16, 0.82),
+    rgba(6, 6, 6, 0.92)
+  );
 
-  /* Colors */
-  --bg-1: #111315;
-  --bg-2: #181B1D;
-  --bg-card: #1D2123;
+  --lux-gold: #e8d7b9;
+  --lux-gold-glow: rgba(232, 213, 168, 0.42);
 
-  --text-main: #F2F2F2;
-  --text-muted: #AAAEB3;
-  --text-gold: #E8D5A8;
+  --lux-emerald: rgba(42, 122, 94, 0.28);
+  --lux-emerald-glow: rgba(42, 122, 94, 0.55);
 
-  --accent-emerald: #2A7A5E;
-  --accent-emerald-soft: rgba(42,122,94,0.3);
+  --lux-radius: 24px;
+  --lux-radius-sm: 14px;
 
-  --border-gold: #E8D5A833;
-
-  --btn-primary-bg: #2A7A5E;
-  --btn-primary-text: #F8F8F8;
-  --btn-secondary-bg: #1A1D1F;
-  --btn-secondary-border: #E8D5A8;
-
-  --radius: 12px; /* Slightly increased for a richer look */
-  --transition: 0.25s ease;
+  --lux-transition: 0.25s ease;
 }
 
-/* ---------------------------
-   🌑 RESET
----------------------------- */
-
-html, body {
-  margin: 0;
-  padding: 0;
-  background: var(--bg-1);
-}
+/* ------------------------------------------------------ */
+/*  4️⃣ BACKGROUND DEPTH LAYERS                           */
+/* ------------------------------------------------------ */
 
 body {
-  font-family: "Inter", system-ui, Helvetica, Arial, sans-serif;
-  color: var(--text-main);
-  font-size: 16px;
-  line-height: var(--lh-normal);
-  letter-spacing: var(--track-medium);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  background: var(--lux-bg);
+  color: var(--lux-text);
+  font-family: "Inter", sans-serif;
 }
 
-/* ---------------------------
-   ✨ HEADINGS (High-End Typography)
----------------------------- */
-
-h1, h2, h3, h4 {
-  margin: 0 0 var(--space-md);
-  font-family: "Cinzel", serif;
-  font-weight: 700;
-  color: var(--text-gold);
-  letter-spacing: var(--track-tight);
-  line-height: var(--lh-tight);
-  text-shadow: 0 0 6px rgba(232,213,168,0.08);
-}
-
-h1 { font-size: 2rem; }
-h2 { font-size: 1.55rem; }
-h3 { font-size: 1.25rem; }
-h4 { font-size: 1.05rem; }
-
-/* Section Titles */
-.section-title {
-  margin-bottom: var(--space-sm);
-  font-size: 1.45rem;
-  letter-spacing: -0.4px;
-}
-
-/* ---------------------------
-   📦 LAYOUT / CONTAINERS
----------------------------- */
-
-.page-container {
-  max-width: 780px;
-  margin: var(--space-xl) auto;
-  padding: var(--space-md);
-}
-
-/* Vertical spacing between major blocks */
-.section-block {
-  margin-bottom: var(--space-xl);
-}
-
-/* Card-like sections */
-.card-block {
-  padding: var(--space-lg);
-  background: var(--bg-card);
-  border-radius: var(--radius);
-  margin-bottom: var(--space-xl);
-}
-
-/* ---------------------------
-   🟢 BUTTONS (Premium Polished)
----------------------------- */
-
-button {
-  cursor: pointer;
-  padding: 14px 20px;
-  font-size: 1rem;
-  border-radius: var(--radius);
-  border: none;
-  transition: var(--transition);
-  font-weight: 600;
-  letter-spacing: var(--track-medium);
-}
-
-/* PRIMARY (Green) */
-.btn-primary {
-  background: var(--btn-primary-bg);
-  color: var(--btn-primary-text);
-}
-.btn-primary:hover {
-  background: #368c6e;
-}
-
-/* SECONDARY (Black w/Gold) */
-.btn-secondary {
-  background: var(--btn-secondary-bg);
-  color: var(--btn-secondary-border);
-  border: 1px solid var(--btn-secondary-border);
-}
-.btn-secondary:hover {
-  border-color: #f0e0b9;
-  color: #f0e0b9;
-}
-
-/* ---------------------------
-   ✔️ FORM ELEMENTS / CHECKBOX ITEMS
----------------------------- */
-
-.checkbox-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-xs) 0;
-  font-size: 1.1rem;
-  line-height: var(--lh-tight);
-}
-
-/* ---------------------------
-   🧩 PLATFORM LIST
----------------------------- */
-
-.platform-list {
-  background: var(--bg-card);
-  padding: var(--space-lg);
-  border-radius: var(--radius);
-  margin-top: var(--space-lg);
-}
-
-/* ---------------------------
-   ✨ UTILS
----------------------------- */
-
-.center {
-  text-align: center;
-}
-
-/* ---------------------------
-   🌌 Ambient Galaxy Background
----------------------------- */
-
-.repostrocket-background {
-  position: fixed;
-  inset: 0;
-  background: radial-gradient(circle at center, #1a1a1a 0%, #000 80%);
-  z-index: -1;
-  pointer-events: none;
-}
-
-/* ---------------------------
-   ✨ Modal Glow (Cinematic)
----------------------------- */
-
-.modal-glow {
-  box-shadow:
-    0 0 80px rgba(255, 255, 255, 0.25),
-    0 0 120px rgba(255, 255, 255, 0.15),
-    0 0 200px rgba(255, 255, 255, 0.08);
-}
-
-/* ---------------------------
-   🌟 Center Shimmer Glow
----------------------------- */
-
-.shimmer-center {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  width: 900px;
-  height: 900px;
-  translate: -50% -50%;
-  pointer-events: none;
-  background: radial-gradient(circle, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 70%);
-  animation: pulseGlow 4s ease-in-out infinite;
-  z-index: -1;
-  filter: blur(80px);
-}
-
-@keyframes pulseGlow {
-  0% { opacity: 0.35; }
-  50% { opacity: 0.6; }
-  100% { opacity: 0.35; }
-}
-
-/* ---------------------------
-   ✨ Stars
----------------------------- */
-
-.stars {
-  pointer-events: none;
-  position: fixed;
-  inset: 0;
-  background-image:
-    radial-gradient(2px 2px at 20% 30%, rgba(255,255,255,0.4) 0%, transparent 40%),
-    radial-gradient(1.5px 1.5px at 70% 60%, rgba(255,255,255,0.3) 0%, transparent 40%),
-    radial-gradient(2.5px 2.5px at 40% 80%, rgba(255,255,255,0.25) 0%, transparent 40%),
-    radial-gradient(1px 1px at 85% 20%, rgba(255,255,255,0.35) 0%, transparent 40%);
-  animation: starsFloat 18s linear infinite;
-  z-index: -1;
-  opacity: 0.65;
-}
-
-@keyframes starsFloat {
-  0% { transform: translateY(0); }
-  100% { transform: translateY(-80px); }
-}
-
-}
-
-/* ---------------------------
-   🚀 Launch Modal
----------------------------- */
-
-.launch-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(6px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 999;
-}
-
-.launch-modal {
-  background: #0a0a0a;
-  border-radius: 18px;
-  padding: 48px 42px;
-  width: 520px;
-  text-align: center;
-  position: relative;
-  color: white;
-}
-
-.modal-title {
-  margin-top: var(--space-sm);
-  font-size: 1.8rem;
-  font-weight: 700;
-  letter-spacing: -0.4px;
-}
-
-.modal-text {
-  margin: var(--space-sm) auto var(--space-lg);
-  max-width: 420px;
-  font-size: 1rem;
-  line-height: 1.5;
-  color: #dcdcdc;
-}
-
-.modal-buttons {
-  display: flex;
-  gap: var(--space-md);
-  justify-content: center;
-}
-
-.rocket-wrapper {
-  position: relative;
-  display: inline-block;
-}
-
-.rocket-glow {
-  position: absolute;
-  top: 46px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 90px;
-  height: 60px;
-  background: radial-gradient(circle, rgba(0, 255, 120, 0.35), transparent 70%);
-  filter: blur(20px);
-  pointer-events: none;
-}
-
-/* -------------------------------------------
-   🌟 GLOBAL LUXURY FINISHING TOUCHES
-   Soft Champagne Glow + Elevated Visual Depth
--------------------------------------------- */
-
-/* Very subtle vignette for depth */
+/* Soft diagonal grid */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
-  background: radial-gradient(circle at center, transparent 35%, rgba(0,0,0,0.45) 100%);
-  pointer-events: none;
-  z-index: -1;
-}
-
-/* Micro-transition for all interactive items */
-button, .platform-card, .platform-checkbox {
-  transition: all 0.25s ease;
-}
-
-/* Smooth scrolling everywhere */
-html {
-  scroll-behavior: smooth;
-}
-
-/* -----------------------------------------------
-   💎 Green Glass Button with Champagne Outline
------------------------------------------------- */
-.btn-glass-gold {
-  background: rgba(42, 122, 94, 0.20); /* translucent emerald */
-  color: #ffffff;
-  font-weight: 700;
-  padding: 15px 26px;
-  border-radius: 14px;
-
-  /* champagne outline */
-  border: 1.8px solid rgba(232, 213, 168, 0.60);
-
-  /* soft glass effect */
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-
-  /* soft depth */
-  box-shadow:
-    0 6px 18px rgba(0, 0, 0, 0.45),
-    0 0 16px rgba(232, 213, 168, 0.18) inset;
-
-  letter-spacing: -0.3px;
-  transition: 0.25s ease;
-}
-
-/* HOVER: brighter glass, stronger champagne glow, tiny lift */
-.btn-glass-gold:hover {
-  background: rgba(42, 122, 94, 0.32);
-  border-color: rgba(232, 213, 168, 0.80);
-
-  box-shadow:
-    0 6px 18px rgba(0, 0, 0, 0.55),
-    0 0 18px rgba(232, 213, 168, 0.28) inset;
-
-  transform: translateY(-2px);
-}
-
-/* -------------------------------------------
-   ✨ Ultimate Champagne Sparkle + Shimmer Combo
--------------------------------------------- */
-
-.sparkly-header {
-  position: relative;
-  display: inline-block;
-  background: linear-gradient(
-    90deg,
-    rgba(232,213,168,0.85),
-    rgba(255,244,220,1),
-    rgba(232,213,168,0.85)
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(255,255,255,0.015) 0,
+    rgba(255,255,255,0.015) 2px,
+    transparent 2px,
+    transparent 20px
   );
-  -webkit-background-clip: text;
-  color: transparent;
-  background-size: 200%;
-  animation: sparkleFlow 4s linear infinite;
-}
-
-@keyframes sparkleFlow {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-
-/* Champagne glitter particles */
-.header-glitter {
-  position: relative;
-  display: inline-block;
-}
-
-.header-glitter::after {
-  content: "";
-  position: absolute;
-  inset: 0;
   pointer-events: none;
-  background-image:
-    radial-gradient(2px 2px at 20% 30%, rgba(255,255,255,0.8), transparent),
-    radial-gradient(2.5px 2.5px at 80% 20%, rgba(255,244,220,0.9), transparent),
-    radial-gradient(1.5px 1.5px at 50% 70%, rgba(255,240,210,0.7), transparent),
-    radial-gradient(1px 1px at 65% 40%, rgba(255,255,255,0.75), transparent);
-  animation: glitterBlink 2.6s infinite ease-in-out;
-}
-
-@keyframes glitterBlink {
-  0%, 100% { opacity: 0.35; }
-  50% { opacity: 1; }
-}
-
-/* Subtle glitter text utility */
-.glitter-text {
-  position: relative;
-  display: inline-block;
-  background: linear-gradient(
-    90deg,
-    rgba(232,213,168,0.75),
-    rgba(255,244,220,1),
-    rgba(232,213,168,0.75)
-  );
-  -webkit-background-clip: text;
-  color: transparent;
-  background-size: 200%;
-  animation: sparkleFlow 4s linear infinite;
-}
-
-.glitter-text::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image:
-    radial-gradient(2px 2px at 20% 30%, rgba(255,255,255,0.7), transparent),
-    radial-gradient(2px 2px at 80% 20%, rgba(255,244,220,0.8), transparent),
-    radial-gradient(1.5px 1.5px at 50% 70%, rgba(255,240,210,0.6), transparent);
-  animation: glitterBlink 2.6s infinite ease-in-out;
-}
-/* -------------------------------------------
-   🌌 STEP 5 — PREMIUM BACKGROUND DEPTH LAYER
-   Adds geometric grid, gold dust, vignette, glow layers.
--------------------------------------------- */
-
-/* Root backdrop wrapper */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  background:
-    /* subtle diagonal grid */
-    repeating-linear-gradient(
-      135deg,
-      rgba(255,255,255,0.015) 0,
-      rgba(255,255,255,0.015) 2px,
-      transparent 2px,
-      transparent 20px
-    );
-  pointer-events: none;
-  z-index: -4;
   opacity: 0.5;
+  z-index: -4;
 }
 
-/* Soft vignette corners */
+/* Vignette */
 body::after {
   content: "";
   position: fixed;
   inset: 0;
   background:
-    radial-gradient(
-      circle at top left,
-      rgba(0,0,0,0.55),
-      transparent 55%
-    ),
-    radial-gradient(
-      circle at bottom right,
-      rgba(0,0,0,0.55),
-      transparent 55%
-    );
+    radial-gradient(circle at top left, rgba(0,0,0,0.55), transparent 55%),
+    radial-gradient(circle at bottom right, rgba(0,0,0,0.55), transparent 55%);
   pointer-events: none;
-  z-index: -3;
   opacity: 0.6;
+  z-index: -3;
 }
 
 /* Gold dust shimmer */
@@ -515,10 +85,10 @@ body::after {
   pointer-events: none;
   z-index: -2;
   background-image:
-    radial-gradient(2px 2px at 12% 22%, rgba(232,213,168,0.18), transparent 60%),
-    radial-gradient(1.5px 1.5px at 78% 42%, rgba(232,213,168,0.12), transparent 65%),
-    radial-gradient(2.5px 2.5px at 34% 74%, rgba(232,213,168,0.15), transparent 60%),
-    radial-gradient(1px 1px at 90% 12%, rgba(232,213,168,0.2), transparent 70%);
+    radial-gradient(2px 2px at 12% 22%, rgba(232,213,168,0.18), transparent),
+    radial-gradient(1.5px 1.5px at 78% 42%, rgba(232,213,168,0.12), transparent),
+    radial-gradient(2.5px 2.5px at 34% 74%, rgba(232,213,168,0.15), transparent),
+    radial-gradient(1px 1px at 90% 12%, rgba(232,213,168,0.2), transparent);
   animation: goldDrift 22s linear infinite;
   opacity: 0.55;
 }
@@ -528,44 +98,365 @@ body::after {
   100% { transform: translateY(-140px); }
 }
 
-/* Emerald depth wash */
+/* Emerald halo */
 .rr-deep-emerald {
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: -1;
-  background:
-    radial-gradient(
-      circle at center,
-      rgba(42,122,94,0.12) 0%,
-      transparent 65%
-    );
+  background: radial-gradient(
+    circle at center,
+    rgba(42,122,94,0.12) 0%,
+    transparent 65%
+  );
   filter: blur(90px);
   opacity: 0.35;
 }
-/* ✨ Luxe Champagne Glitter Text (Clean + Premium) */
-.glitter-text {
-  background: 
-      linear-gradient(
-        90deg,
-        #e9d9b5 0%,
-        #f5e9c9 25%,
-        #fff7e3 50%,
-        #f5e9c9 75%,
-        #e9d9b5 100%
-      ),
-      url("data:image/svg+xml;utf8,\
-<svg xmlns='http://www.w3.org/2000/svg' width='60' height='60'>\
-<circle cx='4' cy='4' r='1' fill='rgba(255,255,255,0.35)'/>\
-<circle cx='20' cy='14' r='1' fill='rgba(255,255,255,0.25)'/>\
-<circle cx='32' cy='28' r='1' fill='rgba(255,255,255,0.30)'/>\
-<circle cx='12' cy='40' r='1' fill='rgba(255,255,255,0.20)'/>\
-<circle cx='48' cy='12' r='1' fill='rgba(255,255,255,0.28)'/>\
-</svg>");
-  background-blend-mode: overlay;
-  background-size: 200% auto, 80px 80px;
+
+/* ------------------------------------------------------ */
+/*  5️⃣ CHAMPAGNE “MAGIC STATUS BAR” — Signature Element   */
+/* ------------------------------------------------------ */
+
+.magic-status-bar {
+  position: relative;
+  width: 100%;
+  padding: 16px 20px;
+
+  background: linear-gradient(
+      180deg,
+      rgba(255, 248, 230, 0.82),
+      rgba(242, 224, 196, 0.92)
+    ),
+    radial-gradient(circle at top left, rgba(255,255,255,0.55), transparent 55%);
+
+  border-radius: 18px;
+  border: 1.5px solid rgba(255, 238, 205, 0.75);
+
+  color: #3a2b16;
+  font-weight: 600;
+  font-size: 15px;
+
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.45),
+    inset 0 1px 4px rgba(255, 255, 255, 0.55),
+    inset 0 -1px 6px rgba(180, 160, 120, 0.35);
+
+  backdrop-filter: blur(12px);
+  margin-bottom: 28px;
+}
+
+/* Gloss streak */
+.magic-status-bar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.45),
+    rgba(255, 255, 255, 0),
+    rgba(255, 255, 255, 0)
+  );
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* Used state */
+.magic-status-bar.used {
+  background: linear-gradient(
+    180deg,
+    rgba(180,170,155,0.75),
+    rgba(155,145,130,0.78)
+  );
+  border-color: rgba(180,170,155,0.55);
+  color: #2f2b25;
+}
+
+.magic-status-sub {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+/* ------------------------------------------------------ */
+/*  6️⃣ DASHBOARD CARDS                                   */
+/* ------------------------------------------------------ */
+
+.lux-dashboard-card {
+  background: linear-gradient(
+      135deg,
+      rgba(14,14,14,0.96),
+      rgba(4,4,4,0.96)
+    );
+  border: 1.5px solid rgba(232, 213, 168, 0.8); /* stronger champagne outline */
+  border-radius: 24px;
+  padding: 24px 26px;
+  transition: all 0.28s ease;
+  box-shadow:
+    0 0 22px rgba(0,0,0,0.7),
+    0 0 16px rgba(232,213,168,0.18);
+}
+
+.lux-dashboard-card:hover {
+  border-color: var(--lux-border-strong);
+  box-shadow:
+    0 0 28px rgba(0,0,0,0.8),
+    0 0 22px rgba(232,213,168,0.28);
+  transform: translateY(-3px);
+}
+
+.lux-card-title {
+  font-family: "Cinzel", serif;
+  font-weight: 700;
+  font-size: 20px;
+  color: #f4e9d5;
+}
+
+.lux-card-subtitle {
+  font-size: 12px;
+  opacity: 0.6;
+  letter-spacing: 2.6px;
+  text-transform: uppercase;
+}
+
+.lux-card-desc {
+  font-size: 14px;
+  opacity: 0.75;
+  margin-top: 6px;
+}
+
+/* ------------------------------------------------------ */
+/*  7️⃣ UPLOAD ZONE + INPUTS                               */
+/* ------------------------------------------------------ */
+
+.lux-upload-zone {
+  border: 1px solid rgba(245, 242, 233, 0.25);
+  border-radius: 18px;
+  padding: 60px 20px;
+  text-align: center;
+  background: rgba(0,0,0,0.35);
+  transition: 0.25s ease;
+}
+
+.lux-upload-zone.lux-upload-hover {
+  border-color: var(--lux-gold);
+  background: rgba(0,0,0,0.55);
+}
+
+.lux-input:focus,
+.lux-textarea:focus {
+  border-color: rgba(232,213,168,0.6);
+  box-shadow: 0 0 0 2px rgba(232,213,168,0.15);
+  outline: none;
+}
+
+/* ------------------------------------------------------ */
+/*  8️⃣ ATTRIBUTE CHIPS & FIELDS                           */
+/* ------------------------------------------------------ */
+
+.lux-attribute-display {
+  padding: 12px 14px;
+  border: 1px solid rgba(245,242,233,0.28);
+  border-radius: 12px;
+  background: rgba(12,12,12,0.55);
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+}
+
+.lux-attribute-display:hover {
+  border-color: var(--lux-gold);
+}
+
+.lux-chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  border: 1px solid rgba(245,242,233,0.25);
+  background: rgba(0,0,0,0.35);
+  color: #f5f2e9;
+}
+
+.lux-chip-active {
+  border-color: var(--lux-gold);
+  background: rgba(245, 231, 206, 0.15);
+  box-shadow: 0 0 12px rgba(245, 231, 206, 0.25);
+}
+
+/* ------------------------------------------------------ */
+/*  9️⃣ BUTTONS                                             */
+/* ------------------------------------------------------ */
+
+.lux-quiet-btn {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.12);
+  padding: 10px 16px;
+  border-radius: 12px;
+  color: #f5f2e9;
+}
+
+.lux-quiet-btn:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+.lux-continue-btn {
+  background: linear-gradient(180deg, #f5e7ce, #d9c19b);
+  color: #000;
+  font-weight: 600;
+  padding: 14px;
+  border-radius: 12px;
+  transition: var(--lux-transition);
+}
+
+.lux-continue-btn:hover {
+  background: linear-gradient(180deg, #fff3d9, #e8d3ad);
+  transform: translateY(-1px);
+}
+
+/* ------------------------------------------------------ */
+/*  🔟 SPARKLE HEADERS                                     */
+/* ------------------------------------------------------ */
+
+.sparkly-header {
+  font-family: "Cinzel", serif;
+  background: linear-gradient(90deg, #e9d9b5, #fff7e3, #e9d9b5);
   -webkit-background-clip: text;
   color: transparent;
-  font-weight: 700;
-  letter-spacing: -0.5px;
+  animation: sparkleFlow 4s linear infinite;
+}
+
+@keyframes sparkleFlow {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ------------------------------------------------------ */
+/*  1️⃣1️⃣ MICRO INTERACTIONS + FADE                      */
+/* ------------------------------------------------------ */
+
+.fade-in {
+  animation: fadeIn 0.35s ease-out forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Gold divider line */
+.gold-divider {
+  height: 2px; /* was 1px */
+  background: linear-gradient(
+    to right,
+    transparent,
+    rgba(232, 213, 168, 0.75),
+    transparent
+  );
+  margin: 18px 0; /* ensures it never collapses */
+  opacity: 1;
+}
+
+/* ------------------------------------------------------ */
+/*   ✨ MAGIC PREP — CHAMPAGNE HEADER LINE                 */
+/* ------------------------------------------------------ */
+
+.magic-champagne-line {
+  width: 0%;
+  height: 1.5px;
+  margin: 8px auto 20px auto;
+  background: linear-gradient(
+    90deg,
+    rgba(232,213,168,0) 0%,
+    rgba(232,213,168,0.75) 40%,
+    rgba(232,213,168,1) 60%,
+    rgba(232,213,168,0) 100%
+  );
+  border-radius: 2px;
+  opacity: 0;
+
+  animation: magicChampagneSweep 2.2s ease-out forwards 0.4s;
+}
+
+@keyframes magicChampagneSweep {
+  0% { width: 0%; opacity: 0; }
+  30% { opacity: 1; }
+  100% { width: 82%; opacity: 1; }
+}
+
+/* ------------------------------------------------------ */
+/*  1️⃣2️⃣ CAROUSEL DOTS (used + future)                 */
+/* ------------------------------------------------------ */
+
+.carousel-dot {
+  background-color: rgba(232, 220, 192, 0.4);
+  transition: background-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.carousel-dot-active {
+  background-color: #E8DCC0 !important;
+  box-shadow: 0 0 8px rgba(232, 220, 192, 0.8);
+}
+
+/* ------------------------------------------------------ */
+/*  1️⃣3️⃣ SOFT TEXT + PAGE TRANSITION                    */
+/* ------------------------------------------------------ */
+
+.lux-soft-text {
+  letter-spacing: 0.4px;
+  font-weight: 300;
+  opacity: 0.82;
+}
+
+.lux-page-transition {
+  animation: pageFade 0.32s ease-out forwards;
+}
+
+@keyframes pageFade {
+  0% { opacity: 1; filter: blur(0px); }
+  100% { opacity: 0; filter: blur(6px); }
+}
+
+/* ------------------------------------------------------ */
+/*  1️⃣4️⃣ MAGIC CHAMPAGNE CTA BAR                         */
+/* ------------------------------------------------------ */
+
+.magic-cta-bar {
+  position: relative;
+  width: 100%;
+  height: 2px;
+  margin: 16px auto 20px auto;
+  border-radius: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(232, 213, 168, 0.9),
+    transparent
+  );
+  overflow: hidden;
+}
+
+.magic-cta-bar::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -40%;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0),
+    rgba(255, 245, 220, 0.95),
+    rgba(255, 255, 255, 0)
+  );
+  animation: magicLineSweep 4s ease-in-out infinite;
+}
+
+@keyframes magicLineSweep {
+  0% {
+    left: -40%;
+  }
+  50% {
+    left: 100%;
+  }
+  100% {
+    left: 100%;
+  }
 }

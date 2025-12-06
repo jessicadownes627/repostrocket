@@ -1,170 +1,60 @@
-import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import "../styles/overrides.css";
-import "../styles/welcome.css";
-import { useListingStore } from "../store/useListingStore";
-import { setUserPhone } from "../store/premiumStore";
 
-const platformOptions = [
-  { id: "mercari", name: "Mercari", icon: "/icons/mercari.png" },
-  { id: "poshmark", name: "Poshmark", icon: "/icons/poshmark.png" },
-  { id: "depop", name: "Depop", icon: "/icons/depop.png" },
-  { id: "ebay", name: "eBay", icon: "/icons/ebay.png" },
-  { id: "etsy", name: "Etsy", icon: "/icons/etsy.png" },
-  { id: "kidizen", name: "Kidizen", icon: "/icons/kidizen.png" },
-  { id: "vinted", name: "Vinted", icon: "/icons/vinted.png" },
-  { id: "grailed", name: "Grailed", icon: "/icons/grailed.png" },
-  { id: "facebook marketplace", name: "Facebook Marketplace", icon: "/icons/facebook.png" },
-  { id: "shopify", name: "Shopify", icon: "/icons/shopify.png" },
-];
-
-function Welcome() {
-  const { selectedPlatforms, setSelectedPlatforms, resetListing } = useListingStore();
+export default function Welcome() {
   const navigate = useNavigate();
-  const normalizedSelected = selectedPlatforms.map((p) => p.toLowerCase());
-  useEffect(() => {
-    // Auto-enable premium for Jess & husband
-    const devPhones = ["15164104363", "17189082021"];
-
-    // Pick whichever is currently stored OR default to Jess
-    const stored = localStorage.getItem("rr_userPhone") || localStorage.getItem("rr_user_phone");
-    const activePhone = stored || devPhones[0];
-
-    setUserPhone(activePhone);
-  }, []);
-
-  useEffect(() => {
-    const current = localStorage.getItem("rr_user_phone");
-    if (!current) {
-      setUserPhone("15164104363");
-    }
-  }, []);
-
-  const togglePlatform = (platform) => {
-    const next = normalizedSelected.includes(platform)
-      ? normalizedSelected.filter((p) => p !== platform)
-      : [...normalizedSelected, platform];
-    setSelectedPlatforms(next);
-    localStorage.setItem("rr_selectedPlatforms", JSON.stringify(next));
-  };
-
-  const selectAllPlatforms = () => {
-    const all = platformOptions.map((p) => p.id);
-    setSelectedPlatforms(all);
-    localStorage.setItem("rr_selectedPlatforms", JSON.stringify(all));
-  };
-
-  const clearPlatforms = () => {
-    setSelectedPlatforms([]);
-    localStorage.removeItem("rr_selectedPlatforms");
-  };
-
-  useEffect(() => {
-    if (!selectedPlatforms.length) {
-      const stored = localStorage.getItem("rr_selectedPlatforms");
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed)) {
-            setSelectedPlatforms(parsed);
-          }
-        } catch (e) {
-          // ignore
-        }
-      }
-    } else {
-      localStorage.setItem("rr_selectedPlatforms", JSON.stringify(selectedPlatforms.map((p) => p.toLowerCase())));
-    }
-  }, [selectedPlatforms, setSelectedPlatforms]);
-
-  const handleContinue = () => {
-    navigate("/create");
-  };
-
-  const hasSelection = selectedPlatforms.length > 0;
 
   return (
-    <div className="welcome-page">
-      <div className="welcome-card welcome-wrapper">
-        <div className="welcome-container">
-          <p className="step-label">STEP 1:</p>
-          <h2 className="section-title">Choose Your Selling Platforms</h2>
+    <div className="min-h-screen flex items-center justify-center bg-[#050505] relative overflow-hidden">
 
-          <p className="section-subtitle">
-            Pick every marketplace you plan to post this listing on. Repost Rocket handles formatting{" "}
-            <span className="lux-animate">across every platform</span>.
-          </p>
+      {/* BACKGROUND EMERALD GRADIENT */}
+      <div className="absolute inset-0 bg-gradient-to-br from-black via-[#0B1A14] to-[#04120D] opacity-80"></div>
 
-          <p className="note-text">
-            (Note: You must have active accounts on these marketplaces to publish listings).
-          </p>
+      {/* CONTENT */}
+      <div className="relative z-10 text-center px-8 max-w-xl">
 
-          {/* Platform Grid */}
-          <div className="platform-grid">
-            {platformOptions.map((p) => {
-              const isActive = normalizedSelected.includes(p.id);
-              return (
-                <div
-                  key={p.id}
-                  className={`platform-card ${isActive ? "selected" : ""}`}
-                  onClick={() => togglePlatform(p.id)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      togglePlatform(p.id);
-                    }
-                  }}
-                >
-                  <div className="platform-icon-ring">
-                    {isActive && (
-                      <svg viewBox="0 0 24 24" width="18" height="18">
-                        <path
-                          fill="currentColor"
-                          d="M20.285 6.709a1 1 0 0 0-1.414-1.414l-9.192 9.193-4.242-4.243A1 1 0 0 0 4.023 11.66l4.95 4.95a1 1 0 0 0 1.414 0l9.898-9.9Z"
-                        />
-                      </svg>
-                    )}
-                  </div>
-                  <div className="platform-name">{p.name}</div>
-                </div>
-              );
-            })}
-          </div>
+        {/* TITLE */}
+        <h1 className="text-[40px] md:text-[52px] font-[Cinzel] font-semibold text-[#E8DCC0] tracking-wide drop-shadow-[0_0_6px_rgba(232,213,168,0.25)]">
+          Repost Rocket
+        </h1>
 
-          <div className="platform-tools-row">
-            <button
-              type="button"
-              className="small-action-btn"
-              onClick={selectAllPlatforms}
-            >
-              Select All
-            </button>
+        {/* SUBTITLE */}
+        <p className="text-lg md:text-xl text-[#D9D0C0] opacity-80 mt-3 font-light tracking-wide">
+          Your AI-Powered Selling Prep Studio
+        </p>
 
-            <button
-              type="button"
-              className="small-action-btn"
-              onClick={clearPlatforms}
-            >
-              Clear
-            </button>
-          </div>
-
-          {/* Bottom Buttons */}
-          <div className="actions">
-            <button
-              className="continue-btn"
-              onClick={handleContinue}
-              disabled={!hasSelection}
-            >
-              CONTINUE →
-            </button>
-          </div>
+        {/* SHIMMER UNDERLINE */}
+        <div className="relative w-40 h-[2px] mx-auto mt-5 mb-10">
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#E8DCC0] to-transparent opacity-60 blur-[1px]"></div>
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#E8DCC0] to-transparent animate-[shimmer_2.8s_infinite]"></div>
         </div>
+
+        {/* CTA BUTTON */}
+        <button
+          onClick={() => navigate("/dashboard")}
+          className="
+            mt-4 px-8 py-4 text-lg font-medium
+            bg-gradient-to-br from-[#0D201A] to-[#07120E]
+            text-[#E8DCC0]
+            border border-[#CBB78A]/40
+            rounded-2xl
+            shadow-[0_0_20px_rgba(203,183,138,0.25)]
+            hover:shadow-[0_0_26px_rgba(203,183,138,0.45)]
+            hover:border-[#E8DCC0]/70
+            transition-all duration-300
+            backdrop-blur-md
+          "
+        >
+          Start Your Prep
+        </button>
       </div>
+
+      {/* SHIMMER KEYFRAMES */}
+      <style>{`
+        @keyframes shimmer {
+          0% { transform: translateX(-60%); }
+          100% { transform: translateX(160%); }
+        }
+      `}</style>
     </div>
   );
 }
-
-export default Welcome;

@@ -11,9 +11,10 @@ const USAGE_KEY = "rr_usage_counts";
 export const DAILY_LIMITS = {
   launches: 2,          // can launch to 2 platforms per day
   smartFill: 0,         // paywalled
-  magicFill: 0,         // paywalled
+  magicFill: 1,         // one Magic listing per day
   autoFill: 0,          // paywalled
-  aiReview: 0           // paywalled
+  aiReview: 0,          // paywalled
+  batchMode: 0          // batch mode is premium-only
 };
 
 const TRY_ONE_FREE_KEYS = {
@@ -70,6 +71,7 @@ const ensureDailyReset = () => {
       magicFill: 0,
       autoFill: 0,
       aiReview: 0,
+      batchMode: 0,
     });
 
     safeSet(LAST_RESET_KEY, now);

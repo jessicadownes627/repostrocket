@@ -93,7 +93,6 @@ export default function Preflight() {
         usage={paywallState.usage}
         limit={paywallState.limit}
         onClose={closePaywall}
-        onUpgrade={() => window.location.href = "/upgrade"}
       />
     </div>
   );

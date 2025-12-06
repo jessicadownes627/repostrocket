@@ -19,7 +19,8 @@ export const FEATURE_LABELS = {
   smartFill: "Smart Fill",
   magicFill: "Magic Fill",
   autoFill: "Auto Fill",
-  aiReview: "AI Review"
+  aiReview: "AI Review",
+  batchMode: "Batch Mode"
 };
 
 /**

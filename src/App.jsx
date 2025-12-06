@@ -1,31 +1,34 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+console.log("🔥 Dashboard.jsx is ACTIVE and LOADED");
 
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+
+// Pages
 import Welcome from "./pages/Welcome";
-import CreateListing from "./pages/CreateListing";
-import SingleListing from "./pages/SingleListing";
-import BatchUpload from "./pages/Batch";
-import LaunchDeck from "./pages/LaunchDeck";
+import Dashboard from "./pages/Dashboard.jsx";
+import MagicPhotoPrep from "./pages/MagicPhotoPrep"; // Magic Upload
+import SingleListing from "./pages/SingleListing"; // AI Editor
+import LaunchDeck from "./pages/LaunchDeck"; // Final Launch
 import Inventory from "./pages/Inventory";
+import Batch from "./pages/Batch"; // Batch Mode
+import LaunchDeckBatch from "./pages/LaunchDeckBatch"; // Batch → Launch
 
-export default function App() {
+function App() {
   return (
     <Router>
-      <Routes>
-        {/* Home */}
-        <Route path="/" element={<Welcome />} />
-        <Route path="/welcome" element={<Welcome />} />
-
-        {/* NEW MAGIC FLOW */}
-        <Route path="/create" element={<CreateListing />} />
-        <Route path="/create-listing" element={<CreateListing />} />
-        <Route path="/single-listing" element={<SingleListing />} />
-        <Route path="/batch-mode" element={<BatchUpload />} />
-        <Route path="/launch" element={<LaunchDeck />} />
-        <Route path="/inventory" element={<Inventory />} />
-
-        {/* OPTIONAL OLD ROUTE FALLBACKS */}
-        <Route path="/batch" element={<Navigate to="/batch-mode" replace />} />
-      </Routes>
+      <div className="app-wrapper relative z-10">
+        <Routes>
+          <Route path="/" element={<Welcome />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/prep" element={<MagicPhotoPrep />} />
+          <Route path="/single-listing" element={<SingleListing />} />
+          <Route path="/launch" element={<LaunchDeck />} />
+          <Route path="/batch" element={<Batch />} />
+          <Route path="/batch-launch" element={<LaunchDeckBatch />} />
+          <Route path="/inventory" element={<Inventory />} />
+        </Routes>
+      </div>
     </Router>
   );
 }
+
+export default App;
