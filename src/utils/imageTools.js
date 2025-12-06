@@ -1,4 +1,45 @@
+import heic2any from "heic2any";
 import { IMAGE_VARIANTS } from "../config/platformImageSettings";
+
+export async function convertHeicIfNeeded(file) {
+  if (!file) return file;
+
+  const name = file.name?.toLowerCase() || "";
+  const type = file.type?.toLowerCase() || "";
+
+  // Detect HEIC in ALL common cases
+  const probablyHeic =
+    type.includes("heic") ||
+    type.includes("heif") ||
+    name.endsWith(".heic") ||
+    name.endsWith(".heif");
+
+  if (!probablyHeic) {
+    // Not HEIC — just pass it through
+    return file;
+  }
+
+  try {
+    const jpegBlob = await heic2any({
+      blob: file,
+      toType: "image/jpeg",
+      quality: 0.9,
+    });
+
+    return new File(
+      [jpegBlob],
+      (file.name || "converted").replace(/\.heic|\.heif/gi, ".jpg"),
+      { type: "image/jpeg" }
+    );
+  } catch (err) {
+    console.warn(
+      "⚠️ HEIC conversion failed — using original file instead:",
+      err
+    );
+    // Always return the original file even if it's weird
+    return file;
+  }
+}
 
 const QUALITY = 0.9;
 

@@ -8,10 +8,45 @@ export default function LaunchDeck() {
   const { listingData, setListing } = useListingStore();
 
   const listings = listingData?.photos?.length ? [{ ...listingData }] : [];
+  const finalListing = listingData || {};
 
   const [activeItem, setActiveItem] = useState(null);
 
   const handleCloseModal = () => setActiveItem(null);
+
+  const formatListingDetails = (item) => {
+    if (!item) return "";
+    const lines = [];
+
+    if (item.title) lines.push(item.title);
+
+    const brandSize = [
+      item.brand || "",
+      item.size ? `Size ${item.size}` : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    if (brandSize) lines.push(brandSize);
+
+    const catCond = [item.category || "", item.condition || ""]
+      .filter(Boolean)
+      .join(" · ");
+    if (catCond) lines.push(catCond);
+
+    if (item.price) lines.push(`Price: $${item.price}`);
+
+    if (item.description) {
+      lines.push("");
+      lines.push(item.description);
+    }
+
+    if (Array.isArray(item.tags) && item.tags.length > 0) {
+      lines.push("");
+      lines.push("Tags: " + item.tags.join(", "));
+    }
+
+    return lines.join("\n");
+  };
 
   return (
     <div className="min-h-screen bg-[#050807] text-[#E8E1D0] px-6 py-10">
@@ -72,9 +107,21 @@ export default function LaunchDeck() {
                   Size {item.size}
                 </div>
               )}
+
+              {(item.category || item.condition) && (
+                <div className="text-[11px] opacity-70">
+                  {[item.category, item.condition].filter(Boolean).join(" · ")}
+                </div>
+              )}
+
               <div className="text-xs opacity-70 line-clamp-2">
                 {item.description || "No description provided."}
               </div>
+              {item.price && (
+                <div className="text-[11px] opacity-80 mt-0.5">
+                  Price: ${item.price}
+                </div>
+              )}
               {Array.isArray(item.tags) && item.tags.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-1">
                   {item.tags.slice(0, 3).map((tag) => (
@@ -179,6 +226,67 @@ export default function LaunchDeck() {
                 ))}
               </div>
             </div>
+
+            {/* FULL DETAILS SUMMARY */}
+            <div>
+              <label className="text-xs uppercase opacity-60">
+                Full Details
+              </label>
+              <div className="mt-2 text-[13px] opacity-80 space-y-1">
+                {activeItem.category && (
+                  <div>
+                    <span className="opacity-60">Category: </span>
+                    {activeItem.category}
+                  </div>
+                )}
+                {(activeItem.brand || activeItem.size) && (
+                  <div>
+                    <span className="opacity-60">Brand / Size: </span>
+                    {[activeItem.brand, activeItem.size]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </div>
+                )}
+                {activeItem.condition && (
+                  <div>
+                    <span className="opacity-60">Condition: </span>
+                    {activeItem.condition}
+                  </div>
+                )}
+                {activeItem.price && (
+                  <div>
+                    <span className="opacity-60">Price: </span>${activeItem.price}
+                  </div>
+                )}
+                {Array.isArray(activeItem.tags) &&
+                  activeItem.tags.length > 0 && (
+                    <div>
+                      <span className="opacity-60">Tags: </span>
+                      {activeItem.tags.join(", ")}
+                    </div>
+                  )}
+              </div>
+            </div>
+
+            {/* COPY DETAILS */}
+            <button
+              className="
+                w-full mt-2 py-3 rounded-xl 
+                bg-[#111] border border-[rgba(232,213,168,0.45)]
+                text-sm font-semibold
+                hover:bg-[#181818] transition
+              "
+              onClick={() => {
+                const text = formatListingDetails(activeItem || finalListing);
+                if (text && navigator.clipboard?.writeText) {
+                  navigator.clipboard.writeText(text).catch((err) =>
+                    console.error("Copy failed:", err)
+                  );
+                }
+              }}
+            >
+              Copy Listing Details ✨
+            </button>
 
             {/* SAVE */}
             <button

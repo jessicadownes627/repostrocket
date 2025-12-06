@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useListingStore } from "../store/useListingStore";
+import { getPremiumStatus } from "../store/premiumStore";
 import { runMagicFill } from "../engines/MagicFillEngine";
+import LuxeChipGroup from "../components/LuxeChipGroup";
 import "../styles/overrides.css";
 
 export default function SingleListing() {
@@ -15,6 +17,9 @@ export default function SingleListing() {
     premiumUsesRemaining,
     consumeMagicUse,
   } = useListingStore();
+
+  // TEMP: Inspect photos coming from store
+  console.log("🔥 listingData.photos =", listingData?.photos);
 
   const title = listingData?.title || "";
   const description = listingData?.description || "";
@@ -36,6 +41,59 @@ export default function SingleListing() {
   const [magicDiff, setMagicDiff] = useState(null);
   const [magicLoading, setMagicLoading] = useState(false);
   const [showUsageModal, setShowUsageModal] = useState(false);
+
+  const CATEGORY_OPTIONS = [
+    "Tops",
+    "Bottoms",
+    "Dresses",
+    "Outerwear",
+    "Activewear",
+    "Shoes",
+    "Accessories",
+    "Bags",
+    "Home Goods",
+    "Kids & Baby",
+    "Toys & Games",
+    "Electronics",
+    "Collectibles",
+    "Sports Cards",
+    "Other",
+  ];
+
+  const CONDITION_OPTIONS = ["New", "Like New", "Good", "Fair"];
+
+  const SIZE_OPTIONS = [
+    "XXS",
+    "XS",
+    "S",
+    "M",
+    "L",
+    "XL",
+    "XXL",
+  ];
+
+  const SMART_TAG_OPTIONS = [
+    "Minimalist",
+    "Cozy",
+    "Classic",
+    "Y2K",
+    "Streetwear",
+    "Vintage",
+    "Oversized",
+    "Petite",
+    "Neutral",
+    "Modern",
+    "Boho",
+    "Athleisure",
+    "Layering",
+    "Statement",
+    "Designer",
+    "Workwear",
+    "Casual",
+    "Lounge",
+    "Bold",
+    "Sporty",
+  ];
 
   // -------------------------------------------
   //  SAFE BOOT — prevents black screen
@@ -98,14 +156,34 @@ export default function SingleListing() {
   //  MAGIC FILL HANDLERS
   // -------------------------------------------
   const handleRunMagicFill = async () => {
+    console.log(
+      "🔥🔥🔥 MAGIC CLICKED — ENTERED HANDLE RUN MAGIC FILL 🔥🔥🔥"
+    );
     if (magicLoading) return;
-    if (premiumUsesRemaining <= 0) {
+    // Premium (including Jess override numbers + rr_dev_premium) bypasses daily limit
+    const isPremiumUser =
+      getPremiumStatus() ||
+      (typeof window !== "undefined" &&
+        window.localStorage.getItem("rr_dev_premium") === "true");
+
+    if (!isPremiumUser && premiumUsesRemaining <= 0) {
       setShowUsageModal(true);
       return;
     }
     try {
       setMagicLoading(true);
-      const current = listingData || {};
+      const raw = listingData || {};
+      const current = {
+        title: raw.title || "",
+        description: raw.description || "",
+        price: raw.price ?? "",
+        condition: raw.condition || "",
+        category: raw.category || "",
+        size: raw.size || "",
+        tags: Array.isArray(raw.tags) ? raw.tags : [],
+        photos: Array.isArray(raw.photos) ? raw.photos : [],
+      };
+
       const updated = await runMagicFill(current);
       if (!updated) {
         setMagicLoading(false);
@@ -158,7 +236,8 @@ export default function SingleListing() {
         });
       }
 
-      setMagicDiff(diffs.length ? diffs : null);
+      // Always store diffs (even empty) so drawer can show
+      setMagicDiff(diffs);
       setShowReview(true);
     } catch (err) {
       console.error("Magic Fill failed:", err);
@@ -167,24 +246,35 @@ export default function SingleListing() {
     }
   };
 
+  // --------------------------
+  // APPLY MAGIC RESULTS
+  // --------------------------
   const handleApplyMagic = () => {
-    if (!magicSuggestion) {
+    try {
+      if (!magicSuggestion) return;
+
+      if (magicSuggestion.title) {
+        setListingField("title", magicSuggestion.title);
+      }
+      if (magicSuggestion.description) {
+        setListingField("description", magicSuggestion.description);
+      }
+      if (magicSuggestion.price) {
+        setListingField("price", magicSuggestion.price);
+      }
+      if (Array.isArray(magicSuggestion.tags)) {
+        setListingField("tags", magicSuggestion.tags);
+      }
+
       setShowReview(false);
-      return;
+
+      console.log("✨ MAGIC APPLIED — listingData now:", {
+        ...listingData,
+        ...magicSuggestion,
+      });
+    } catch (err) {
+      console.error("⚠️ APPLY MAGIC FAILED:", err);
     }
-    if (magicSuggestion.title) {
-      setListingField("title", magicSuggestion.title);
-    }
-    if (magicSuggestion.description) {
-      setListingField("description", magicSuggestion.description);
-    }
-    if (magicSuggestion.price) {
-      setListingField("price", magicSuggestion.price);
-    }
-    if (Array.isArray(magicSuggestion.tags)) {
-      setListingField("tags", magicSuggestion.tags);
-    }
-    setShowReview(false);
   };
 
   // -------------------------------------------
@@ -231,7 +321,21 @@ export default function SingleListing() {
       <div className="mt-12 mb-10">
         <button
           onClick={handleRunMagicFill}
-          className="btn-glass-gold w-full text-center py-3"
+          className="
+            w-full 
+            py-3.5 
+            rounded-2xl
+            bg-[#E8D5A8]
+            text-[#111]
+            font-semibold
+            tracking-wide
+            text-sm
+            border border-[rgba(255,255,255,0.25)]
+            shadow-[0_4px_10px_rgba(0,0,0,0.45)]
+            hover:bg-[#f0e1bf]
+            transition-all
+            active:scale-[0.98]
+          "
           disabled={magicLoading}
         >
           {magicLoading ? "Running Magic…" : "Run Magic Fill ✨"}
@@ -264,19 +368,16 @@ export default function SingleListing() {
         placeholder="e.g., 48"
       />
 
-      <LuxeInput
-        label="Condition"
-        value={condition}
-        onChange={handleFieldChange("condition")}
-        placeholder="New / Excellent / Good / Fair"
-      />
-
-      <LuxeInput
-        label="Category"
-        value={category}
-        onChange={handleFieldChange("category")}
-        placeholder="Women / Kids / Home / Toys"
-      />
+      <div className="mb-6">
+        <div className="text-xs uppercase opacity-70 tracking-wide mb-2">
+          Category
+        </div>
+        <LuxeChipGroup
+          options={CATEGORY_OPTIONS}
+          value={category}
+          onChange={(val) => setListingField("category", val)}
+        />
+      </div>
 
       <LuxeInput
         label="Brand"
@@ -285,32 +386,44 @@ export default function SingleListing() {
         placeholder="e.g., Lululemon, Nike, Zara"
       />
 
-      <LuxeInput
-        label="Size"
-        value={size}
-        onChange={handleFieldChange("size")}
-        placeholder="e.g., S / M / 6 / 28"
-      />
+      <div className="mb-6">
+        <div className="text-xs uppercase opacity-70 tracking-wide mb-2">
+          Size
+        </div>
+        <LuxeChipGroup
+          options={SIZE_OPTIONS}
+          value={size}
+          onChange={(val) => setListingField("size", val)}
+        />
+      </div>
 
-      <LuxeInput
-        label="Tags"
-        value={tags.join(", ")}
-        onChange={(val) =>
-          setListingField(
-            "tags",
-            val
-              .split(",")
-              .map((t) => t.trim())
-              .filter(Boolean)
-          )
-        }
-        placeholder="cozy, knit, neutral, fall"
-      />
+      <div className="mb-6">
+        <div className="text-xs uppercase opacity-70 tracking-wide mb-2">
+          Condition
+        </div>
+        <LuxeChipGroup
+          options={CONDITION_OPTIONS}
+          value={condition}
+          onChange={(val) => setListingField("condition", val)}
+        />
+      </div>
+
+      <div className="mb-6">
+        <div className="text-xs uppercase opacity-70 tracking-wide mb-2">
+          Tags
+        </div>
+        <LuxeChipGroup
+          options={SMART_TAG_OPTIONS}
+          value={tags}
+          multiple
+          onChange={(val) => setListingField("tags", val)}
+        />
+      </div>
 
       {/* ---------------------- */}
       {/*  MAGIC FILL DRAWER     */}
       {/* ---------------------- */}
-      {showReview && magicDiff && magicDiff.length > 0 && (
+      {showReview && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-end justify-center px-4">
           <div className="lux-drawer w-full max-w-xl pb-8 pt-5 px-5 space-y-4">
             <div className="text-center">
@@ -320,6 +433,11 @@ export default function SingleListing() {
               <p className="text-xs opacity-70 mt-1">
                 Review AI suggestions before applying them to your listing.
               </p>
+              {magicDiff.length === 0 && (
+                <p className="text-xs opacity-70 mt-2">
+                  Magic added fresh suggestions to your listing ✨
+                </p>
+              )}
             </div>
 
             <div className="gold-divider" />

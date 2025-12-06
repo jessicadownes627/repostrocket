@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useListingStore } from "../store/useListingStore";
-import { convertHeicToJpeg } from "../utils/heicConverter";
+import { convertHeicIfNeeded } from "../utils/imageTools";
 import "../styles/createListing.css"; // small helpers only
 
 export default function MagicPhotoPrep() {
@@ -20,28 +20,13 @@ export default function MagicPhotoPrep() {
     async (files) => {
       const converted = [];
 
-      for (const file of files || []) {
-        // HEIC → JPEG
-        if (file.type === "image/heic" || file.name?.toLowerCase().endsWith(".heic")) {
-          try {
-            const jpegBlob = await convertHeicToJpeg(file);
-            if (jpegBlob) {
-              const jpegFile = new File(
-                [jpegBlob],
-                file.name.replace(/\.heic$/i, ".jpg"),
-                { type: "image/jpeg" }
-              );
-              converted.push(jpegFile);
-            } else {
-              console.warn("HEIC conversion returned no blob, using original.");
-              converted.push(file);
-            }
-          } catch (err) {
-            console.error("HEIC conversion failed:", err);
-            converted.push(file);
-          }
-        } else {
+      for (const original of files || []) {
+        try {
+          const file = await convertHeicIfNeeded(original);
           converted.push(file);
+        } catch (err) {
+          console.error("HEIC conversion failed:", err);
+          converted.push(original);
         }
       }
 
