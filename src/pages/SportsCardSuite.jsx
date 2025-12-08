@@ -55,6 +55,15 @@ export default function SportsCardSuite() {
             </div>
           </button>
 
+          {/* Batch Market Assist */}
+          <button
+            onClick={() => navigate("/batch-comps")}
+            className="w-full py-4 rounded-xl border border-white/20 text-white bg-white/5
+                       hover:bg-white/10 transition-all text-xl"
+          >
+            Batch Market Assist
+          </button>
+
         </div>
 
         {/* Features */}

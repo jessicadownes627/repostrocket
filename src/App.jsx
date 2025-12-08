@@ -14,6 +14,7 @@ import Batch from "./pages/Batch"; // Batch Mode
 import LaunchDeckBatch from "./pages/LaunchDeckBatch"; // Batch → Launch
 import SportsCardSuite from "./pages/SportsCardSuite";
 import MultiDetect from "./pages/MultiDetect";
+import BatchComps from "./pages/BatchComps";
 
 function App() {
   return (
@@ -31,6 +32,7 @@ function App() {
           <Route path="/inventory" element={<Inventory />} />
           <Route path="/sports-cards" element={<SportsCardSuite />} />
           <Route path="/multi-detect" element={<MultiDetect />} />
+          <Route path="/batch-comps" element={<BatchComps />} />
         </Routes>
       </div>
     </Router>
