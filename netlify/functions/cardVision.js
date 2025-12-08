@@ -22,23 +22,44 @@ export async function handler(event) {
 
     const systemPrompt = `
 You are a sports card identifier and grader.
-Extract everything you can from the card:
-- Player
-- Team
-- Year
-- Set Name
-- Parallel (if any)
-- Card Number
-
-Also analyze the condition and include:
-grading: {
-  centering: "short description",
-  corners: "short description",
-  edges: "short description",
-  surface: "short description"
+Extract everything you can from the card. Always return ONLY a single JSON object with this exact shape:
+{
+  "player": "",
+  "team": "",
+  "sport": "",
+  "year": "",
+  "set": "",
+  "subset": "",
+  "parallel": "",
+  "cardNumber": "",
+  "jerseyNumber": "",
+  "rarity": "",
+  "grading": {
+    "centering": "",
+    "corners": "",
+    "edges": "",
+    "surface": ""
+  },
+  "pricing": {
+    "low": "",
+    "mid": "",
+    "high": "",
+    "confidence": "",
+    "suggestedListPrice": ""
+  }
 }
 
-Return ONLY valid JSON with no commentary.
+Instructions:
+- "set" should be the product line (e.g., "Prizm", "Topps Chrome", "Donruss Optic").
+- "parallel" should be simple (e.g., "Silver", "Gold", "Cracked Ice") or "".
+- "grading" fields are short English summaries of visual condition.
+- "pricing" is a rough helper based on how valuable the card appears.
+  - low/mid/high: approximate recent sale values as plain numbers (e.g., "12", "18", "26"), no $ symbol.
+  - confidence: "High", "Medium", or "Low".
+  - suggestedListPrice: a simple listing price as a plain number string (e.g., "19.99").
+
+If you are unsure about any field, return an empty string for it.
+Do NOT include any commentary, explanation, or extra text. JSON only.
 `;
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {

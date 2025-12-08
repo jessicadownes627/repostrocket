@@ -435,6 +435,88 @@ export default function SingleListing() {
             </div>
           )}
 
+          {/* MARKET VALUE ASSIST — Sports Card Mode Only */}
+          {cardAttributes?.pricing && (
+            <div className="lux-card mb-8">
+              <div className="text-xs uppercase opacity-70 tracking-wide mb-3">
+                Market Value Assist
+              </div>
+
+              <div className="space-y-1 text-sm opacity-85">
+                <div>
+                  <span className="opacity-60">Recent Low:</span>{" "}
+                  {cardAttributes.pricing.low
+                    ? `$${cardAttributes.pricing.low}`
+                    : "—"}
+                </div>
+                <div>
+                  <span className="opacity-60">Recent Mid:</span>{" "}
+                  {cardAttributes.pricing.mid
+                    ? `$${cardAttributes.pricing.mid}`
+                    : "—"}
+                </div>
+                <div>
+                  <span className="opacity-60">Recent High:</span>{" "}
+                  {cardAttributes.pricing.high
+                    ? `$${cardAttributes.pricing.high}`
+                    : "—"}
+                </div>
+                <div className="mt-2">
+                  <span className="opacity-60">Suggested List Price:</span>{" "}
+                  {cardAttributes.pricing.suggestedListPrice
+                    ? `$${cardAttributes.pricing.suggestedListPrice}`
+                    : "—"}
+                </div>
+                <div>
+                  <span className="opacity-60">Confidence:</span>{" "}
+                  {cardAttributes.pricing.confidence || "—"}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 mt-4">
+                <button
+                  onClick={() => {
+                    const encoded = encodeURIComponent(title || "");
+                    if (!encoded) return;
+                    window.open(
+                      `https://www.ebay.com/sch/i.html?_nkw=${encoded}`,
+                      "_blank"
+                    );
+                  }}
+                  className="lux-small-btn"
+                >
+                  Open eBay
+                </button>
+
+                <button
+                  onClick={() => {
+                    const encoded = encodeURIComponent(title || "");
+                    if (!encoded) return;
+                    window.open(
+                      `https://www.mercari.com/search/?keyword=${encoded}`,
+                      "_blank"
+                    );
+                  }}
+                  className="lux-small-btn"
+                >
+                  Open Mercari
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (!title) return;
+                    if (navigator?.clipboard?.writeText) {
+                      navigator.clipboard.writeText(title);
+                    }
+                  }}
+                  className="lux-small-btn"
+                >
+                  Copy Title
+                </button>
+              </div>
+            </div>
+          )}
+
           <LuxeInput
             label="Card Title"
             value={title}

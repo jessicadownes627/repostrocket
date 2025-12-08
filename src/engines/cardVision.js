@@ -56,6 +56,13 @@ Keep answers short. Infer if needed. If unknown, use "".
           edges: "",
           surface: "",
         },
+        pricing: {
+          low: "",
+          mid: "",
+          high: "",
+          confidence: "",
+          suggestedListPrice: "",
+        },
       };
     }
   }

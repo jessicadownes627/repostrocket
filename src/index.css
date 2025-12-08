@@ -319,6 +319,24 @@ body::after {
   transform: translateY(-1px);
 }
 
+/* Small luxe buttons (card tools, quick actions) */
+.lux-small-btn {
+  padding: 0.5rem 1rem;
+  border-radius: 0.75rem;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(232, 213, 168, 0.4);
+  color: var(--lux-text);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  transition: background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.lux-small-btn:hover {
+  background: rgba(0, 0, 0, 0.6);
+  box-shadow: 0 0 12px rgba(232, 213, 168, 0.35);
+}
+
 /* ------------------------------------------------------ */
 /*  🔟 SPARKLE HEADERS                                     */
 /* ------------------------------------------------------ */
