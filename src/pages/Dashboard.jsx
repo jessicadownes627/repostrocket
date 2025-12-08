@@ -111,6 +111,18 @@ export default function Dashboard() {
             Prep multiple items at once. Save hours. (Premium only)
           </div>
         </button>
+
+        {/* Sports Card Suite */}
+        <button
+          onClick={() => navigate("/sports-cards")}
+          className="lux-dashboard-card w-full text-left"
+        >
+          <div className="lux-card-subtitle">COLLECTIBLES</div>
+          <div className="lux-card-title">Sports Card Suite 🃏</div>
+          <div className="lux-card-desc">
+            Dedicated tools for sports cards — batch detection, auto marketplace builds, and more.
+          </div>
+        </button>
       </div>
 
       {/* UPGRADE STRIP */}

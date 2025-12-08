@@ -4,6 +4,8 @@ import { useListingStore } from "../store/useListingStore";
 import { getPremiumStatus } from "../store/premiumStore";
 import { runMagicFill } from "../engines/MagicFillEngine";
 import LuxeChipGroup from "../components/LuxeChipGroup";
+import { useCardParser } from "../hooks/useCardParser";
+import { buildCardTitle } from "../utils/buildCardTitle";
 import "../styles/overrides.css";
 
 export default function SingleListing() {
@@ -17,6 +19,8 @@ export default function SingleListing() {
     premiumUsesRemaining,
     consumeMagicUse,
   } = useListingStore();
+
+  const { cardData, parseCard, loading: parsingCard } = useCardParser();
 
   // TEMP: Inspect photos coming from store
   console.log("🔥 listingData.photos =", listingData?.photos);
@@ -246,6 +250,31 @@ export default function SingleListing() {
     }
   };
 
+  // -------------------------------------------
+  //  CARD ANALYSIS (Sports Card Suite)
+  // -------------------------------------------
+  const handleAnalyzeCard = async () => {
+    if (!mainPhoto) {
+      return;
+    }
+
+    try {
+      const result = await parseCard(mainPhoto);
+      if (!result) return;
+
+      // Store raw card attributes on the listing
+      setListingField("cardAttributes", result);
+
+      // If we can build a strong sports-card title, apply it
+      const cardTitle = buildCardTitle(result);
+      if (cardTitle) {
+        setListingField("title", cardTitle);
+      }
+    } catch (err) {
+      console.error("Analyze card failed:", err);
+    }
+  };
+
   // --------------------------
   // APPLY MAGIC RESULTS
   // --------------------------
@@ -305,11 +334,20 @@ export default function SingleListing() {
         </div>
 
         {mainPhoto ? (
-          <img
-            src={mainPhoto}
-            alt="Main Photo"
-            className="rounded-[14px] w-full h-auto object-cover"
-          />
+          <>
+            <img
+              src={mainPhoto}
+              alt="Main Photo"
+              className="rounded-[14px] w-full h-auto object-cover"
+            />
+            <button
+              onClick={handleAnalyzeCard}
+              disabled={parsingCard}
+              className="mt-4 w-full py-2.5 rounded-2xl bg-black/40 border border-[rgba(232,213,168,0.45)] text-[var(--lux-text)] text-xs tracking-[0.18em] uppercase hover:bg-black/60 transition"
+            >
+              {parsingCard ? "Analyzing Card…" : "Analyze Card Details"}
+            </button>
+          </>
         ) : (
           <div className="opacity-60 text-sm">No photo found</div>
         )}

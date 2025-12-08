@@ -166,6 +166,151 @@
   border-radius: 18px;
 }
 
+.ld-pills-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 0.5rem;
+}
+
+.ld-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  border: 1px solid rgba(232, 213, 168, 0.45);
+  color: #e8e1d0;
+  background: rgba(16, 16, 16, 0.9);
+}
+
+.ld-pill-muted {
+  border-color: #444;
+  color: #b3b3b3;
+}
+
+.ld-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  padding: 0.75rem 0;
+  background: linear-gradient(
+    180deg,
+    rgba(10, 10, 10, 0.95),
+    rgba(10, 10, 10, 0.85)
+  );
+  backdrop-filter: blur(18px);
+  border-bottom: 1px solid rgba(232, 213, 168, 0.25);
+  margin-bottom: 0.75rem;
+}
+
+.ld-toolbar-inner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.ld-toolbar-btn {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(232, 213, 168, 0.4);
+  background: rgba(16, 16, 16, 0.9);
+  color: #e8e1d0;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.ld-toolbar-btn:hover {
+  background: rgba(232, 213, 168, 0.1);
+  box-shadow: 0 0 12px rgba(232, 213, 168, 0.35);
+}
+
+.ld-toolbar-btn:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+.ld-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(20px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.ld-modal {
+  width: 100%;
+  max-width: 420px;
+  background: #0a0a0a;
+  border-radius: 20px;
+  border: 1px solid rgba(232, 213, 168, 0.4);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.7);
+  padding: 1.5rem;
+  color: #e8e1d0;
+}
+
+.ld-modal-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.ld-modal-sub {
+  font-size: 0.8rem;
+  opacity: 0.75;
+  margin-bottom: 0.9rem;
+}
+
+.ld-modal-input {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(232, 213, 168, 0.4);
+  background: #060606;
+  color: #e8e1d0;
+  font-size: 0.85rem;
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.ld-modal-hint {
+  font-size: 0.75rem;
+  opacity: 0.7;
+  margin-bottom: 0.9rem;
+}
+
+.ld-modal-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.ld-modal-btn-quiet,
+.ld-modal-btn-apply {
+  flex: 1;
+  padding: 0.6rem 0.8rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.ld-modal-btn-quiet {
+  border: 1px solid #333;
+  background: #111;
+  color: #ddd;
+}
+
+.ld-modal-btn-apply {
+  border: 1px solid rgba(232, 213, 168, 0.7);
+  background: linear-gradient(180deg, #f8ecd5, #e4cfa5);
+  color: #111;
+  font-weight: 600;
+}
+
 .ld-photo {
   width: 100%;
   border-radius: 14px;

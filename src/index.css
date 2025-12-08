@@ -266,6 +266,14 @@ body::after {
   border-color: var(--lux-gold);
 }
 
+/* Sidebar slide helper (optional) */
+.fixed.right-0 {
+  transform: translateX(0%);
+}
+.fixed.right-hidden {
+  transform: translateX(100%);
+}
+
 .lux-chip {
   padding: 6px 12px;
   border-radius: 999px;
