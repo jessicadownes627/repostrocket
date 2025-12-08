@@ -1,24 +1,20 @@
-// Placeholder vision client.
-// In production, this should call a secured serverless function (e.g. Netlify)
-// that talks to OpenAI Vision and returns JSON text.
-
 export async function runVision(prompt, base64Image) {
-  console.warn(
-    "runVision is using a placeholder implementation. Wire this to your serverless vision function when ready."
-  );
+  try {
+    const response = await fetch("/.netlify/functions/cardVision", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        prompt,
+        imageBase64: base64Image,
+      }),
+    });
 
-  // Return a safe, empty card payload so UI does not break before backend is wired.
-  return JSON.stringify({
-    player: "",
-    team: "",
-    sport: "",
-    year: "",
-    set: "",
-    subset: "",
-    parallel: "",
-    cardNumber: "",
-    jerseyNumber: "",
-    rarity: "",
-  });
+    const { result } = await response.json();
+    return result;
+  } catch (err) {
+    console.error("Vision client error:", err);
+    return "{}";
+  }
 }
-
