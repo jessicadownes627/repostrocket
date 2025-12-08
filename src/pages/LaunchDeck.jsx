@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useListingStore } from "../store/useListingStore";
 import "../styles/overrides.css";
 
 export default function LaunchDeck() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { listingData, setListing } = useListingStore();
 
   const listings = listingData?.photos?.length ? [{ ...listingData }] : [];
@@ -56,9 +57,15 @@ export default function LaunchDeck() {
         <h1 className="text-[30px] font-semibold tracking-tight sparkly-header header-glitter">
           LaunchDeck
         </h1>
-        <p className="text-sm opacity-70 mt-1">
+        <p className="text-sm opacity-70 mt-1 mb-3">
           Final polish before posting.
         </p>
+        <button
+          onClick={() => navigate("/launch-listing")}
+          className="lux-small-btn"
+        >
+          Launch Listing 🚀
+        </button>
       </div>
 
       {/* CAROUSEL */}

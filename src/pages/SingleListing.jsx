@@ -534,7 +534,7 @@ export default function SingleListing() {
       ) : (
         <>
           {/* MAGIC FILL CTA */}
-          <div className="mt-12 mb-10">
+          <div className="mt-12 mb-6">
             <button
               onClick={handleRunMagicFill}
               className="
@@ -556,6 +556,19 @@ export default function SingleListing() {
             >
               {magicLoading ? "Running Magic…" : "Run Magic Fill ✨"}
             </button>
+          </div>
+
+          {/* MAGIC LISTING LAUNCHER CTA */}
+          <div className="mt-4 mb-10">
+            <button
+              onClick={() => navigate("/launch-listing")}
+              className="w-full py-3.5 rounded-2xl bg-[#E8D5A8] text-[#111] font-semibold tracking-wide text-sm border border-[rgba(255,255,255,0.25)] shadow-[0_4px_10px_rgba(0,0,0,0.45)] hover:bg-[#f0e1bf] transition-all active:scale-[0.98]"
+            >
+              Launch Listing 🚀
+            </button>
+            <div className="text-center opacity-60 text-xs mt-1">
+              Generate optimized titles & descriptions for every marketplace.
+            </div>
           </div>
 
           {/* CORE INFORMATION */}

@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useCardParser } from "../hooks/useCardParser";
 import { buildCardTitle } from "../utils/buildCardTitle";
 import { convertHeicIfNeeded } from "../utils/imageTools";
@@ -8,6 +8,10 @@ function BatchCompsInner() {
   const fileInputRef = useRef(null);
   const { batchItems, setBatch, updateBatchItem } = useBatchStore();
   const { parseCard, loading: parsing } = useCardParser();
+
+  // Progress UI for analyzing batches
+  const [analyzeProgress, setAnalyzeProgress] = useState(0);
+  const [analyzingAll, setAnalyzingAll] = useState(false);
 
   const handleFiles = useCallback(
     async (files) => {
@@ -73,11 +77,33 @@ function BatchCompsInner() {
     }
   };
 
+  // Chunked analyzer — 3 at a time to avoid Netlify throttling
   const analyzeAll = async () => {
-    for (const item of batchItems) {
+    if (!batchItems.length || parsing) return;
+
+    setAnalyzingAll(true);
+    setAnalyzeProgress(0);
+
+    const chunkSize = 3;
+    const total = batchItems.length;
+    let completed = 0;
+
+    // break into chunks of 3
+    for (let i = 0; i < batchItems.length; i += chunkSize) {
+      const chunk = batchItems.slice(i, i + chunkSize);
+
+      // Run up to 3 analyses in parallel
       // eslint-disable-next-line no-await-in-loop
-      await analyzeOne(item);
+      await Promise.all(
+        chunk.map(async (item) => {
+          await analyzeOne(item);
+          completed += 1;
+          setAnalyzeProgress(completed / total);
+        })
+      );
     }
+
+    setAnalyzingAll(false);
   };
 
   const exportCSV = () => {
@@ -161,10 +187,41 @@ function BatchCompsInner() {
           </div>
         )}
 
+        {batchItems.length > 0 && analyzingAll && (
+          <div className="mt-3 w-full">
+            <div className="text-xs opacity-70 mb-1">
+              Analyzing {Math.round(analyzeProgress * 100)}%
+            </div>
+            <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-[#E8D5A8] transition-all"
+                style={{ width: `${analyzeProgress * 100}%` }}
+              />
+            </div>
+          </div>
+        )}
+
         {/* Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 mt-4">
           {batchItems.map((item) => (
-            <div key={item.id} className="lux-card">
+            <div key={item.id} className="lux-card relative">
+              {/* STATUS CHIP */}
+              <div className="absolute top-2 right-2">
+                {item.cardAttributes ? (
+                  <span className="px-2 py-1 text-[10px] rounded-lg bg-green-500/20 border border-green-400/30 text-green-200 uppercase tracking-wide">
+                    Analyzed
+                  </span>
+                ) : analyzingAll ? (
+                  <span className="px-2 py-1 text-[10px] rounded-lg bg-yellow-500/20 border border-yellow-400/30 text-yellow-200 uppercase tracking-wide">
+                    Working…
+                  </span>
+                ) : (
+                  <span className="px-2 py-1 text-[10px] rounded-lg bg-white/10 border border-white/20 text-white/70 uppercase tracking-wide">
+                    Not Analyzed
+                  </span>
+                )}
+              </div>
+
               {item.photo && (
                 <img
                   src={item.photo}
@@ -296,4 +353,3 @@ export default function BatchComps() {
     </BatchProvider>
   );
 }
-
