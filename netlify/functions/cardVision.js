@@ -20,6 +20,27 @@ export async function handler(event) {
       };
     }
 
+    const systemPrompt = `
+You are a sports card identifier and grader.
+Extract everything you can from the card:
+- Player
+- Team
+- Year
+- Set Name
+- Parallel (if any)
+- Card Number
+
+Also analyze the condition and include:
+grading: {
+  centering: "short description",
+  corners: "short description",
+  edges: "short description",
+  surface: "short description"
+}
+
+Return ONLY valid JSON with no commentary.
+`;
+
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -29,6 +50,10 @@ export async function handler(event) {
       body: JSON.stringify({
         model: "gpt-4o-mini",
         messages: [
+          {
+            role: "system",
+            content: systemPrompt,
+          },
           {
             role: "user",
             content: [
@@ -62,4 +87,3 @@ export async function handler(event) {
     };
   }
 }
-

@@ -1,6 +1,7 @@
 import { useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useListingStore } from "../store/useListingStore";
+import { convertHeicIfNeeded } from "../utils/imageTools";
 import "../styles/createListing.css"; // still safe to reuse
 
 export default function MagicCardPrep() {
@@ -16,20 +17,34 @@ export default function MagicCardPrep() {
   /* ------------------------------------------------------ */
   const handleFiles = useCallback(
     async (files) => {
-      const arr = Array.from(files || []);
-      const urls = arr.map((f) => URL.createObjectURL(f));
+      const incoming = Array.from(files || []);
+      const converted = [];
+
+      for (const file of incoming) {
+        try {
+          const fixed = await convertHeicIfNeeded(file);
+          converted.push(fixed);
+        } catch (err) {
+          console.error("HEIC conversion failed for card prep:", err);
+          converted.push(file);
+        }
+      }
+
+      const urls = converted.map((f) => URL.createObjectURL(f));
 
       // Set previews
       urls.forEach((url) => {
         const img = new Image();
-        img.onload = () =>
+        const commit = () =>
           setPreviews((prev) => (prev.includes(url) ? prev : [...prev, url]));
-        img.onerror = img.onload;
+        img.onload = commit;
+        img.onerror = commit;
         img.src = url;
       });
 
-      // Store photos (card flow)
+      // Store photos + mark as sports card flow
       setListingField("photos", urls);
+      setListingField("category", "Sports Cards");
     },
     [setListingField]
   );

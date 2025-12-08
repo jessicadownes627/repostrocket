@@ -39,6 +39,13 @@ export default function SingleListing() {
       ? listingData.photos[0]
       : null;
 
+  const cardAttributes = listingData?.cardAttributes || null;
+  const isCardMode =
+    category === "Sports Cards" ||
+    Boolean(
+      cardAttributes && typeof cardAttributes === "object" && Object.keys(cardAttributes).length
+    );
+
   const [isLoaded, setIsLoaded] = useState(false);
   const [showReview, setShowReview] = useState(false);
   const [magicSuggestion, setMagicSuggestion] = useState(null);
@@ -340,13 +347,15 @@ export default function SingleListing() {
               alt="Main Photo"
               className="rounded-[14px] w-full h-auto object-cover"
             />
-            <button
-              onClick={handleAnalyzeCard}
-              disabled={parsingCard}
-              className="mt-4 w-full py-2.5 rounded-2xl bg-black/40 border border-[rgba(232,213,168,0.45)] text-[var(--lux-text)] text-xs tracking-[0.18em] uppercase hover:bg-black/60 transition"
-            >
-              {parsingCard ? "Analyzing Card…" : "Analyze Card Details"}
-            </button>
+            {isCardMode && (
+              <button
+                onClick={handleAnalyzeCard}
+                disabled={parsingCard}
+                className="mt-4 w-full py-2.5 rounded-2xl bg-black/40 border border-[rgba(232,213,168,0.45)] text-[var(--lux-text)] text-xs tracking-[0.18em] uppercase hover:bg-black/60 transition"
+              >
+                {parsingCard ? "Analyzing Card…" : "Analyze Card Details"}
+              </button>
+            )}
           </>
         ) : (
           <div className="opacity-60 text-sm">No photo found</div>
@@ -354,114 +363,201 @@ export default function SingleListing() {
       </div>
 
       {/* ---------------------- */}
-      {/*  MAGIC FILL CTA        */}
+      {/*  MODE-SPECIFIC FIELDS  */}
       {/* ---------------------- */}
-      <div className="mt-12 mb-10">
-        <button
-          onClick={handleRunMagicFill}
-          className="
-            w-full 
-            py-3.5 
-            rounded-2xl
-            bg-[#E8D5A8]
-            text-[#111]
-            font-semibold
-            tracking-wide
-            text-sm
-            border border-[rgba(255,255,255,0.25)]
-            shadow-[0_4px_10px_rgba(0,0,0,0.45)]
-            hover:bg-[#f0e1bf]
-            transition-all
-            active:scale-[0.98]
-          "
-          disabled={magicLoading}
-        >
-          {magicLoading ? "Running Magic…" : "Run Magic Fill ✨"}
-        </button>
-      </div>
+      {isCardMode ? (
+        <>
+          <HeaderBar label="Card Details" />
 
-      {/* ---------------------- */}
-      {/*  CORE INFORMATION      */}
-      {/* ---------------------- */}
-      <HeaderBar label="Details Refined" />
+          <div className="lux-card mb-8">
+            <div className="text-xs uppercase opacity-70 tracking-wide mb-3">
+              Detected Attributes
+            </div>
+            <div className="space-y-1 text-sm opacity-85">
+              <div>
+                <span className="opacity-60">Player:</span>{" "}
+                {cardAttributes?.player || <span className="opacity-40">—</span>}
+              </div>
+              <div>
+                <span className="opacity-60">Team:</span>{" "}
+                {cardAttributes?.team || <span className="opacity-40">—</span>}
+              </div>
+              <div>
+                <span className="opacity-60">Year:</span>{" "}
+                {cardAttributes?.year || <span className="opacity-40">—</span>}
+              </div>
+              <div>
+                <span className="opacity-60">Set:</span>{" "}
+                {cardAttributes?.set || cardAttributes?.setName || (
+                  <span className="opacity-40">—</span>
+                )}
+              </div>
+              <div>
+                <span className="opacity-60">Parallel:</span>{" "}
+                {cardAttributes?.parallel || (
+                  <span className="opacity-40">—</span>
+                )}
+              </div>
+              <div>
+                <span className="opacity-60">Card #:</span>{" "}
+                {cardAttributes?.cardNumber || (
+                  <span className="opacity-40">—</span>
+                )}
+              </div>
+            </div>
+          </div>
 
-      <LuxeInput
-        label="Title"
-        value={title}
-        onChange={handleFieldChange("title")}
-        placeholder="e.g., Lululemon Define Jacket — Size 6"
-      />
+          {/* CARD GRADING ASSIST — Sports Card Mode Only */}
+          {cardAttributes?.grading && (
+            <div className="lux-card mb-8">
+              <div className="text-xs uppercase opacity-70 tracking-wide mb-3">
+                Grading Assist
+              </div>
 
-      <LuxeInput
-        label="Description"
-        value={description}
-        onChange={handleFieldChange("description")}
-        placeholder="Brief, luxe description…"
-      />
+              <div className="space-y-1 text-sm opacity-85">
+                <div>
+                  <span className="opacity-60">Centering:</span>{" "}
+                  {cardAttributes.grading.centering || "—"}
+                </div>
+                <div>
+                  <span className="opacity-60">Corners:</span>{" "}
+                  {cardAttributes.grading.corners || "—"}
+                </div>
+                <div>
+                  <span className="opacity-60">Edges:</span>{" "}
+                  {cardAttributes.grading.edges || "—"}
+                </div>
+                <div>
+                  <span className="opacity-60">Surface:</span>{" "}
+                  {cardAttributes.grading.surface || "—"}
+                </div>
+              </div>
+            </div>
+          )}
 
-      <LuxeInput
-        label="Price"
-        value={price}
-        onChange={handleFieldChange("price")}
-        placeholder="e.g., 48"
-      />
+          <LuxeInput
+            label="Card Title"
+            value={title}
+            onChange={handleFieldChange("title")}
+            placeholder="e.g., 2023 Prizm Shohei Ohtani #25 Silver"
+          />
 
-      <div className="mb-6">
-        <div className="text-xs uppercase opacity-70 tracking-wide mb-2">
-          Category
-        </div>
-        <LuxeChipGroup
-          options={CATEGORY_OPTIONS}
-          value={category}
-          onChange={(val) => setListingField("category", val)}
-        />
-      </div>
+          <LuxeInput
+            label="Card Notes"
+            value={description}
+            onChange={handleFieldChange("description")}
+            placeholder="Sharp corners, clean surface, no creases."
+          />
+        </>
+      ) : (
+        <>
+          {/* MAGIC FILL CTA */}
+          <div className="mt-12 mb-10">
+            <button
+              onClick={handleRunMagicFill}
+              className="
+                w-full 
+                py-3.5 
+                rounded-2xl
+                bg-[#E8D5A8]
+                text-[#111]
+                font-semibold
+                tracking-wide
+                text-sm
+                border border-[rgba(255,255,255,0.25)]
+                shadow-[0_4px_10px_rgba(0,0,0,0.45)]
+                hover:bg-[#f0e1bf]
+                transition-all
+                active:scale-[0.98]
+              "
+              disabled={magicLoading}
+            >
+              {magicLoading ? "Running Magic…" : "Run Magic Fill ✨"}
+            </button>
+          </div>
 
-      <LuxeInput
-        label="Brand"
-        value={brand}
-        onChange={handleFieldChange("brand")}
-        placeholder="e.g., Lululemon, Nike, Zara"
-      />
+          {/* CORE INFORMATION */}
+          <HeaderBar label="Details Refined" />
 
-      <div className="mb-6">
-        <div className="text-xs uppercase opacity-70 tracking-wide mb-2">
-          Size
-        </div>
-        <LuxeChipGroup
-          options={SIZE_OPTIONS}
-          value={size}
-          onChange={(val) => setListingField("size", val)}
-        />
-      </div>
+          <LuxeInput
+            label="Title"
+            value={title}
+            onChange={handleFieldChange("title")}
+            placeholder="e.g., Lululemon Define Jacket — Size 6"
+          />
 
-      <div className="mb-6">
-        <div className="text-xs uppercase opacity-70 tracking-wide mb-2">
-          Condition
-        </div>
-        <LuxeChipGroup
-          options={CONDITION_OPTIONS}
-          value={condition}
-          onChange={(val) => setListingField("condition", val)}
-        />
-      </div>
+          <LuxeInput
+            label="Description"
+            value={description}
+            onChange={handleFieldChange("description")}
+            placeholder="Brief, luxe description…"
+          />
 
-      <div className="mb-6">
-        <div className="text-xs uppercase opacity-70 tracking-wide mb-2">
-          Tags
-        </div>
-        <LuxeChipGroup
-          options={SMART_TAG_OPTIONS}
-          value={tags}
-          multiple
-          onChange={(val) => setListingField("tags", val)}
-        />
-      </div>
+          <LuxeInput
+            label="Price"
+            value={price}
+            onChange={handleFieldChange("price")}
+            placeholder="e.g., 48"
+          />
+
+          <div className="mb-6">
+            <div className="text-xs uppercase opacity-70 tracking-wide mb-2">
+              Category
+            </div>
+            <LuxeChipGroup
+              options={CATEGORY_OPTIONS}
+              value={category}
+              onChange={(val) => setListingField("category", val)}
+            />
+          </div>
+
+          <LuxeInput
+            label="Brand"
+            value={brand}
+            onChange={handleFieldChange("brand")}
+            placeholder="e.g., Lululemon, Nike, Zara"
+          />
+
+          <div className="mb-6">
+            <div className="text-xs uppercase opacity-70 tracking-wide mb-2">
+              Size
+            </div>
+            <LuxeChipGroup
+              options={SIZE_OPTIONS}
+              value={size}
+              onChange={(val) => setListingField("size", val)}
+            />
+          </div>
+
+          <div className="mb-6">
+            <div className="text-xs uppercase opacity-70 tracking-wide mb-2">
+              Condition
+            </div>
+            <LuxeChipGroup
+              options={CONDITION_OPTIONS}
+              value={condition}
+              onChange={(val) => setListingField("condition", val)}
+            />
+          </div>
+
+          <div className="mb-6">
+            <div className="text-xs uppercase opacity-70 tracking-wide mb-2">
+              Tags
+            </div>
+            <LuxeChipGroup
+              options={SMART_TAG_OPTIONS}
+              value={tags}
+              multiple
+              onChange={(val) => setListingField("tags", val)}
+            />
+          </div>
+        </>
+      )}
 
       {/* ---------------------- */}
       {/*  MAGIC FILL DRAWER     */}
       {/* ---------------------- */}
-      {showReview && (
+      {!isCardMode && showReview && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-end justify-center px-4">
           <div className="lux-drawer w-full max-w-xl pb-8 pt-5 px-5 space-y-4">
             <div className="text-center">
@@ -560,7 +656,7 @@ export default function SingleListing() {
       {/* ---------------------- */}
       {/*  MAGIC USAGE MODAL     */}
       {/* ---------------------- */}
-      {showUsageModal && (
+      {!isCardMode && showUsageModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center px-4">
           <div className="bg-[#0A0A0A] border border-[rgba(232,213,168,0.65)] rounded-2xl p-6 max-w-sm w-full text-center">
             <h2 className="text-[18px] font-semibold text-[#F4E9D5] mb-2">

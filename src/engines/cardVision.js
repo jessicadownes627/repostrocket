@@ -14,7 +14,13 @@ Extract ONLY this info as JSON:
   "parallel": "",
   "cardNumber": "",
   "jerseyNumber": "",
-  "rarity": ""
+  "rarity": "",
+  "grading": {
+    "centering": "",
+    "corners": "",
+    "edges": "",
+    "surface": ""
+  }
 }
 Keep answers short. Infer if needed. If unknown, use "".
 `;
@@ -44,6 +50,12 @@ Keep answers short. Infer if needed. If unknown, use "".
         cardNumber: "",
         jerseyNumber: "",
         rarity: "",
+        grading: {
+          centering: "",
+          corners: "",
+          edges: "",
+          surface: "",
+        },
       };
     }
   }
@@ -87,4 +99,3 @@ function blobToBase64(blob) {
     reader.readAsDataURL(blob);
   });
 }
-
