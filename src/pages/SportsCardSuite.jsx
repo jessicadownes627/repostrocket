@@ -31,7 +31,7 @@ export default function SportsCardSuite() {
 
           {/* Single Card Mode */}
           <button
-            onClick={() => navigate("/single-listing")}
+            onClick={() => navigate("/card-prep")}
             className="w-full py-4 rounded-xl border border-white/20 text-white bg-white/5
                        hover:bg-white/10 transition-all text-xl"
           >

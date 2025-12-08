@@ -6,6 +6,7 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Welcome from "./pages/Welcome";
 import Dashboard from "./pages/Dashboard.jsx";
 import MagicPhotoPrep from "./pages/MagicPhotoPrep"; // Magic Upload
+import MagicCardPrep from "./pages/MagicCardPrep";
 import SingleListing from "./pages/SingleListing"; // AI Editor
 import LaunchDeck from "./pages/LaunchDeck"; // Final Launch
 import Inventory from "./pages/Inventory";
@@ -22,6 +23,7 @@ function App() {
           <Route path="/" element={<Welcome />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/prep" element={<MagicPhotoPrep />} />
+          <Route path="/card-prep" element={<MagicCardPrep />} />
           <Route path="/single-listing" element={<SingleListing />} />
           <Route path="/launch" element={<LaunchDeck />} />
           <Route path="/batch" element={<Batch />} />
