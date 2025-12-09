@@ -6,10 +6,41 @@ import { runMagicFill } from "../engines/MagicFillEngine";
 import LuxeChipGroup from "../components/LuxeChipGroup";
 import { useCardParser } from "../hooks/useCardParser";
 import { buildCardTitle } from "../utils/buildCardTitle";
+import {
+  brighten,
+  warm,
+  cool,
+  autoSquare,
+  removeShadows,
+  blurBackground,
+  studioMode,
+  whiteBackgroundPro,
+  downloadImageFile,
+  autoFix,
+} from "../utils/magicPhotoTools";
+import { getPhotoWarnings } from "../utils/photoWarnings";
 import "../styles/overrides.css";
 
 export default function SingleListing() {
   const navigate = useNavigate();
+
+  // Photo Hints (professional, rotating)
+  const photoHints = [
+    "Center the item in the frame for the most accurate analysis.",
+    "Use even lighting. Reduce shadows for clearer detail.",
+    "Hold your phone steady for one second to avoid blur.",
+    "Move closer. Sharp detail increases buyer confidence.",
+    "Keep the background simple so the AI can detect edges cleanly.",
+    "Wipe your camera lens to remove haze and improve clarity.",
+    "Avoid overhead glare. Tilt slightly to reduce reflections.",
+    "Place smaller items on a flat, solid surface for better detection.",
+    "Shoot straight-on for accurate shape and color.",
+    "Natural daylight gives the cleanest, most accurate results.",
+    "Fill most of the frame with the item. Empty space lowers detail.",
+    "After capturing, use Auto-Square for marketplace-ready formatting.",
+  ];
+
+  const [hintIndex, setHintIndex] = useState(0);
 
   // Pull listing data from global store
   const {
@@ -39,6 +70,8 @@ export default function SingleListing() {
       ? listingData.photos[0]
       : null;
 
+  const displayedPhoto = listingData?.editedPhoto || mainPhoto;
+
   const cardAttributes = listingData?.cardAttributes || null;
   const isCardMode =
     category === "Sports Cards" ||
@@ -52,6 +85,7 @@ export default function SingleListing() {
   const [magicDiff, setMagicDiff] = useState(null);
   const [magicLoading, setMagicLoading] = useState(false);
   const [showUsageModal, setShowUsageModal] = useState(false);
+  const [photoWarnings, setPhotoWarnings] = useState([]);
 
   const CATEGORY_OPTIONS = [
     "Tops",
@@ -120,6 +154,37 @@ export default function SingleListing() {
     const t = setTimeout(() => setIsLoaded(true), 150);
     return () => clearTimeout(t);
   }, [listingData, navigate]);
+
+  // Photo warnings based on current main/edited photo
+  useEffect(() => {
+    const src = listingData?.editedPhoto || mainPhoto;
+    if (!src) {
+      setPhotoWarnings([]);
+      return;
+    }
+
+    let cancelled = false;
+    getPhotoWarnings(src)
+      .then((warnings) => {
+        if (!cancelled) setPhotoWarnings(warnings || []);
+      })
+      .catch(() => {
+        if (!cancelled) setPhotoWarnings([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [listingData?.editedPhoto, mainPhoto]);
+
+  // Rotate photo hints every 6 seconds
+  useEffect(() => {
+    const interval = setInterval(
+      () => setHintIndex((i) => (i + 1) % photoHints.length),
+      6000
+    );
+    return () => clearInterval(interval);
+  }, [photoHints.length]);
 
   if (!isLoaded) {
     return (
@@ -261,12 +326,12 @@ export default function SingleListing() {
   //  CARD ANALYSIS (Sports Card Suite)
   // -------------------------------------------
   const handleAnalyzeCard = async () => {
-    if (!mainPhoto) {
+    if (!displayedPhoto) {
       return;
     }
 
     try {
-      const result = await parseCard(mainPhoto);
+      const result = await parseCard(displayedPhoto);
       if (!result) return;
 
       // Store raw card attributes on the listing
@@ -280,6 +345,45 @@ export default function SingleListing() {
     } catch (err) {
       console.error("Analyze card failed:", err);
     }
+  };
+
+  // -------------------------------------------
+  //  MAGIC PHOTO FIX (Single Listing)
+  // -------------------------------------------
+  const handleFix = async (fn) => {
+    try {
+      const src = listingData?.editedPhoto || mainPhoto;
+      if (!src) return;
+      const updated = await fn(src);
+      setListingField("editedPhoto", updated);
+      setListingField("editHistory", [
+        ...(listingData.editHistory || []),
+        updated,
+      ]);
+    } catch (err) {
+      console.error("Photo fix failed:", err);
+    }
+  };
+
+  const handleUndo = () => {
+    const history = listingData?.editHistory || [];
+
+    if (history.length <= 1) {
+      setListingField("editedPhoto", null);
+      setListingField("editHistory", []);
+      return;
+    }
+
+    const newHistory = history.slice(0, -1);
+    const previousVersion = newHistory[newHistory.length - 1];
+
+    setListingField("editedPhoto", previousVersion);
+    setListingField("editHistory", newHistory);
+  };
+
+  const handleRevertOriginal = () => {
+    setListingField("editedPhoto", null);
+    setListingField("editHistory", []);
   };
 
   // --------------------------
@@ -340,13 +444,33 @@ export default function SingleListing() {
           This is the hero image buyers will see first.
         </div>
 
-        {mainPhoto ? (
+        {displayedPhoto ? (
           <>
             <img
-              src={mainPhoto}
+              src={displayedPhoto}
               alt="Main Photo"
               className="rounded-[14px] w-full h-auto object-cover"
             />
+            {listingData?.editedPhoto && (
+              <div className="absolute top-3 left-3 px-2 py-1 rounded-md text-[10px] font-semibold bg-[#E8D5A8] text-black shadow-md border border-black/40">
+                Edited
+              </div>
+            )}
+            <div className="text-center text-xs opacity-70 mt-3 select-none">
+              {photoHints[hintIndex]}
+            </div>
+            {!listingData?.editedPhoto && photoWarnings.length > 0 && (
+              <div className="mt-3 space-y-1">
+                {photoWarnings.map((w, i) => (
+                  <div
+                    key={i}
+                    className="text-[11px] opacity-70 border-l-2 border-[#E8D5A8] pl-2"
+                  >
+                    {w}
+                  </div>
+                ))}
+              </div>
+            )}
             {isCardMode && (
               <button
                 onClick={handleAnalyzeCard}
@@ -356,6 +480,87 @@ export default function SingleListing() {
                 {parsingCard ? "Analyzing Card…" : "Analyze Card Details"}
               </button>
             )}
+            <div className="flex flex-wrap gap-2 mt-4">
+              <button
+                className="lux-small-btn"
+                onClick={() => handleFix(brighten)}
+              >
+                Brighten
+              </button>
+              <button
+                className="lux-small-btn"
+                onClick={() => handleFix(warm)}
+              >
+                Warm
+              </button>
+              <button
+                className="lux-small-btn"
+                onClick={() => handleFix(cool)}
+              >
+                Cool
+              </button>
+              <button
+                className="lux-small-btn"
+                onClick={() => handleFix(autoSquare)}
+              >
+                Auto-Square
+              </button>
+              <button
+                className="lux-small-btn"
+                onClick={() => handleFix(removeShadows)}
+              >
+                Shadows
+              </button>
+              <button
+                className="lux-small-btn"
+                onClick={() => handleFix(blurBackground)}
+              >
+                Blur BG
+              </button>
+              <button
+                className="lux-small-btn"
+                onClick={() => handleFix(whiteBackgroundPro)}
+              >
+                White BG Pro
+              </button>
+              <button
+                className="lux-small-btn"
+                onClick={() => handleFix(studioMode)}
+              >
+                Studio Mode
+              </button>
+              <button
+                className="lux-small-btn bg-[#E8D5A8] text-black"
+                onClick={() => handleFix(autoFix)}
+              >
+                Auto-Fix 🔥
+              </button>
+            </div>
+            <button
+              className="lux-small-btn mt-2"
+              onClick={() =>
+                downloadImageFile(
+                  listingData?.editedPhoto || mainPhoto,
+                  "repostrocket-photo.jpg"
+                )
+              }
+            >
+              Save Photo
+            </button>
+            <div className="flex flex-wrap gap-2 mt-2">
+              <button
+                className="lux-small-btn bg-black/40 border-white/20 text-white hover:bg-black/50"
+                onClick={handleUndo}
+              >
+                Undo
+              </button>
+              <button
+                className="lux-small-btn bg-red-500/20 border-red-500/40 text-red-200 hover:bg-red-500/30"
+                onClick={handleRevertOriginal}
+              >
+                Revert
+              </button>
+            </div>
           </>
         ) : (
           <div className="opacity-60 text-sm">No photo found</div>

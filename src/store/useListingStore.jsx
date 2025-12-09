@@ -14,6 +14,8 @@ const defaultListing = {
   shipping: "buyer pays",
   batchItems: [],
   photos: [],
+   editedPhoto: null,
+   editHistory: [],
   resizedPhotos: {
     poshmark: [],
     depop: [],

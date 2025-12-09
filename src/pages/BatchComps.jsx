@@ -1,17 +1,95 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useCardParser } from "../hooks/useCardParser";
 import { buildCardTitle } from "../utils/buildCardTitle";
 import { convertHeicIfNeeded } from "../utils/imageTools";
+import {
+  brighten,
+  warm,
+  cool,
+  autoSquare,
+  removeShadows,
+  blurBackground,
+  studioMode,
+  whiteBackgroundPro,
+  downloadImageFile,
+  autoFix,
+} from "../utils/magicPhotoTools";
 import { BatchProvider, useBatchStore } from "../store/useBatchStore";
+import { getPhotoWarnings } from "../utils/photoWarnings";
 
 function BatchCompsInner() {
   const fileInputRef = useRef(null);
+  const navigate = useNavigate();
   const { batchItems, setBatch, updateBatchItem } = useBatchStore();
   const { parseCard, loading: parsing } = useCardParser();
 
   // Progress UI for analyzing batches
   const [analyzeProgress, setAnalyzeProgress] = useState(0);
   const [analyzingAll, setAnalyzingAll] = useState(false);
+
+   // Photo Hints (professional, rotating)
+  const photoHints = [
+    "Center the item in the frame for the most accurate analysis.",
+    "Use even lighting. Reduce shadows for clearer detail.",
+    "Hold your phone steady for one second to avoid blur.",
+    "Move closer. Sharp detail increases buyer confidence.",
+    "Keep the background simple so the AI can detect edges cleanly.",
+    "Wipe your camera lens to remove haze and improve clarity.",
+    "Avoid overhead glare. Tilt slightly to reduce reflections.",
+    "Place smaller items on a flat, solid surface for better detection.",
+    "Shoot straight-on for accurate shape and color.",
+    "Natural daylight gives the cleanest, most accurate results.",
+    "Fill most of the frame with the item. Empty space lowers detail.",
+    "After capturing, use Auto-Square for marketplace-ready formatting.",
+  ];
+
+  const [hintIndex, setHintIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(
+      () => setHintIndex((i) => (i + 1) % photoHints.length),
+      6000
+    );
+    return () => clearInterval(interval);
+  }, [photoHints.length]);
+
+  function PhotoWarningBlock({ src }) {
+    const [localWarnings, setLocalWarnings] = useState([]);
+
+    useEffect(() => {
+      if (!src) {
+        setLocalWarnings([]);
+        return;
+      }
+      let cancelled = false;
+      getPhotoWarnings(src)
+        .then((w) => {
+          if (!cancelled) setLocalWarnings(w || []);
+        })
+        .catch(() => {
+          if (!cancelled) setLocalWarnings([]);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, [src]);
+
+    if (!localWarnings.length) return null;
+
+    return (
+      <div className="mt-2 space-y-1">
+        {localWarnings.map((w, idx) => (
+          <div
+            key={idx}
+            className="text-[10px] opacity-60 border-l-2 border-[#E8D5A8] pl-2"
+          >
+            {w}
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   const handleFiles = useCallback(
     async (files) => {
@@ -33,6 +111,8 @@ function BatchCompsInner() {
             cardAttributes: null,
             title: "",
             pricing: null,
+            editedPhoto: null,
+            editHistory: [],
           });
         } catch (err) {
           console.error("BatchComps HEIC conversion failed:", err);
@@ -106,6 +186,41 @@ function BatchCompsInner() {
     setAnalyzingAll(false);
   };
 
+  const fixBatch = async (item, fn) => {
+    try {
+      const src = item.editedPhoto || item.photo;
+      if (!src) return;
+      const out = await fn(src);
+      updateBatchItem(item.id, {
+        editedPhoto: out,
+        editHistory: [...(item.editHistory || []), out],
+      });
+    } catch (err) {
+      console.error("BatchComps photo fix failed:", err);
+    }
+  };
+
+  const undoBatch = (item) => {
+    const history = item?.editHistory || [];
+
+    if (history.length <= 1) {
+      updateBatchItem(item.id, { editedPhoto: null, editHistory: [] });
+      return;
+    }
+
+    const newHistory = history.slice(0, -1);
+    const previousVersion = newHistory[newHistory.length - 1];
+
+    updateBatchItem(item.id, {
+      editedPhoto: previousVersion,
+      editHistory: newHistory,
+    });
+  };
+
+  const revertBatch = (item) => {
+    updateBatchItem(item.id, { editedPhoto: null, editHistory: [] });
+  };
+
   const exportCSV = () => {
     if (!batchItems.length) return;
     const headers = "Title,Low,Mid,High,Suggested,Confidence\n";
@@ -140,6 +255,18 @@ function BatchCompsInner() {
         <div className="magic-cta-bar mb-8 text-center">
           Use AI to prep pricing for multiple sports cards at once.
         </div>
+
+        {/* LAUNCH DECK CTA */}
+        {batchItems.some((i) => i.customPrice || i.pricing) && (
+          <div className="mb-6">
+            <button
+              onClick={() => navigate("/launch")}
+              className="lux-small-btn"
+            >
+              Launch Deck 🚀
+            </button>
+          </div>
+        )}
 
         {/* Upload zone */}
         <div
@@ -207,27 +334,40 @@ function BatchCompsInner() {
             <div key={item.id} className="lux-card relative">
               {/* STATUS CHIP */}
               <div className="absolute top-2 right-2">
-                {item.cardAttributes ? (
-                  <span className="px-2 py-1 text-[10px] rounded-lg bg-green-500/20 border border-green-400/30 text-green-200 uppercase tracking-wide">
-                    Analyzed
-                  </span>
-                ) : analyzingAll ? (
-                  <span className="px-2 py-1 text-[10px] rounded-lg bg-yellow-500/20 border border-yellow-400/30 text-yellow-200 uppercase tracking-wide">
-                    Working…
-                  </span>
-                ) : (
-                  <span className="px-2 py-1 text-[10px] rounded-lg bg-white/10 border border-white/20 text-white/70 uppercase tracking-wide">
-                    Not Analyzed
-                  </span>
-                )}
+                <div
+                  className={`
+                    text-[10px] px-2 py-1 rounded-full tracking-wide uppercase
+                    ${
+                      item.customPrice
+                        ? "bg-[#E8D5A8] text-black"
+                        : item.cardAttributes
+                        ? "bg-white/20 text-white/80"
+                        : "bg-black/40 text-white/60"
+                    }
+                  `}
+                >
+                  {item.customPrice
+                    ? "Ready"
+                    : item.cardAttributes
+                    ? "Analyzed"
+                    : "Pending"}
+                </div>
               </div>
 
               {item.photo && (
-                <img
-                  src={item.photo}
-                  alt="Card"
-                  className="w-full rounded-xl mb-3 border border-white/20"
-                />
+                <>
+                  <img
+                    src={item.editedPhoto || item.photo}
+                    alt="Card"
+                    className="w-full rounded-xl mb-3 border border-white/20"
+                  />
+                  <div className="text-center text-[10px] opacity-60 mt-2 select-none">
+                    {photoHints[hintIndex]}
+                  </div>
+                  {!item.editedPhoto && (
+                    <PhotoWarningBlock src={item.photo} />
+                  )}
+                </>
               )}
 
               <div className="flex items-center justify-between mb-3">
@@ -293,6 +433,145 @@ function BatchCompsInner() {
                   <div>
                     <span className="opacity-60">Confidence:</span>{" "}
                     {item.pricing.confidence || "—"}
+                  </div>
+
+                  {/* Inline override for suggested price */}
+                  <div className="mt-2">
+                    <div className="text-[11px] opacity-70 mb-1">
+                      Edit Suggested Price
+                    </div>
+                    <input
+                      type="text"
+                      className="w-full bg-black/40 border border-white/20 rounded-lg px-2 py-1 text-xs"
+                      value={item.pricing.suggestedListPrice || ""}
+                      onChange={(e) =>
+                        updateBatchItem(item.id, {
+                          pricing: {
+                            ...item.pricing,
+                            suggestedListPrice: e.target.value,
+                          },
+                        })
+                      }
+                      placeholder="e.g., 24.99"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* MAGIC PHOTO FIX TOOLS (per card) */}
+              {item.photo && (
+                <div className="flex flex-wrap gap-1 mt-3">
+                  <button
+                    className="lux-small-btn"
+                    onClick={() => fixBatch(item, brighten)}
+                  >
+                    Brighten
+                  </button>
+                  <button
+                    className="lux-small-btn"
+                    onClick={() => fixBatch(item, warm)}
+                  >
+                    Warm
+                  </button>
+                  <button
+                    className="lux-small-btn"
+                    onClick={() => fixBatch(item, cool)}
+                  >
+                    Cool
+                  </button>
+                  <button
+                    className="lux-small-btn"
+                    onClick={() => fixBatch(item, autoSquare)}
+                  >
+                    Square
+                  </button>
+                  <button
+                    className="lux-small-btn"
+                    onClick={() => fixBatch(item, removeShadows)}
+                  >
+                    Shadows
+                  </button>
+                  <button
+                    className="lux-small-btn"
+                    onClick={() => fixBatch(item, blurBackground)}
+                  >
+                    Blur BG
+                  </button>
+                  <button
+                    className="lux-small-btn"
+                    onClick={() => fixBatch(item, whiteBackgroundPro)}
+                  >
+                    White BG Pro
+                  </button>
+                  <button
+                    className="lux-small-btn"
+                    onClick={() => fixBatch(item, studioMode)}
+                  >
+                    Studio Mode
+                  </button>
+                  <button
+                    className="lux-small-btn bg-[#E8D5A8] text-black"
+                    onClick={() => fixBatch(item, autoFix)}
+                  >
+                    Auto-Fix 🔥
+                  </button>
+                  <button
+                    className="lux-small-btn"
+                    onClick={() =>
+                      downloadImageFile(
+                        item.editedPhoto || item.photo,
+                        `${item.title || "card"}.jpg`
+                      )
+                    }
+                  >
+                    Save Photo
+                  </button>
+                  <div className="flex gap-1 mt-2 w-full">
+                    <button
+                      className="lux-small-btn bg-black/40 border-white/20 text-white hover:bg-black/60"
+                      onClick={() => undoBatch(item)}
+                    >
+                      Undo
+                    </button>
+                    <button
+                      className="lux-small-btn bg-red-500/20 border-red-500/40 text-red-200 hover:bg-red-500/30"
+                      onClick={() => revertBatch(item)}
+                    >
+                      Revert
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* INLINE PRICE EDITOR */}
+              {(item.pricing || item.cardAttributes) && (
+                <div className="mt-3">
+                  <div className="text-xs opacity-70 mb-1">Your Price</div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      placeholder="e.g. 19.99"
+                      defaultValue={item.customPrice || ""}
+                      onChange={(e) =>
+                        updateBatchItem(item.id, {
+                          customPrice: e.target.value,
+                        })
+                      }
+                      className="
+                        bg-black/40 border border-white/20 rounded-lg px-2 py-1
+                        text-sm w-28 text-white focus:outline-none
+                      "
+                    />
+                    <button
+                      className="lux-small-btn"
+                      onClick={() =>
+                        updateBatchItem(item.id, {
+                          customPrice: item.customPrice || "",
+                        })
+                      }
+                    >
+                      Set
+                    </button>
                   </div>
                 </div>
               )}
