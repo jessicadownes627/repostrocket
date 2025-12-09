@@ -84,7 +84,7 @@ export default function Dashboard() {
 
         {/* TrendSense */}
         <button
-          onClick={() => navigate("/trends")}
+          onClick={() => navigate("/trendsense")}
           className="lux-dashboard-card w-full text-left"
         >
           <div className="lux-card-subtitle">INSIGHTS</div>

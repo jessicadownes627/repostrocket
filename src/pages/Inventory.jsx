@@ -210,7 +210,7 @@ export default function Inventory() {
             <div className="inv-infinity-tags">
               {infinity.hotTags.map((t, i) => (
                 <span key={i} className="inv-infinity-tag">
-                  {t}
+                  {t.keyword || t.tag || t}
                 </span>
               ))}
             </div>
@@ -247,6 +247,14 @@ export default function Inventory() {
                   ))}
                 </div>
               )}
+
+              {/* LIVE TREND ALERT */}
+              {trendMap[item.id]?.eventLinked &&
+                trendMap[item.id]?.eventHeadline && (
+                  <div className="text-xs text-[#E8D5A8] opacity-85 mt-1">
+                    LIVE TREND: {trendMap[item.id].eventHeadline}
+                  </div>
+                )}
 
               <div className="inventory-tags">
                 {item.category && (

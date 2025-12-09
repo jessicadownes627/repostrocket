@@ -16,6 +16,7 @@ import SportsCardSuite from "./pages/SportsCardSuite";
 import MultiDetect from "./pages/MultiDetect";
 import BatchComps from "./pages/BatchComps";
 import LaunchListing from "./pages/LaunchListing";
+import TrendSenseDashboard from "./pages/TrendSenseDashboard";
 
 function App() {
   return (
@@ -35,6 +36,7 @@ function App() {
           <Route path="/multi-detect" element={<MultiDetect />} />
           <Route path="/batch-comps" element={<BatchComps />} />
           <Route path="/launch-listing" element={<LaunchListing />} />
+          <Route path="/trendsense" element={<TrendSenseDashboard />} />
         </Routes>
       </div>
     </Router>

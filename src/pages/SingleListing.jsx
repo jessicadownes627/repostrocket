@@ -19,6 +19,8 @@ import {
   autoFix,
 } from "../utils/magicPhotoTools";
 import { getPhotoWarnings } from "../utils/photoWarnings";
+import { getDynamicPrice } from "../utils/dynamicPricing";
+import { composeListing } from "../utils/listingComposer";
 import "../styles/overrides.css";
 
 export default function SingleListing() {
@@ -86,6 +88,9 @@ export default function SingleListing() {
   const [magicLoading, setMagicLoading] = useState(false);
   const [showUsageModal, setShowUsageModal] = useState(false);
   const [photoWarnings, setPhotoWarnings] = useState([]);
+  const [autofilled, setAutofilled] = useState(false);
+  const [dynamicPrice, setDynamicPrice] = useState(null);
+  const [composed, setComposed] = useState(null);
 
   const CATEGORY_OPTIONS = [
     "Tops",
@@ -155,6 +160,34 @@ export default function SingleListing() {
     return () => clearTimeout(t);
   }, [listingData, navigate]);
 
+  // TrendSense Autofill — apply any saved autofill payload once
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem("rr_autofill");
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      if (!data || typeof data !== "object") return;
+
+      if (data.category) {
+        setListingField("category", data.category);
+      }
+      if (data.brand) {
+        setListingField("brand", data.brand);
+      }
+      if (Array.isArray(data.tags) && data.tags.length) {
+        setListingField("tags", data.tags);
+      }
+      if (data.suggestedPrice) {
+        setListingField("price", data.suggestedPrice);
+      }
+
+      window.localStorage.removeItem("rr_autofill");
+      setAutofilled(true);
+    } catch {
+      // ignore bad or missing data
+    }
+  }, [setListingField]);
+
   // Photo warnings based on current main/edited photo
   useEffect(() => {
     const src = listingData?.editedPhoto || mainPhoto;
@@ -199,6 +232,20 @@ export default function SingleListing() {
   // -------------------------------------------
   const handleFieldChange = (key) => (value) => {
     setListingField(key, value);
+  };
+  const handleTitleChange = async (value) => {
+    setListingField("title", value);
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.length < 3) {
+      setDynamicPrice(null);
+      return;
+    }
+    try {
+      const out = await getDynamicPrice(trimmed, condition || "Good");
+      setDynamicPrice(out);
+    } catch {
+      setDynamicPrice(null);
+    }
   };
 
   // -------------------------------------------
@@ -782,7 +829,7 @@ export default function SingleListing() {
           <LuxeInput
             label="Title"
             value={title}
-            onChange={handleFieldChange("title")}
+            onChange={handleTitleChange}
             placeholder="e.g., Lululemon Define Jacket — Size 6"
           />
 
@@ -799,6 +846,92 @@ export default function SingleListing() {
             onChange={handleFieldChange("price")}
             placeholder="e.g., 48"
           />
+
+          {dynamicPrice && (
+            <>
+              <div className="lux-bento-card p-4 border border-[#26292B] bg-[#0B0D0F] rounded-xl mt-4 mb-4">
+                <div className="font-medium mb-1">Dynamic Price</div>
+                <div className="text-2xl font-semibold text-[#E8D5A8]">
+                  ${dynamicPrice.dynamic}
+                </div>
+                <div className="text-xs opacity-70 mt-2">
+                  Recommended: ${dynamicPrice.floor} – $
+                  {dynamicPrice.ceiling}
+                </div>
+                <div className="text-xs opacity-70">
+                  Target: ${dynamicPrice.target}
+                </div>
+                {dynamicPrice.event && (
+                  <div className="text-xs mt-2 opacity-80">
+                    News Spike: {dynamicPrice.event}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  className="mt-3 px-3 py-1 bg-[#E8D5A8] text-black text-xs rounded-lg"
+                  onClick={() =>
+                    setListingField("price", dynamicPrice.dynamic)
+                  }
+                >
+                  Set Dynamic Price
+                </button>
+              </div>
+
+              <button
+                type="button"
+                className="mt-2 w-full bg-[#E8D5A8] text-black rounded-lg py-2 text-sm font-medium hover:opacity-90 transition"
+                onClick={() => {
+                  const composedResult = composeListing({
+                    title,
+                    brand,
+                    category,
+                    condition,
+                    dynamicPrice: dynamicPrice.dynamic,
+                    trendScore: dynamicPrice.trendScore,
+                    hotTags: dynamicPrice.hotTags,
+                    eventHeadline: dynamicPrice.event,
+                  });
+                  setComposed(composedResult);
+                }}
+              >
+                Compose Listing
+              </button>
+            </>
+          )}
+
+          {composed && (
+            <div className="lux-bento-card p-4 border border-[#26292B] bg-[#0B0D0F] rounded-xl mt-4 mb-4 space-y-4">
+              <div>
+                <div className="font-medium mb-1">Optimized Title</div>
+                <div className="text-sm opacity-80">{composed.title}</div>
+              </div>
+
+              <div>
+                <div className="font-medium mb-1">Description</div>
+                <div className="text-sm opacity-80 whitespace-pre-line">
+                  {composed.description}
+                </div>
+              </div>
+
+              {composed.hashtags && (
+                <div>
+                  <div className="font-medium mb-1">Hashtags</div>
+                  <div className="text-xs opacity-70">
+                    {composed.hashtags}
+                  </div>
+                </div>
+              )}
+
+              {composed.keywords && (
+                <div>
+                  <div className="font-medium mb-1">Keywords</div>
+                  <div className="text-xs opacity-70">
+                    {composed.keywords}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="mb-6">
             <div className="text-xs uppercase opacity-70 tracking-wide mb-2">
