@@ -35,7 +35,7 @@ export function transformForWhatnot(base) {
   ];
 
   return {
-    title: shortTitle ? `${shortTitle} 🔥` : rawTitle,
+    title: shortTitle || rawTitle,
     description: `${base.description || ""}\n\n${hashtags.join(" ")}`.trim(),
     specifics: null,
   };
@@ -52,4 +52,3 @@ export function transformForMercari(base) {
     specifics: null,
   };
 }
-

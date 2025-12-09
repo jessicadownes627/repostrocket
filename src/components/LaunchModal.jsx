@@ -12,10 +12,10 @@ export default function LaunchModal({ platform, onClose, onLaunch }) {
         <div className="ambient-gradient"></div>
       </div>
 
-      {/* 🌑 Modal card with cinematic glow */}
+      {/* Modal card with cinematic glow */}
       <div className="modal-card">
 
-        {/* 🚀 Premium Rocket Icon */}
+        {/* Premium Rocket Icon */}
         <div className="rocket-container">
           <svg
             className="rocket-icon"
@@ -39,7 +39,7 @@ export default function LaunchModal({ platform, onClose, onLaunch }) {
             <path d="M17 14l3 3-4-1-2-2" />
           </svg>
 
-          {/* 🔥 Green flame glow */}
+          {/* Green flame glow */}
           <div className="rocket-glow"></div>
         </div>
 
@@ -54,7 +54,7 @@ export default function LaunchModal({ platform, onClose, onLaunch }) {
         {/* Buttons */}
         <div className="modal-buttons">
           <button className="btn-primary" onClick={onLaunch}>
-            🚀 Open {platform}
+            Open {platform}
           </button>
 
           <button className="btn-secondary" onClick={onClose}>
@@ -65,4 +65,3 @@ export default function LaunchModal({ platform, onClose, onLaunch }) {
     </div>
   );  
 }
-

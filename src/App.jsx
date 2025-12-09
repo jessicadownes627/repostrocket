@@ -1,5 +1,3 @@
-console.log("🔥 Dashboard.jsx is ACTIVE and LOADED");
-
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 
 // Pages

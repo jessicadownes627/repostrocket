@@ -64,7 +64,7 @@ export default function LaunchDeck() {
           onClick={() => navigate("/launch-listing")}
           className="lux-small-btn"
         >
-          Launch Listing 🚀
+          Launch Listing
         </button>
       </div>
 
@@ -292,7 +292,7 @@ export default function LaunchDeck() {
                 }
               }}
             >
-              Copy Listing Details ✨
+              Copy Listing Details
             </button>
 
             {/* SAVE */}

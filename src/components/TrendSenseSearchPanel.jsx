@@ -8,10 +8,13 @@ export default function TrendSenseSearchPanel() {
   const [query, setQuery] = useState("");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   async function handleSearch(e) {
     const v = e.target.value;
     setQuery(v);
+    setError(false);
 
     if (!v || v.trim().length < 2) {
       setResult(null);
@@ -22,6 +25,10 @@ export default function TrendSenseSearchPanel() {
     try {
       const out = await runTrendSenseSearch(v);
       setResult(out);
+      setLastUpdated(new Date());
+    } catch {
+      setResult(null);
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -35,6 +42,21 @@ export default function TrendSenseSearchPanel() {
         placeholder="Search any item…"
         className="w-full bg-[#050708] border border-[#2E3235] rounded-lg px-3 py-2 text-sm focus:outline-none mb-4"
       />
+
+      {(error || lastUpdated) && (
+        <div className="flex items-center justify-between mb-1 text-[11px]">
+          {error && !loading && (
+            <div className="opacity-60">
+              Unable to load insights right now. Please try again.
+            </div>
+          )}
+          {!error && lastUpdated && !loading && (
+            <div className="opacity-60 ml-auto">
+              Last updated just now
+            </div>
+          )}
+        </div>
+      )}
 
       {loading && (
         <div className="text-xs opacity-60">

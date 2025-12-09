@@ -1,7 +1,22 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { loadListingLibrary } from "../utils/savedListings";
 
 export default function SportsCardSuite() {
   const navigate = useNavigate();
+  const [hasCards, setHasCards] = useState(true);
+
+  useEffect(() => {
+    try {
+      const library = loadListingLibrary();
+      const anyCards = Array.isArray(library)
+        ? library.some((item) => item?.category === "Sports Cards")
+        : false;
+      setHasCards(anyCards);
+    } catch {
+      setHasCards(true);
+    }
+  }, []);
 
   return (
     <div className="min-h-screen bg-black text-white px-6 py-12 font-inter">
@@ -9,7 +24,7 @@ export default function SportsCardSuite() {
 
         {/* Header */}
         <h1 className="text-4xl font-cinzel tracking-wide mb-4">
-          Sports Card Suite 🃏✨
+          Sports Card Suite
         </h1>
         <p className="text-lg text-white/70 mb-10 leading-relaxed">
           Built exclusively for high-volume sports card sellers.  
@@ -80,6 +95,12 @@ export default function SportsCardSuite() {
             <li>• SEO keyword builder</li>
             <li>• Luxe dark + champagne themed dashboard</li>
           </ul>
+
+          {!hasCards && (
+            <p className="text-xs opacity-50 italic mt-4">
+              No cards in your collection yet. Use the tools above to add your first one.
+            </p>
+          )}
         </div>
 
         {/* Footer */}

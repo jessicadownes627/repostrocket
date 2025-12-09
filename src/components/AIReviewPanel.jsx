@@ -29,7 +29,7 @@ export default function AIReviewPanel({ open, onClose, results, onApply }) {
           transition={{ type: "tween", duration: 0.35 }}
         >
           <div className="ai-review-header">
-            <h2>AI Listing Review ✨</h2>
+            <h2>AI Listing Review</h2>
             <button className="close-btn" onClick={onClose}>
               ✕
             </button>

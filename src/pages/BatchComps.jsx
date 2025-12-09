@@ -263,7 +263,7 @@ function BatchCompsInner() {
               onClick={() => navigate("/launch")}
               className="lux-small-btn"
             >
-              Launch Deck 🚀
+              Launch Deck
             </button>
           </div>
         )}
@@ -325,6 +325,12 @@ function BatchCompsInner() {
                 style={{ width: `${analyzeProgress * 100}%` }}
               />
             </div>
+          </div>
+        )}
+
+        {batchItems.length === 0 && (
+          <div className="py-4 text-sm text-[#d6c7a1]/70">
+            No sports cards in this batch.
           </div>
         )}
 
@@ -513,7 +519,7 @@ function BatchCompsInner() {
                     className="lux-small-btn bg-[#E8D5A8] text-black"
                     onClick={() => fixBatch(item, autoFix)}
                   >
-                    Auto-Fix 🔥
+                    Auto-Fix
                   </button>
                   <button
                     className="lux-small-btn"

@@ -462,6 +462,12 @@ export default function LaunchDeckBatch() {
 
       <h1 className="ld-title">LaunchDeck — Batch Mode</h1>
 
+      {(displayedItems.length ? displayedItems : processedItems).length === 0 && (
+        <div className="pt-4 text-sm text-[#d6c7a1]/70">
+          No sports cards selected for launch.
+        </div>
+      )}
+
       <div className="ld-grid">
         {(displayedItems.length ? displayedItems : processedItems).map(
           (item, index) => (

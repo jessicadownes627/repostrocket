@@ -21,6 +21,7 @@ import {
 import { getPhotoWarnings } from "../utils/photoWarnings";
 import { getDynamicPrice } from "../utils/dynamicPricing";
 import { composeListing } from "../utils/listingComposer";
+import { buildListingExportLinks } from "../utils/exportListing";
 import "../styles/overrides.css";
 
 export default function SingleListing() {
@@ -55,9 +56,6 @@ export default function SingleListing() {
 
   const { cardData, parseCard, loading: parsingCard } = useCardParser();
 
-  // TEMP: Inspect photos coming from store
-  console.log("🔥 listingData.photos =", listingData?.photos);
-
   const title = listingData?.title || "";
   const description = listingData?.description || "";
   const price = listingData?.price || "";
@@ -91,6 +89,10 @@ export default function SingleListing() {
   const [autofilled, setAutofilled] = useState(false);
   const [dynamicPrice, setDynamicPrice] = useState(null);
   const [composed, setComposed] = useState(null);
+  const [exportLinks, setExportLinks] = useState(null);
+  const [magicError, setMagicError] = useState("");
+  const [dynamicError, setDynamicError] = useState("");
+  const [cardError, setCardError] = useState("");
 
   const CATEGORY_OPTIONS = [
     "Tops",
@@ -235,6 +237,7 @@ export default function SingleListing() {
   };
   const handleTitleChange = async (value) => {
     setListingField("title", value);
+    setDynamicError("");
     const trimmed = value.trim();
     if (!trimmed || trimmed.length < 3) {
       setDynamicPrice(null);
@@ -245,6 +248,9 @@ export default function SingleListing() {
       setDynamicPrice(out);
     } catch {
       setDynamicPrice(null);
+      setDynamicError(
+        "Unable to load pricing insights right now. Please try again."
+      );
     }
   };
 
@@ -279,9 +285,7 @@ export default function SingleListing() {
   //  MAGIC FILL HANDLERS
   // -------------------------------------------
   const handleRunMagicFill = async () => {
-    console.log(
-      "🔥🔥🔥 MAGIC CLICKED — ENTERED HANDLE RUN MAGIC FILL 🔥🔥🔥"
-    );
+    setMagicError("");
     if (magicLoading) return;
     // Premium (including Jess override numbers + rr_dev_premium) bypasses daily limit
     const isPremiumUser =
@@ -364,6 +368,9 @@ export default function SingleListing() {
       setShowReview(true);
     } catch (err) {
       console.error("Magic Fill failed:", err);
+      setMagicError(
+        "Unable to load Magic Fill insights right now. Please try again."
+      );
     } finally {
       setMagicLoading(false);
     }
@@ -373,9 +380,8 @@ export default function SingleListing() {
   //  CARD ANALYSIS (Sports Card Suite)
   // -------------------------------------------
   const handleAnalyzeCard = async () => {
-    if (!displayedPhoto) {
-      return;
-    }
+    setCardError("");
+    if (!displayedPhoto) return;
 
     try {
       const result = await parseCard(displayedPhoto);
@@ -391,6 +397,9 @@ export default function SingleListing() {
       }
     } catch (err) {
       console.error("Analyze card failed:", err);
+      setCardError(
+        "Unable to analyze card details right now. Please try again."
+      );
     }
   };
 
@@ -454,13 +463,8 @@ export default function SingleListing() {
       }
 
       setShowReview(false);
-
-      console.log("✨ MAGIC APPLIED — listingData now:", {
-        ...listingData,
-        ...magicSuggestion,
-      });
     } catch (err) {
-      console.error("⚠️ APPLY MAGIC FAILED:", err);
+      console.error("APPLY MAGIC FAILED:", err);
     }
   };
 
@@ -477,7 +481,7 @@ export default function SingleListing() {
         Single Listing
       </h1>
       <p className="text-center lux-soft-text text-sm mb-10">
-        Make your listing shine ✨
+        Make your listing shine
       </p>
 
       {/* ---------------------- */}
@@ -526,6 +530,11 @@ export default function SingleListing() {
               >
                 {parsingCard ? "Analyzing Card…" : "Analyze Card Details"}
               </button>
+            )}
+            {cardError && (
+              <div className="text-xs opacity-60 mt-2">
+                {cardError}
+              </div>
             )}
             <div className="flex flex-wrap gap-2 mt-4">
               <button
@@ -580,7 +589,7 @@ export default function SingleListing() {
                 className="lux-small-btn bg-[#E8D5A8] text-black"
                 onClick={() => handleFix(autoFix)}
               >
-                Auto-Fix 🔥
+                Auto-Fix
               </button>
             </div>
             <button
@@ -806,8 +815,13 @@ export default function SingleListing() {
               "
               disabled={magicLoading}
             >
-              {magicLoading ? "Running Magic…" : "Run Magic Fill ✨"}
+              {magicLoading ? "Running Magic…" : "Run Magic Fill"}
             </button>
+            {magicError && (
+              <div className="text-xs opacity-60 mt-2">
+                {magicError}
+              </div>
+            )}
           </div>
 
           {/* MAGIC LISTING LAUNCHER CTA */}
@@ -816,7 +830,7 @@ export default function SingleListing() {
               onClick={() => navigate("/launch-listing")}
               className="w-full py-3.5 rounded-2xl bg-[#E8D5A8] text-[#111] font-semibold tracking-wide text-sm border border-[rgba(255,255,255,0.25)] shadow-[0_4px_10px_rgba(0,0,0,0.45)] hover:bg-[#f0e1bf] transition-all active:scale-[0.98]"
             >
-              Launch Listing 🚀
+              Launch Listing
             </button>
             <div className="text-center opacity-60 text-xs mt-1">
               Generate optimized titles & descriptions for every marketplace.
@@ -846,6 +860,12 @@ export default function SingleListing() {
             onChange={handleFieldChange("price")}
             placeholder="e.g., 48"
           />
+
+          {dynamicError && (
+            <div className="text-xs opacity-60 mt-2">
+              {dynamicError}
+            </div>
+          )}
 
           {dynamicPrice && (
             <>
@@ -900,37 +920,121 @@ export default function SingleListing() {
           )}
 
           {composed && (
-            <div className="lux-bento-card p-4 border border-[#26292B] bg-[#0B0D0F] rounded-xl mt-4 mb-4 space-y-4">
-              <div>
-                <div className="font-medium mb-1">Optimized Title</div>
-                <div className="text-sm opacity-80">{composed.title}</div>
-              </div>
-
-              <div>
-                <div className="font-medium mb-1">Description</div>
-                <div className="text-sm opacity-80 whitespace-pre-line">
-                  {composed.description}
-                </div>
-              </div>
-
-              {composed.hashtags && (
+            <>
+              <div className="lux-bento-card p-4 border border-[#26292B] bg-[#0B0D0F] rounded-xl mt-4 mb-4 space-y-4">
                 <div>
-                  <div className="font-medium mb-1">Hashtags</div>
-                  <div className="text-xs opacity-70">
-                    {composed.hashtags}
+                  <div className="font-medium mb-1">Optimized Title</div>
+                  <div className="text-sm opacity-80">{composed.title}</div>
+                </div>
+
+                <div>
+                  <div className="font-medium mb-1">Description</div>
+                  <div className="text-sm opacity-80 whitespace-pre-line">
+                    {composed.description}
                   </div>
                 </div>
-              )}
 
-              {composed.keywords && (
-                <div>
-                  <div className="font-medium mb-1">Keywords</div>
-                  <div className="text-xs opacity-70">
-                    {composed.keywords}
+                {composed.hashtags && (
+                  <div>
+                    <div className="font-medium mb-1">Hashtags</div>
+                    <div className="text-xs opacity-70">
+                      {composed.hashtags}
+                    </div>
                   </div>
+                )}
+
+                {composed.keywords && (
+                  <div>
+                    <div className="font-medium mb-1">Keywords</div>
+                    <div className="text-xs opacity-70">
+                      {composed.keywords}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="button"
+                className="mt-2 w-full bg-[#E8D5A8] text-black rounded-lg py-2 text-sm font-medium hover:opacity-90 transition"
+                onClick={() => {
+                  const links = buildListingExportLinks({
+                    title: composed.title,
+                    price: dynamicPrice?.dynamic,
+                    description: composed.description,
+                  });
+                  setExportLinks(links);
+                }}
+              >
+                Generate Export Links
+              </button>
+
+              {exportLinks && (
+                <div className="lux-bento-card p-4 border border-[#26292B] bg-[#0B0D0F] rounded-xl mt-4 space-y-3">
+                  <div className="font-medium mb-2">Export Your Listing</div>
+
+                  <a
+                    href={exportLinks.ebay}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-[#E8D5A8] underline block"
+                  >
+                    List on eBay →
+                  </a>
+
+                  <a
+                    href={exportLinks.poshmark}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-[#E8D5A8] underline block"
+                  >
+                    List on Poshmark →
+                  </a>
+
+                  <a
+                    href={exportLinks.mercari}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-[#E8D5A8] underline block"
+                  >
+                    List on Mercari →
+                  </a>
+
+                  <a
+                    href={exportLinks.depop}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-[#E8D5A8] underline block"
+                  >
+                    List on Depop →
+                  </a>
+
+                  <a
+                    href={exportLinks.grailed}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-[#E8D5A8] underline block"
+                  >
+                    List on Grailed →
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!composed) return;
+                      const text = `${composed.title}\n\n${composed.description}\n\nPrice: $${
+                        dynamicPrice?.dynamic ?? ""
+                      }`;
+                      if (navigator?.clipboard?.writeText) {
+                        navigator.clipboard.writeText(text);
+                      }
+                    }}
+                    className="w-full text-xs py-2 mt-2 bg-[#1A1D20] border border-[#E8D5A8] text-[#E8D5A8] rounded-lg"
+                  >
+                    Copy Listing to Clipboard
+                  </button>
                 </div>
               )}
-            </div>
+            </>
           )}
 
           <div className="mb-6">
@@ -1002,7 +1106,7 @@ export default function SingleListing() {
               </p>
               {magicDiff.length === 0 && (
                 <p className="text-xs opacity-70 mt-2">
-                  Magic added fresh suggestions to your listing ✨
+                  Magic added fresh suggestions to your listing
                 </p>
               )}
             </div>

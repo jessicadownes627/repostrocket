@@ -38,7 +38,7 @@ export default function Preflight() {
       <div className="preflight-container">
         {isClean && (
           <div className="preflight-clean-card">
-            <h2>✨ Ready to Launch</h2>
+            <h2>Ready to Launch</h2>
             <p>Everything looks perfect. Preparing your launch deck…</p>
           </div>
         )}
@@ -53,7 +53,7 @@ export default function Preflight() {
 
             {results.errors.length > 0 && (
               <div className="preflight-card error-card">
-                <h3 className="card-title">🚫 Required Fixes</h3>
+                <h3 className="card-title">Required Fixes</h3>
                 <ul>
                   {results.errors.map((err, idx) => (
                     <li key={idx}>{err}</li>
@@ -64,7 +64,7 @@ export default function Preflight() {
 
             {results.warnings.length > 0 && (
               <div className="preflight-card warning-card">
-                <h3 className="card-title">⚠️ Strong Recommendations</h3>
+                <h3 className="card-title">Strong Recommendations</h3>
                 <ul>
                   {results.warnings.map((warn, idx) => (
                     <li key={idx}>{warn}</li>
@@ -74,7 +74,7 @@ export default function Preflight() {
             )}
 
             <div className="preflight-actions">
-              <button className="preflight-btn" onClick={() => navigate("/create")}>
+              <button className="preflight-btn" onClick={() => navigate("/prep")}>
                 Fix Items
               </button>
 

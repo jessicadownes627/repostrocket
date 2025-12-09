@@ -14,10 +14,10 @@ export default function PaywallModal({ open, onClose }) {
         </p>
 
         <ul className="paywall-features">
-          <li>🚀 Unlimited Launch Deck Access</li>
-          <li>✨ Unlimited Smart Fill</li>
-          <li>🔍 AI Review & Scoring</li>
-          <li>📸 Unlimited Photo Badges</li>
+          <li>Unlimited Launch Deck access</li>
+          <li>Unlimited Smart Fill</li>
+          <li>AI Review &amp; scoring</li>
+          <li>Unlimited photo badges</li>
         </ul>
 
         <button

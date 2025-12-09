@@ -1,5 +1,16 @@
 export function saveListingToLibrary(item) {
   try {
+    // Ensure sold fields exist
+    if (typeof item.sold !== "boolean") {
+      item.sold = false;
+    }
+    if (!Object.prototype.hasOwnProperty.call(item, "soldPrice")) {
+      item.soldPrice = null;
+    }
+    if (!Object.prototype.hasOwnProperty.call(item, "soldDate")) {
+      item.soldDate = null;
+    }
+
     // Stamp the time saved/updated
     item.savedAt = Date.now();
 
@@ -61,4 +72,3 @@ export function sortLibrary(library, method) {
       return library;
   }
 }
-

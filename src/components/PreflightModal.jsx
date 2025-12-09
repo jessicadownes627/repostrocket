@@ -29,7 +29,7 @@ export default function PreflightModal({ open, results, onClose, onFix }) {
                 <h3 className="preflight-issues-title">Required Fixes</h3>
                 <ul>
                   {errors.map((e, i) => (
-                    <li key={i}>⚠️ {e}</li>
+                    <li key={i}>{e}</li>
                   ))}
                 </ul>
               </div>
@@ -40,7 +40,7 @@ export default function PreflightModal({ open, results, onClose, onFix }) {
                 <h3 className="preflight-issues-title">Optional Improvements</h3>
                 <ul>
                   {warnings.map((w, i) => (
-                    <li key={i}>💡 {w}</li>
+                    <li key={i}>{w}</li>
                   ))}
                 </ul>
               </div>
@@ -50,7 +50,7 @@ export default function PreflightModal({ open, results, onClose, onFix }) {
 
         {errors.length === 0 && warnings.length === 0 && (
           <div className="preflight-clean">
-            <div className="pf-clean-icon">✨</div>
+            <div className="pf-clean-icon"></div>
             <p className="pf-clean-text">Everything looks perfect. Ready to launch!</p>
           </div>
         )}

@@ -42,7 +42,7 @@ export default function Drafts() {
   const handleEdit = (id) => {
     const draft = loadDraft(id);
     if (draft) {
-      navigate("/create");
+      navigate("/prep");
     }
   };
 

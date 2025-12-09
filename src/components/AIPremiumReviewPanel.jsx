@@ -8,7 +8,7 @@ export default function AIPremiumReviewPanel({ review, onClose }) {
       <div className="ai-review-cardstack">
         {/* HEADER */}
         <div className="ai-review-header">
-          <h2 className="ai-review-title">✨ Repost Rocket Review</h2>
+          <h2 className="ai-review-title">Repost Rocket Review</h2>
           <p className="ai-review-sub">Here’s how to optimize this listing</p>
           <button className="ai-close-btn" onClick={onClose}>
             ✕
@@ -24,7 +24,7 @@ export default function AIPremiumReviewPanel({ review, onClose }) {
 
         {/* CARD 2: PHOTO QUALITY */}
         <div className="ai-card">
-          <h3 className="ai-card-title">📸 Photo Quality</h3>
+          <h3 className="ai-card-title">Photo Quality</h3>
           <p className="ai-subscore">Score: {review.photo.score}/100</p>
           <ul className="ai-list">
             {review.photo.notes.map((note, i) => (
@@ -35,7 +35,7 @@ export default function AIPremiumReviewPanel({ review, onClose }) {
 
         {/* CARD 3: FIT PREDICTOR */}
         <div className="ai-card">
-          <h3 className="ai-card-title">👗 Fit Predictor</h3>
+          <h3 className="ai-card-title">Fit Predictor</h3>
           <p className="ai-subscore">{review.fit.fitType}</p>
           <ul className="ai-list">
             {review.fit.buyerQuestions.map((q, i) => (
@@ -46,7 +46,7 @@ export default function AIPremiumReviewPanel({ review, onClose }) {
 
         {/* CARD 4: RISK CHECK */}
         <div className="ai-card">
-          <h3 className="ai-card-title">⚠️ Risk Check</h3>
+          <h3 className="ai-card-title">Risk Check</h3>
           <ul className="ai-list">
             {review.risks.map((risk, i) => (
               <li key={i}>{risk}</li>

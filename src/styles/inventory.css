@@ -59,6 +59,18 @@
   gap: 16px;
 }
 
+.inventory-active-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.inventory-active-empty {
+  font-size: 0.8rem;
+  opacity: 0.5;
+  font-style: italic;
+}
+
 /* CARD */
 .inventory-card {
   background: #0d0d0d;
@@ -129,6 +141,87 @@
   margin-top: 8px;
 }
 
+.inventory-mark-sold {
+  background: none;
+  border: none;
+  color: #e8d5a8;
+  font-size: 0.75rem;
+  margin-top: 4px;
+  padding: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.inventory-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+}
+
+.inventory-modal-card {
+  background: #0d0d0d;
+  border: 1px solid #2e2e2e;
+  border-radius: 16px;
+  padding: 18px;
+  max-width: 320px;
+  width: 100%;
+}
+
+.inventory-modal-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.inventory-modal-body {
+  margin-bottom: 14px;
+}
+
+.inventory-modal-label {
+  font-size: 0.8rem;
+  opacity: 0.8;
+  margin-bottom: 4px;
+}
+
+.inventory-modal-input {
+  width: 100%;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid #444;
+  background: #111;
+  color: #fff;
+  font-size: 0.85rem;
+}
+
+.inventory-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.inventory-modal-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.inventory-modal-btn.secondary {
+  background: transparent;
+  border: 1px solid #444;
+  color: #fff;
+}
+
+.inventory-modal-btn.primary {
+  background: #e8d5a8;
+  border: 1px solid #e8d5a8;
+  color: #000;
+}
+
 .inv-badges {
   display: flex;
   flex-wrap: wrap;
@@ -184,4 +277,20 @@
   font-size: 0.8rem;
   border-radius: 8px;
   color: #ccc;
+}
+
+.inventory-sold-section {
+  margin-top: 2.5rem;
+}
+
+.inventory-sold-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.inventory-sold-empty {
+  font-size: 0.8rem;
+  opacity: 0.5;
+  font-style: italic;
 }

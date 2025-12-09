@@ -12,6 +12,7 @@ import HotTagCard from "../components/HotTagCard";
 import SmartPriceBandCard from "../components/SmartPriceBandCard";
 import CategoryMomentumCard from "../components/CategoryMomentumCard";
 import TrendSenseSearchPanel from "../components/TrendSenseSearchPanel";
+import SalesAlertsPanel from "../components/SalesAlertsPanel";
 import {
   trendingPairs,
   trendingOpportunities,
@@ -276,6 +277,9 @@ export default function TrendSenseDashboard() {
             </div>
           )}
         </div>
+
+        {/* 🔔 Sales Monitor & Alerts */}
+        <SalesAlertsPanel reports={reports} />
 
         {/* 💰 Smart Price Bands */}
         <div className="mt-14 mb-10">

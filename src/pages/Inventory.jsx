@@ -10,6 +10,10 @@ import { runTrendSenseUltra } from "../utils/trendSenseUltra";
 import { runTrendSenseInfinity } from "../utils/trendSenseInfinity";
 
 import "../styles/inventory.css";
+import MarkAsSoldModal from "../components/MarkAsSoldModal";
+import { runTrendSensePro } from "../engines/trendSensePro";
+import { generateSaleSnapshot } from "../utils/saleSnapshot";
+import SaleSnapshotCard from "../components/SaleSnapshotCard";
 
 export default function Inventory() {
   const [library, setLibrary] = useState([]);
@@ -20,6 +24,7 @@ export default function Inventory() {
   const [selectedIds, setSelectedIds] = useState([]);
   const [trendMap, setTrendMap] = useState({});
   const [infinity, setInfinity] = useState(null);
+  const [soldModalItem, setSoldModalItem] = useState(null);
 
   const navigate = useNavigate();
 
@@ -75,6 +80,7 @@ export default function Inventory() {
 
   function applyFilters(items) {
     return items.filter((item) => {
+      if (item.sold) return false;
       const catOk = filterCat === "all" || item.category === filterCat;
       const condOk = filterCond === "all" || item.condition === filterCond;
       return catOk && condOk;
@@ -109,6 +115,18 @@ export default function Inventory() {
 
     setSelectedIds([]);
     refreshLibrary();
+  }
+
+  function openSoldModal(item) {
+    setSoldModalItem(item);
+  }
+
+  function handleConfirmSold(updated) {
+    if (updated) {
+      saveListingToLibrary(updated);
+      refreshLibrary();
+    }
+    setSoldModalItem(null);
   }
 
   return (
@@ -186,7 +204,7 @@ export default function Inventory() {
 
           {/* List Next */}
           <div className="inv-infinity-section">
-            <strong>🕒 List Next:</strong>
+            <strong>List Next:</strong>
             {infinity.listNext.map((entry) => (
               <div key={entry.id} className="inv-infinity-line">
                 • {entry.item.title}
@@ -196,7 +214,7 @@ export default function Inventory() {
 
           {/* Flip Potential */}
           <div className="inv-infinity-section">
-            <strong>💰 Highest Flip Potential:</strong>
+            <strong>Highest Flip Potential:</strong>
             {infinity.flipPotential.map((entry) => (
               <div key={entry.id} className="inv-infinity-line">
                 • {entry.item.title}
@@ -206,7 +224,7 @@ export default function Inventory() {
 
           {/* Hot Tags */}
           <div className="inv-infinity-section">
-            <strong>🔥 Hot Tags This Week:</strong>
+            <strong>Hot Tags This Week:</strong>
             <div className="inv-infinity-tags">
               {infinity.hotTags.map((t, i) => (
                 <span key={i} className="inv-infinity-tag">
@@ -218,9 +236,15 @@ export default function Inventory() {
         </div>
       )}
 
-      {/* LISTINGS */}
+      {/* ACTIVE LISTINGS */}
+      <h2 className="inventory-active-title">Active Listings</h2>
       <div className="inventory-grid">
-        {applyFilters(library).map((item) => (
+        {applyFilters(library).length === 0 ? (
+          <div className="inventory-active-empty">
+            No active listings yet. Add one to get started.
+          </div>
+        ) : (
+          applyFilters(library).map((item) => (
           <div
             key={item.id}
             className={`inventory-card ${
@@ -265,7 +289,7 @@ export default function Inventory() {
                 )}
                 {item.trendScore && (
                   <span className="pill pill-trend">
-                    🔥 {item.trendScore}%
+                    {item.trendScore}%
                   </span>
                 )}
               </div>
@@ -282,10 +306,67 @@ export default function Inventory() {
               >
                 Open in Launch Deck →
               </button>
+
+              {!item.sold && (
+                <button
+                  type="button"
+                  className="inventory-mark-sold"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openSoldModal(item);
+                  }}
+                >
+                  Mark as Sold
+                </button>
+              )}
             </div>
           </div>
-        ))}
+        ))
+        )}
       </div>
+
+      {library.filter((i) => i.category === "Sports Cards").length === 0 && (
+        <div className="mt-4 text-sm text-[#d6c7a1]/70">
+          No sports cards found. Add your first card above.
+        </div>
+      )}
+
+      {/* Sold Items */}
+      <div className="inventory-sold-section">
+        <h2 className="inventory-sold-title">Sold Items</h2>
+        {library.filter((i) => i.sold).length === 0 ? (
+          <div className="inventory-sold-empty">
+            No sold items yet.
+          </div>
+        ) : (
+          library
+            .filter((i) => i.sold)
+            .map((item) => {
+              const ultra = trendMap[item.id];
+              const pro = runTrendSensePro(item);
+              const snapshot = generateSaleSnapshot(
+                item,
+                ultra,
+                pro,
+                infinity
+              );
+              return (
+                <SaleSnapshotCard
+                  key={item.id}
+                  item={item}
+                  snapshot={snapshot}
+                />
+              );
+            })
+        )}
+      </div>
+
+      {soldModalItem && (
+        <MarkAsSoldModal
+          item={soldModalItem}
+          onClose={handleConfirmSold}
+        />
+      )}
     </div>
   );
 }
