@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useListingStore } from "../store/useListingStore";
+import { buildListingExportLinks } from "../utils/exportListing";
 import "../styles/overrides.css";
 
 export default function LaunchDeck() {
@@ -12,6 +13,15 @@ export default function LaunchDeck() {
   const finalListing = listingData || {};
 
   const [activeItem, setActiveItem] = useState(null);
+
+  const safeCopy = (text) => {
+    if (!text) return;
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).catch((err) =>
+        console.error("Copy failed:", err)
+      );
+    }
+  };
 
   const handleCloseModal = () => setActiveItem(null);
 
@@ -175,18 +185,52 @@ export default function LaunchDeck() {
             </div>
 
             {/* IMAGE */}
-            <div className="w-full h-56 overflow-hidden rounded-xl">
-              <img
-                src={activeItem.photos?.[0]}
-                className="w-full h-full object-cover"
-              />
+            <div>
+              <div className="w-full h-56 overflow-hidden rounded-xl">
+                <img
+                  src={activeItem.photos?.[0]}
+                  className="w-full h-full object-cover"
+                  alt="listing"
+                />
+              </div>
+
+              {Array.isArray(activeItem.photos) &&
+                activeItem.photos.length > 1 && (
+                  <div className="mt-3 flex gap-2 overflow-x-auto hide-scrollbar">
+                    {activeItem.photos.slice(1).map((url, idx) => (
+                      <div
+                        key={idx}
+                        className="
+                          w-16 h-16 rounded-lg overflow-hidden 
+                          border border-[rgba(232,213,168,0.28)]
+                          flex-shrink-0
+                        "
+                      >
+                        <img
+                          src={url}
+                          alt="additional"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
             </div>
 
             {/* TITLE */}
             <div>
-              <label className="text-xs uppercase opacity-60">
-                Title
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs uppercase opacity-60">
+                  Title
+                </label>
+                <button
+                  type="button"
+                  className="text-[10px] px-2 py-0.5 rounded-full border border-[rgba(232,213,168,0.45)] text-[rgba(232,213,168,0.85)]"
+                  onClick={() => safeCopy(activeItem.title || "")}
+                >
+                  Copy
+                </button>
+              </div>
               <input
                 className="
                   w-full mt-1 p-3 rounded-xl bg-[#0F0F0F] 
@@ -202,9 +246,18 @@ export default function LaunchDeck() {
 
             {/* DESCRIPTION */}
             <div>
-              <label className="text-xs uppercase opacity-60">
-                Description
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs uppercase opacity-60">
+                  Description
+                </label>
+                <button
+                  type="button"
+                  className="text-[10px] px-2 py-0.5 rounded-full border border-[rgba(232,213,168,0.45)] text-[rgba(232,213,168,0.85)]"
+                  onClick={() => safeCopy(activeItem.description || "")}
+                >
+                  Copy
+                </button>
+              </div>
               <textarea
                 className="
                   w-full mt-1 p-3 rounded-xl bg-[#0F0F0F] 
@@ -261,15 +314,45 @@ export default function LaunchDeck() {
                   </div>
                 )}
                 {activeItem.price && (
-                  <div>
-                    <span className="opacity-60">Price: </span>${activeItem.price}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="opacity-60">Price: </span>${activeItem.price}
+                    </div>
+                    <button
+                      type="button"
+                      className="text-[10px] px-2 py-0.5 rounded-full border border-[rgba(232,213,168,0.45)] text-[rgba(232,213,168,0.85)]"
+                      onClick={() =>
+                        safeCopy(
+                          typeof activeItem.price === "number"
+                            ? activeItem.price.toString()
+                            : activeItem.price || ""
+                        )
+                      }
+                    >
+                      Copy
+                    </button>
                   </div>
                 )}
                 {Array.isArray(activeItem.tags) &&
                   activeItem.tags.length > 0 && (
-                    <div>
-                      <span className="opacity-60">Tags: </span>
-                      {activeItem.tags.join(", ")}
+                    <div className="flex items-center justify-between">
+                      <div className="truncate">
+                        <span className="opacity-60">Tags: </span>
+                        {activeItem.tags.join(", ")}
+                      </div>
+                      <button
+                        type="button"
+                        className="ml-2 text-[10px] px-2 py-0.5 rounded-full border border-[rgba(232,213,168,0.45)] text-[rgba(232,213,168,0.85)] flex-shrink-0"
+                        onClick={() =>
+                          safeCopy(
+                            Array.isArray(activeItem.tags)
+                              ? activeItem.tags.join(", ")
+                              : ""
+                          )
+                        }
+                      >
+                        Copy
+                      </button>
                     </div>
                   )}
               </div>
@@ -285,15 +368,50 @@ export default function LaunchDeck() {
               "
               onClick={() => {
                 const text = formatListingDetails(activeItem || finalListing);
-                if (text && navigator.clipboard?.writeText) {
-                  navigator.clipboard.writeText(text).catch((err) =>
-                    console.error("Copy failed:", err)
-                  );
-                }
+                safeCopy(text);
               }}
             >
               Copy Listing Details
             </button>
+
+            {/* MARKETPLACE DEEP LINKS */}
+            {(() => {
+              const links = buildListingExportLinks({
+                title: activeItem.title || "",
+                price: activeItem.price,
+                description: activeItem.description || "",
+              });
+
+              return (
+                <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
+                  <button
+                    type="button"
+                    className="py-2 rounded-xl bg-[#111] border border-[rgba(232,213,168,0.45)] hover:bg-[#181818] transition"
+                    onClick={() => window.open(links.ebay, "_blank", "noopener")}
+                  >
+                    eBay
+                  </button>
+                  <button
+                    type="button"
+                    className="py-2 rounded-xl bg-[#111] border border-[rgba(232,213,168,0.45)] hover:bg-[#181818] transition"
+                    onClick={() =>
+                      window.open(links.poshmark, "_blank", "noopener")
+                    }
+                  >
+                    Poshmark
+                  </button>
+                  <button
+                    type="button"
+                    className="py-2 rounded-xl bg-[#111] border border-[rgba(232,213,168,0.45)] hover:bg-[#181818] transition"
+                    onClick={() =>
+                      window.open(links.mercari, "_blank", "noopener")
+                    }
+                  >
+                    Mercari
+                  </button>
+                </div>
+              );
+            })()}
 
             {/* SAVE */}
             <button
