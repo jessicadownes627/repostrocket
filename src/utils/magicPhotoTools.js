@@ -1,5 +1,7 @@
 // src/utils/magicPhotoTools.js
 import { getPhotoWarnings } from "./photoWarnings";
+import * as bodyPix from "@tensorflow-models/body-pix";
+import "@tensorflow/tfjs-backend-webgl";
 
 // Generic helper: load an image and run a canvas filter, return data URL
 export async function applyCanvasFilter(imgUrl, filterFn) {
@@ -17,15 +19,6 @@ export async function applyCanvasFilter(imgUrl, filterFn) {
   filterFn(ctx, canvas);
 
   return canvas.toDataURL("image/jpeg", 0.9);
-}
-
-function loadImage(url) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => resolve(img);
-    img.src = url;
-  });
 }
 
 // 🔆 1. Brighten
@@ -109,14 +102,54 @@ export function removeShadows(imageUrl) {
   });
 }
 
-// 🎭 6. Blur background (fake depth)
-export function blurBackground(imageUrl) {
-  return applyCanvasFilter(imageUrl, (ctx, canvas) => {
-    // Stronger visible blur for background depth
-    ctx.filter = "blur(6px)";
-    ctx.drawImage(canvas, 0, 0);
-    ctx.filter = "none";
+// 🎭 6. Blur background (real background-only blur using segmentation)
+export async function blurBackground(imageUrl) {
+  const net = await bodyPix.load({
+    architecture: "MobileNetV1",
+    outputStride: 16,
+    multiplier: 0.75,
+    quantBytes: 2,
   });
+
+  // Load image
+  const img = await loadImage(imageUrl);
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  canvas.width = img.width;
+  canvas.height = img.height;
+
+  // Get segmentation mask
+  const segmentation = await net.segmentPerson(img, {
+    internalResolution: "medium",
+    segmentationThreshold: 0.7,
+  });
+
+  // Create mask image
+  const mask = bodyPix.toMask(
+    segmentation,
+    {
+      r: 0,
+      g: 0,
+      b: 0,
+      a: 0,
+    }, // subject — transparent
+    {
+      r: 0,
+      g: 0,
+      b: 0,
+      a: 255,
+    } // background — opaque
+  );
+
+  // Draw blurred background
+  ctx.filter = "blur(14px)";
+  ctx.drawImage(img, 0, 0);
+  ctx.filter = "none";
+
+  // Draw sharp foreground using mask
+  await bodyPix.drawMask(canvas, img, mask, 1.0, 7, false);
+
+  return canvas.toDataURL("image/jpeg", 0.92);
 }
 
 // 🧵 Studio Mode — full pipeline: brighten, de-shadow, square, warm, clarity, subtle sharpen
@@ -282,4 +315,14 @@ export async function autoFix(imageUrl) {
   }
 
   return output;
+}
+
+// Utility to load image into <img>
+function loadImage(src) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.src = src;
+  });
 }

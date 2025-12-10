@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useListingStore } from "../store/useListingStore";
 import { getPremiumStatus } from "../store/premiumStore";
 import { runMagicFill } from "../engines/MagicFillEngine";
 import LuxeChipGroup from "../components/LuxeChipGroup";
+import LuxeInput from "../components/LuxeInput";
 import { useCardParser } from "../hooks/useCardParser";
 import { buildCardTitle } from "../utils/buildCardTitle";
 import {
@@ -71,10 +72,15 @@ export default function SingleListing() {
   const [dynamicPrice, setDynamicPrice] = useState(null);
   const [composed, setComposed] = useState(null);
   const [exportLinks, setExportLinks] = useState(null);
+  const [magicAccepted, setMagicAccepted] = useState({});
   const [magicError, setMagicError] = useState("");
   const [dynamicError, setDynamicError] = useState("");
   const [cardError, setCardError] = useState("");
   const [localTitle, setLocalTitle] = useState(title);
+  const [localDescription, setLocalDescription] = useState(description);
+  const [localBrand, setLocalBrand] = useState(brand);
+  const [localPrice, setLocalPrice] = useState(price);
+
 
   const CATEGORY_OPTIONS = [
     "Tops",
@@ -132,9 +138,10 @@ export default function SingleListing() {
   useEffect(() => {
     if (!listingData?.photos || listingData.photos.length === 0) {
       navigate("/prep");
-      return;
     }
-  }, [listingData, navigate]);
+    // run ONLY once on first load
+    // DO NOT depend on listingData
+  }, []);
 
   // TrendSense Autofill — apply any saved autofill payload once
   useEffect(() => {
@@ -162,7 +169,7 @@ export default function SingleListing() {
     } catch {
       // ignore bad or missing data
     }
-  }, [setListingField]);
+  }, []);
 
   // Photo warnings based on current main/edited photo
   useEffect(() => {
@@ -186,50 +193,99 @@ export default function SingleListing() {
     };
   }, [listingData?.editedPhoto, mainPhoto]);
 
-  // Title + Dynamic Pricing: debounce pricing so typing stays smooth
-  useEffect(() => {
-    setListingField("title", localTitle);
-    setDynamicError("");
-    const trimmed = localTitle.trim();
+  const runDynamicPricing = useCallback(
+    (rawTitle) => {
+      setDynamicError("");
+      const trimmed = (rawTitle || "").trim();
 
-    if (!trimmed || trimmed.length < 3) {
-      setDynamicPrice(null);
-      return;
-    }
+      if (!trimmed || trimmed.length < 3) {
+        setDynamicPrice(null);
+        return;
+      }
 
-    let cancelled = false;
-    const timer = setTimeout(() => {
       getDynamicPrice(trimmed, condition || "Good")
         .then((out) => {
-          if (cancelled) return;
           setDynamicPrice(out);
         })
         .catch(() => {
-          if (cancelled) return;
           setDynamicPrice(null);
           setDynamicError(
             "Unable to load pricing insights right now. Please try again."
           );
         });
-    }, 400);
+    },
+    [condition]
+  );
 
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [localTitle, condition, setListingField]);
-
-  // Keep local title in sync with store (e.g. Magic Fill, card analyze)
   useEffect(() => {
-    setLocalTitle(title);
-  }, [title]);
+    if (magicAccepted?.title || parsingCard) {
+      setLocalTitle(title);
+    }
+  }, [title, magicAccepted, parsingCard]);
+
+  useEffect(() => {
+    if (magicAccepted?.description || parsingCard) {
+      setLocalDescription(description);
+    }
+  }, [description, magicAccepted, parsingCard]);
+
+  useEffect(() => {
+    if (magicAccepted?.brand || parsingCard) {
+      setLocalBrand(brand);
+    }
+  }, [brand, magicAccepted, parsingCard]);
+
+  useEffect(() => {
+    if (magicAccepted?.price || parsingCard) {
+      setLocalPrice(price);
+    }
+  }, [price, magicAccepted, parsingCard]);
 
   // -------------------------------------------
-  //  LUX INPUT FIELD
+  //  INPUT HANDLERS
   // -------------------------------------------
   const handleFieldChange = (key) => (value) => {
     setListingField(key, value);
   };
+
+  const handleTitleChange = useCallback((value) => {
+    setLocalTitle(value);
+  }, [setLocalTitle]);
+
+  const handleDescriptionChange = useCallback((value) => {
+    setLocalDescription(value);
+  }, [setLocalDescription]);
+
+  const handleBrandChange = useCallback((value) => {
+    setLocalBrand(value);
+  }, [setLocalBrand]);
+
+  const handlePriceChange = useCallback((value) => {
+    setLocalPrice(value);
+  }, [setLocalPrice]);
+
+  const commitTitleToStore = useCallback(() => {
+    const trimmed = localTitle.trim();
+    if (trimmed !== title) {
+      setListingField("title", trimmed);
+    }
+    runDynamicPricing(trimmed);
+  }, [localTitle, title, setListingField, runDynamicPricing]);
+
+  const commitDescriptionToStore = useCallback(() => {
+    if (localDescription === description) return;
+    setListingField("description", localDescription);
+  }, [localDescription, description, setListingField]);
+
+  const commitBrandToStore = useCallback(() => {
+    if (localBrand === brand) return;
+    setListingField("brand", localBrand);
+  }, [localBrand, brand, setListingField]);
+
+  const commitPriceToStore = useCallback(() => {
+    if (localPrice === price) return;
+    setListingField("price", localPrice);
+  }, [localPrice, price, setListingField]);
 
   // -------------------------------------------
   //  LUX HEADER BAR
@@ -241,20 +297,6 @@ export default function SingleListing() {
         {label}
       </div>
       <div className="h-[1px] w-full bg-[var(--lux-border)] opacity-50"></div>
-    </div>
-  );
-
-  const LuxeInput = ({ label, value, onChange, placeholder }) => (
-    <div className="mb-6">
-      <div className="text-xs uppercase opacity-70 tracking-wide mb-2">
-        {label}
-      </div>
-      <input
-        className="w-full p-3 rounded-[12px] bg-black/30 border border-[var(--lux-border)] text-[var(--lux-text)] focus:outline-none lux-input"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-      />
     </div>
   );
 
@@ -276,6 +318,7 @@ export default function SingleListing() {
     }
     try {
       setMagicLoading(true);
+      setMagicAccepted({});
       const raw = listingData || {};
       const current = {
         title: raw.title || "",
@@ -299,30 +342,37 @@ export default function SingleListing() {
 
       setMagicSuggestion(updated);
 
+      const accepted = {};
       const diffs = [];
       if (current.title !== updated.title) {
         diffs.push({
+          fieldKey: "title",
           label: "Title",
           before: current.title || "",
           after: updated.title || "",
           reason: "AI improved clarity and searchability.",
         });
+        accepted.title = true;
       }
       if (current.description !== updated.description) {
         diffs.push({
+          fieldKey: "description",
           label: "Description",
           before: current.description || "",
           after: updated.description || "",
           reason: "AI expanded and polished the description.",
         });
+        accepted.description = true;
       }
       if (current.price !== updated.price) {
         diffs.push({
+          fieldKey: "price",
           label: "Price",
           before: current.price || "",
           after: updated.price || "",
           reason: "AI adjusted price based on demand and condition.",
         });
+        accepted.price = true;
       }
 
       const beforeTags = Array.isArray(current.tags)
@@ -333,6 +383,7 @@ export default function SingleListing() {
         : "";
       if (beforeTags !== afterTags) {
         diffs.push({
+          fieldKey: "tags",
           label: "Tags",
           before: beforeTags,
           after: afterTags,
@@ -342,6 +393,7 @@ export default function SingleListing() {
 
       // Always store diffs (even empty) so drawer can show
       setMagicDiff(diffs);
+      setMagicAccepted(accepted);
       setShowReview(true);
     } catch (err) {
       console.error("Magic Fill failed:", err);
@@ -426,16 +478,18 @@ export default function SingleListing() {
     try {
       if (!magicSuggestion) return;
 
-      if (magicSuggestion.title) {
+      const accepted = magicAccepted || {};
+
+      if (magicSuggestion.title && accepted.title !== false) {
         setListingField("title", magicSuggestion.title);
       }
-      if (magicSuggestion.description) {
+      if (magicSuggestion.description && accepted.description !== false) {
         setListingField("description", magicSuggestion.description);
       }
-      if (magicSuggestion.price) {
+      if (magicSuggestion.price && accepted.price !== false) {
         setListingField("price", magicSuggestion.price);
       }
-      if (Array.isArray(magicSuggestion.tags)) {
+      if (Array.isArray(magicSuggestion.tags) && accepted.tags !== false) {
         setListingField("tags", magicSuggestion.tags);
       }
 
@@ -448,6 +502,8 @@ export default function SingleListing() {
   // -------------------------------------------
   //  MAIN COMPONENT RENDER
   // -------------------------------------------
+  console.log("🔁 SingleListing re-render");
+
   return (
     <div className="app-wrapper px-6 py-10 max-w-2xl mx-auto">
 
@@ -759,15 +815,17 @@ export default function SingleListing() {
 
           <LuxeInput
             label="Card Title"
-            value={title}
-            onChange={handleFieldChange("title")}
+            value={localTitle}
+            onChange={handleTitleChange}
+            onBlur={commitTitleToStore}
             placeholder="e.g., 2023 Prizm Shohei Ohtani #25 Silver"
           />
 
           <LuxeInput
             label="Card Notes"
-            value={description}
-            onChange={handleFieldChange("description")}
+            value={localDescription}
+            onChange={handleDescriptionChange}
+            onBlur={commitDescriptionToStore}
             placeholder="Sharp corners, clean surface, no creases."
           />
         </>
@@ -809,21 +867,24 @@ export default function SingleListing() {
           <LuxeInput
             label="Title"
             value={localTitle}
-            onChange={setLocalTitle}
+            onChange={handleTitleChange}
+            onBlur={commitTitleToStore}
             placeholder="e.g., Lululemon Define Jacket — Size 6"
           />
 
           <LuxeInput
             label="Description"
-            value={description}
-            onChange={handleFieldChange("description")}
+            value={localDescription}
+            onChange={handleDescriptionChange}
+            onBlur={commitDescriptionToStore}
             placeholder="Brief, luxe description…"
           />
 
           <LuxeInput
             label="Price"
-            value={price}
-            onChange={handleFieldChange("price")}
+            value={localPrice}
+            onChange={handlePriceChange}
+            onBlur={commitPriceToStore}
             placeholder="e.g., 48"
           />
 
@@ -1016,8 +1077,9 @@ export default function SingleListing() {
 
           <LuxeInput
             label="Brand"
-            value={brand}
-            onChange={handleFieldChange("brand")}
+            value={localBrand}
+            onChange={handleBrandChange}
+            onBlur={commitBrandToStore}
             placeholder="e.g., Lululemon, Nike, Zara"
           />
 
@@ -1081,9 +1143,38 @@ export default function SingleListing() {
 
             <div className="space-y-4 max-h-[320px] overflow-y-auto pr-1">
               {magicDiff.map((item, idx) => (
-                <div key={idx} className="border border-[rgba(232,213,168,0.28)] rounded-xl p-3 bg-black/30">
-                  <div className="text-xs uppercase tracking-wide opacity-70 mb-1">
-                    {item.label}
+                <div
+                  key={idx}
+                  className="border border-[rgba(232,213,168,0.28)] rounded-xl p-3 bg-black/30"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="text-xs uppercase tracking-wide opacity-70">
+                      {item.label}
+                    </div>
+                    <button
+                      type="button"
+                      className={`text-[10px] px-2 py-0.5 rounded-full border transition ${
+                        magicAccepted[item.fieldKey || item.label] !== false
+                          ? "border-[rgba(232,213,168,0.65)] text-[rgba(232,213,168,0.9)] bg-black/40"
+                          : "border-white/20 text-white/60 bg-black/20"
+                      }`}
+                      onClick={() => {
+                        const key = item.fieldKey || item.label;
+                        setMagicAccepted((prev) => {
+                          const current = prev && Object.prototype.hasOwnProperty.call(prev, key)
+                            ? prev[key]
+                            : true;
+                          return {
+                            ...(prev || {}),
+                            [key]: !current,
+                          };
+                        });
+                      }}
+                    >
+                      {magicAccepted[item.fieldKey || item.label] !== false
+                        ? "Will Apply"
+                        : "Skip"}
+                    </button>
                   </div>
                   <div className="flex flex-col gap-2 text-sm">
                     <div>
@@ -1142,7 +1233,7 @@ export default function SingleListing() {
             }, 180);
           }}
         >
-          Continue to LaunchDeck →
+          Preview Your Listing →
         </button>
 
         <button

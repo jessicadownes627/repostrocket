@@ -2,6 +2,9 @@ import React, { useState, useRef, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import "../styles/launchdeck.css";
+import PreviewCard from "../components/PreviewCard";
+import { buildPlatformPreview } from "../utils/platformPreview";
+import { formatDescriptionByPlatform } from "../utils/formatDescriptionByPlatform";
 
 import {
   formatEbay,
@@ -691,10 +694,35 @@ function BatchCard({ item, index, updateItem, setActiveDetailIndex }) {
     setEnhancedOutput(`${base}\n\n${s}`);
   }
 
+  const platformPreview = buildPlatformPreview(item);
+  const platformDescriptions = formatDescriptionByPlatform({
+    ...item,
+    description:
+      platformPreview.summaryDescription || item.description,
+  });
+
   return (
     <div className="ld-card">
-      <div className="ld-card-header">
-        <h2 className="ld-item-title">{item?.title || `Item ${index + 1}`}</h2>
+      {/* Shared Preview UI — one card per marketplace */}
+      <div className="space-y-4 mb-4">
+        {["ebay", "poshmark", "mercari"].map((platformKey) => (
+          <PreviewCard
+            key={platformKey}
+            platform={platformKey}
+            item={item}
+            platformTitle={
+              platformPreview?.titles
+                ? platformPreview.titles[platformKey]
+                : undefined
+            }
+            platformDescription={platformDescriptions[platformKey]}
+            onEdit={
+              setActiveDetailIndex
+                ? () => setActiveDetailIndex(index)
+                : undefined
+            }
+          />
+        ))}
       </div>
 
       {(item.autoCategory || item.autoBrand) && (
@@ -705,24 +733,6 @@ function BatchCard({ item, index, updateItem, setActiveDetailIndex }) {
           {item.autoBrand && (
             <span className="ld-pill ld-pill-muted">{item.autoBrand}</span>
           )}
-        </div>
-      )}
-
-      {item.photos?.[0] && (
-        <div className="relative">
-          {item.editedPhoto && (
-            <div
-              className="absolute top-2 right-2 px-2 py-1 rounded-md text-[10px] font-semibold
-                         bg-[#F5E7D0] text-black shadow-md border border-black/40"
-            >
-              Edited
-            </div>
-          )}
-          <img
-            src={item.editedPhoto || item.photos[0]}
-            className="ld-photo border border-white/20 rounded-lg"
-            alt="card"
-          />
         </div>
       )}
 

@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useListingStore } from "../store/useListingStore";
-import { buildListingExportLinks } from "../utils/exportListing";
+import PreviewCard from "../components/PreviewCard";
+import { buildPlatformPreview } from "../utils/platformPreview";
+import { formatDescriptionByPlatform } from "../utils/formatDescriptionByPlatform";
 import "../styles/overrides.css";
 
 export default function LaunchDeck() {
@@ -9,8 +11,28 @@ export default function LaunchDeck() {
   const navigate = useNavigate();
   const { listingData, setListing } = useListingStore();
 
-  const listings = listingData?.photos?.length ? [{ ...listingData }] : [];
+  const locationItems = location.state?.items;
+  const listings =
+    locationItems && locationItems.length
+      ? locationItems
+      : listingData?.photos?.length
+      ? [{ ...listingData }]
+      : [];
   const finalListing = listingData || {};
+
+  const activeListing = listings.length ? listings[0] : null;
+  const platformPreview = activeListing
+    ? buildPlatformPreview(activeListing)
+    : null;
+
+  const platformDescriptions =
+    activeListing && platformPreview
+      ? formatDescriptionByPlatform({
+          ...activeListing,
+          description:
+            platformPreview.summaryDescription || activeListing.description,
+        })
+      : null;
 
   const [activeItem, setActiveItem] = useState(null);
 
@@ -65,99 +87,40 @@ export default function LaunchDeck() {
       {/* HEADER */}
       <div className="mb-8">
         <h1 className="text-[30px] font-semibold tracking-tight sparkly-header header-glitter">
-          LaunchDeck
+          Listing Preview
         </h1>
         <p className="text-sm opacity-70 mt-1 mb-3">
-          Final polish before posting.
+          Preview your listing for each marketplace, copy details, and launch.
         </p>
-        <button
-          onClick={() => navigate("/launch-listing")}
-          className="lux-small-btn"
-        >
-          Launch Listing
-        </button>
       </div>
 
-      {/* CAROUSEL */}
-      <div
-        className="
-          flex gap-6 overflow-x-auto snap-x snap-mandatory 
-          pb-4 hide-scrollbar
-        "
-      >
-        {listings.map((item, idx) => (
-          <div
-            key={item.id || idx}
-            className="
-              min-w-[260px] snap-center 
-              bg-[rgba(16,16,16,0.55)]
-              border border-[rgba(232,213,168,0.40)]
-              rounded-2xl overflow-hidden relative
-              shadow-[0_0_18px_rgba(0,0,0,0.45)]
-              transition-all duration-300
-              hover:shadow-[0_0_22px_rgba(232,213,168,0.25)]
-            "
-            onClick={() => setActiveItem(item)}
-          >
-            {/* Image */}
-            <div className="h-48 w-full overflow-hidden">
-              <img
-                src={item.photos?.[0]}
-                className="w-full h-full object-cover"
-                alt="item"
-              />
-            </div>
-
-            {/* CONTENT */}
-            <div className="p-4 space-y-1">
-              <div className="font-semibold text-[15px] text-[#F4E9D5]">
-                {item.title || "Untitled Listing"}
-              </div>
-              {item.brand && (
-                <div className="text-[11px] opacity-80">
-                  {item.brand}
-                  {item.size ? ` · ${item.size}` : ""}
-                </div>
-              )}
-              {!item.brand && item.size && (
-                <div className="text-[11px] opacity-80">
-                  Size {item.size}
-                </div>
-              )}
-
-              {(item.category || item.condition) && (
-                <div className="text-[11px] opacity-70">
-                  {[item.category, item.condition].filter(Boolean).join(" · ")}
-                </div>
-              )}
-
-              <div className="text-xs opacity-70 line-clamp-2">
-                {item.description || "No description provided."}
-              </div>
-              {item.price && (
-                <div className="text-[11px] opacity-80 mt-0.5">
-                  Price: ${item.price}
-                </div>
-              )}
-              {Array.isArray(item.tags) && item.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {item.tags.slice(0, 3).map((tag) => (
-                    <span
-                      key={tag}
-                      className="px-2 py-0.5 rounded-full border border-[rgba(232,213,168,0.35)] text-[10px] opacity-80"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {/* Glossy shimmer */}
-              <div className="premium-gloss absolute inset-0 pointer-events-none"></div>
-            </div>
-          </div>
-        ))}
-      </div>
+      {/* PREVIEW CARDS */}
+      {listings.length === 0 ? (
+        <div className="text-sm opacity-60">
+          No listing found to preview. Go back and create a listing first.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {["ebay", "poshmark", "mercari"].map((platformKey) => (
+            <PreviewCard
+              key={platformKey}
+              platform={platformKey}
+              item={activeListing}
+              platformTitle={
+                platformPreview?.titles
+                  ? platformPreview.titles[platformKey]
+                  : undefined
+              }
+              platformDescription={
+                platformDescriptions
+                  ? platformDescriptions[platformKey]
+                  : undefined
+              }
+              onEdit={() => setActiveItem(activeListing)}
+            />
+          ))}
+        </div>
+      )}
 
       {/* EDIT MODAL */}
       {activeItem && (
@@ -373,45 +336,6 @@ export default function LaunchDeck() {
             >
               Copy Listing Details
             </button>
-
-            {/* MARKETPLACE DEEP LINKS */}
-            {(() => {
-              const links = buildListingExportLinks({
-                title: activeItem.title || "",
-                price: activeItem.price,
-                description: activeItem.description || "",
-              });
-
-              return (
-                <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
-                  <button
-                    type="button"
-                    className="py-2 rounded-xl bg-[#111] border border-[rgba(232,213,168,0.45)] hover:bg-[#181818] transition"
-                    onClick={() => window.open(links.ebay, "_blank", "noopener")}
-                  >
-                    eBay
-                  </button>
-                  <button
-                    type="button"
-                    className="py-2 rounded-xl bg-[#111] border border-[rgba(232,213,168,0.45)] hover:bg-[#181818] transition"
-                    onClick={() =>
-                      window.open(links.poshmark, "_blank", "noopener")
-                    }
-                  >
-                    Poshmark
-                  </button>
-                  <button
-                    type="button"
-                    className="py-2 rounded-xl bg-[#111] border border-[rgba(232,213,168,0.45)] hover:bg-[#181818] transition"
-                    onClick={() =>
-                      window.open(links.mercari, "_blank", "noopener")
-                    }
-                  >
-                    Mercari
-                  </button>
-                </div>
-              );
-            })()}
 
             {/* SAVE */}
             <button
