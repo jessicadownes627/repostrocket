@@ -61,7 +61,6 @@ export default function SingleListing() {
       cardAttributes && typeof cardAttributes === "object" && Object.keys(cardAttributes).length
     );
 
-  const [isLoaded, setIsLoaded] = useState(false);
   const [showReview, setShowReview] = useState(false);
   const [magicSuggestion, setMagicSuggestion] = useState(null);
   const [magicDiff, setMagicDiff] = useState(null);
@@ -130,19 +129,11 @@ export default function SingleListing() {
     "Sporty",
   ];
 
-  // -------------------------------------------
-  //  SAFE BOOT — prevents black screen
-  // -------------------------------------------
   useEffect(() => {
-    // If user arrives with NO MagicPrep data, kick them back
     if (!listingData?.photos || listingData.photos.length === 0) {
       navigate("/prep");
       return;
     }
-
-    // Delay just to allow CSS fade-in
-    const t = setTimeout(() => setIsLoaded(true), 150);
-    return () => clearTimeout(t);
   }, [listingData, navigate]);
 
   // TrendSense Autofill — apply any saved autofill payload once
@@ -232,14 +223,6 @@ export default function SingleListing() {
   useEffect(() => {
     setLocalTitle(title);
   }, [title]);
-
-  if (!isLoaded) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-center text-[var(--lux-text)]">
-        <div className="fade-in text-sm opacity-70">Loading your listing…</div>
-      </div>
-    );
-  }
 
   // -------------------------------------------
   //  LUX INPUT FIELD
