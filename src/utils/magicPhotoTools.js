@@ -112,11 +112,10 @@ export function removeShadows(imageUrl) {
 // 🎭 6. Blur background (fake depth)
 export function blurBackground(imageUrl) {
   return applyCanvasFilter(imageUrl, (ctx, canvas) => {
-    ctx.globalAlpha = 0.75;
-    ctx.filter = "blur(8px)";
+    // Stronger visible blur for background depth
+    ctx.filter = "blur(6px)";
     ctx.drawImage(canvas, 0, 0);
     ctx.filter = "none";
-    ctx.globalAlpha = 1;
   });
 }
 
@@ -246,7 +245,10 @@ export async function whiteBackgroundPro(imageUrl) {
   }
 
   subjectCtx.putImageData(masked, 0, 0);
+  // Apply a brighter, higher-contrast look to the subject on white
+  outCtx.filter = "brightness(1.35) contrast(1.15) saturate(0.9)";
   outCtx.drawImage(subjectCanvas, 0, 0);
+  outCtx.filter = "none";
 
   // Export result
   return outCanvas.toDataURL("image/jpeg", 0.94);

@@ -7,7 +7,7 @@ import "../styles/createListing.css"; // still safe to reuse
 export default function MagicCardPrep() {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
-  const { setListingField } = useListingStore();
+  const { setListingField, resetListing } = useListingStore();
 
   const [previews, setPreviews] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -18,6 +18,11 @@ export default function MagicCardPrep() {
   const handleFiles = useCallback(
     async (files) => {
       const incoming = Array.from(files || []);
+      if (!incoming.length) return;
+
+      // New card upload: start from a clean listing
+      resetListing();
+
       const converted = [];
 
       for (const file of incoming) {
@@ -46,7 +51,7 @@ export default function MagicCardPrep() {
       setListingField("photos", urls);
       setListingField("category", "Sports Cards");
     },
-    [setListingField]
+    [resetListing, setListingField]
   );
 
   /* ------------------------------------------------------ */

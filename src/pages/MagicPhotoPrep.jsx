@@ -8,7 +8,7 @@ export default function MagicPhotoPrep() {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
 
-  const { setListingField } = useListingStore();
+  const { setListingField, resetListing } = useListingStore();
 
   const [previews, setPreviews] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -18,6 +18,11 @@ export default function MagicPhotoPrep() {
   /* ------------------------------------------------------ */
   const handleFiles = useCallback(
     async (files) => {
+      if (!files || files.length === 0) return;
+
+      // New item: clear any existing listing data before setting photos
+      resetListing();
+
       const converted = [];
 
       for (const original of files || []) {
@@ -51,7 +56,7 @@ export default function MagicPhotoPrep() {
       // STORE PHOTOS — always save fresh URLs
       setListingField("photos", urls);
     },
-    [setListingField]
+    [resetListing, setListingField]
   );
 
   /* ------------------------------------------------------ */

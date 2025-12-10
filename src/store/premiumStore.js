@@ -34,6 +34,19 @@ const getDeviceId = () => {
 
 // Main premium check
 export const getPremiumStatus = () => {
+  // 0. Always treat development as premium for testing
+  try {
+    if (
+      typeof import.meta !== "undefined" &&
+      import.meta.env &&
+      import.meta.env.MODE === "development"
+    ) {
+      return true;
+    }
+  } catch {
+    // ignore env lookup failures
+  }
+
   // 1. Dev override (never remove)
   if (localStorage.getItem("rr_dev_premium") === "true") return true;
 

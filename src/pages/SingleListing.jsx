@@ -27,24 +27,6 @@ import "../styles/overrides.css";
 export default function SingleListing() {
   const navigate = useNavigate();
 
-  // Photo Hints (professional, rotating)
-  const photoHints = [
-    "Center the item in the frame for the most accurate analysis.",
-    "Use even lighting. Reduce shadows for clearer detail.",
-    "Hold your phone steady for one second to avoid blur.",
-    "Move closer. Sharp detail increases buyer confidence.",
-    "Keep the background simple so the AI can detect edges cleanly.",
-    "Wipe your camera lens to remove haze and improve clarity.",
-    "Avoid overhead glare. Tilt slightly to reduce reflections.",
-    "Place smaller items on a flat, solid surface for better detection.",
-    "Shoot straight-on for accurate shape and color.",
-    "Natural daylight gives the cleanest, most accurate results.",
-    "Fill most of the frame with the item. Empty space lowers detail.",
-    "After capturing, use Auto-Square for marketplace-ready formatting.",
-  ];
-
-  const [hintIndex, setHintIndex] = useState(0);
-
   // Pull listing data from global store
   const {
     listingData,
@@ -93,6 +75,7 @@ export default function SingleListing() {
   const [magicError, setMagicError] = useState("");
   const [dynamicError, setDynamicError] = useState("");
   const [cardError, setCardError] = useState("");
+  const [localTitle, setLocalTitle] = useState(title);
 
   const CATEGORY_OPTIONS = [
     "Tops",
@@ -212,14 +195,10 @@ export default function SingleListing() {
     };
   }, [listingData?.editedPhoto, mainPhoto]);
 
-  // Rotate photo hints every 6 seconds
+  // Keep local title in sync with store (e.g. Magic Fill, card analyze)
   useEffect(() => {
-    const interval = setInterval(
-      () => setHintIndex((i) => (i + 1) % photoHints.length),
-      6000
-    );
-    return () => clearInterval(interval);
-  }, [photoHints.length]);
+    setLocalTitle(title);
+  }, [title]);
 
   if (!isLoaded) {
     return (
@@ -235,24 +214,39 @@ export default function SingleListing() {
   const handleFieldChange = (key) => (value) => {
     setListingField(key, value);
   };
-  const handleTitleChange = async (value) => {
-    setListingField("title", value);
+
+  // Title + Dynamic Pricing: debounce pricing so typing stays smooth
+  useEffect(() => {
+    setListingField("title", localTitle);
     setDynamicError("");
-    const trimmed = value.trim();
+    const trimmed = localTitle.trim();
+
     if (!trimmed || trimmed.length < 3) {
       setDynamicPrice(null);
       return;
     }
-    try {
-      const out = await getDynamicPrice(trimmed, condition || "Good");
-      setDynamicPrice(out);
-    } catch {
-      setDynamicPrice(null);
-      setDynamicError(
-        "Unable to load pricing insights right now. Please try again."
-      );
-    }
-  };
+
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      getDynamicPrice(trimmed, condition || "Good")
+        .then((out) => {
+          if (cancelled) return;
+          setDynamicPrice(out);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setDynamicPrice(null);
+          setDynamicError(
+            "Unable to load pricing insights right now. Please try again."
+          );
+        });
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [localTitle, condition, setListingField]);
 
   // -------------------------------------------
   //  LUX HEADER BAR
@@ -492,23 +486,25 @@ export default function SingleListing() {
 
         <div className="lux-card-title mb-3">Main Photo</div>
         <div className="text-sm opacity-70 mb-3">
-          This is the hero image buyers will see first.
+          This is your primary listing photo.
         </div>
 
         {displayedPhoto ? (
           <>
-            <img
-              src={displayedPhoto}
-              alt="Main Photo"
-              className="rounded-[14px] w-full h-auto object-cover"
-            />
-            {listingData?.editedPhoto && (
-              <div className="absolute top-3 left-3 px-2 py-1 rounded-md text-[10px] font-semibold bg-[#E8D5A8] text-black shadow-md border border-black/40">
-                Edited
-              </div>
-            )}
+            <div className="relative">
+              <img
+                src={displayedPhoto}
+                alt="Main Photo"
+                className="rounded-[14px] w-full h-auto object-cover"
+              />
+              {listingData?.editedPhoto && (
+                <div className="absolute top-2 right-2 z-10 px-2 py-1 rounded-md text-[10px] font-semibold bg-[#E8D5A8] text-black shadow-md border border-black/40">
+                  Edited
+                </div>
+              )}
+            </div>
             <div className="text-center text-xs opacity-70 mt-3 select-none">
-              {photoHints[hintIndex]}
+              Use the tools below to refine your photo.
             </div>
             {!listingData?.editedPhoto && photoWarnings.length > 0 && (
               <div className="mt-3 space-y-1">
@@ -824,26 +820,13 @@ export default function SingleListing() {
             )}
           </div>
 
-          {/* MAGIC LISTING LAUNCHER CTA */}
-          <div className="mt-4 mb-10">
-            <button
-              onClick={() => navigate("/launch-listing")}
-              className="w-full py-3.5 rounded-2xl bg-[#E8D5A8] text-[#111] font-semibold tracking-wide text-sm border border-[rgba(255,255,255,0.25)] shadow-[0_4px_10px_rgba(0,0,0,0.45)] hover:bg-[#f0e1bf] transition-all active:scale-[0.98]"
-            >
-              Launch Listing
-            </button>
-            <div className="text-center opacity-60 text-xs mt-1">
-              Generate optimized titles & descriptions for every marketplace.
-            </div>
-          </div>
-
           {/* CORE INFORMATION */}
           <HeaderBar label="Details Refined" />
 
           <LuxeInput
             label="Title"
-            value={title}
-            onChange={handleTitleChange}
+            value={localTitle}
+            onChange={setLocalTitle}
             placeholder="e.g., Lululemon Define Jacket — Size 6"
           />
 
@@ -1177,6 +1160,13 @@ export default function SingleListing() {
           }}
         >
           Continue to LaunchDeck →
+        </button>
+
+        <button
+          onClick={() => navigate("/launch-listing")}
+          className="w-full py-3.5 rounded-2xl bg-[#E8D5A8] text-[#111] font-semibold tracking-wide text-sm border border-[rgba(255,255,255,0.25)] shadow-[0_4px_10px_rgba(0,0,0,0.45)] hover:bg-[#f0e1bf] transition-all active:scale-[0.98]"
+        >
+          Launch Listing (Advanced Titles)
         </button>
 
         <button
