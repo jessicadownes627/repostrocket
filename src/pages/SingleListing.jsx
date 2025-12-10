@@ -195,26 +195,6 @@ export default function SingleListing() {
     };
   }, [listingData?.editedPhoto, mainPhoto]);
 
-  // Keep local title in sync with store (e.g. Magic Fill, card analyze)
-  useEffect(() => {
-    setLocalTitle(title);
-  }, [title]);
-
-  if (!isLoaded) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-center text-[var(--lux-text)]">
-        <div className="fade-in text-sm opacity-70">Loading your listing…</div>
-      </div>
-    );
-  }
-
-  // -------------------------------------------
-  //  LUX INPUT FIELD
-  // -------------------------------------------
-  const handleFieldChange = (key) => (value) => {
-    setListingField(key, value);
-  };
-
   // Title + Dynamic Pricing: debounce pricing so typing stays smooth
   useEffect(() => {
     setListingField("title", localTitle);
@@ -247,6 +227,26 @@ export default function SingleListing() {
       clearTimeout(timer);
     };
   }, [localTitle, condition, setListingField]);
+
+  // Keep local title in sync with store (e.g. Magic Fill, card analyze)
+  useEffect(() => {
+    setLocalTitle(title);
+  }, [title]);
+
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-center text-[var(--lux-text)]">
+        <div className="fade-in text-sm opacity-70">Loading your listing…</div>
+      </div>
+    );
+  }
+
+  // -------------------------------------------
+  //  LUX INPUT FIELD
+  // -------------------------------------------
+  const handleFieldChange = (key) => (value) => {
+    setListingField(key, value);
+  };
 
   // -------------------------------------------
   //  LUX HEADER BAR
