@@ -4,10 +4,7 @@ export default function Welcome() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#050505] relative overflow-hidden">
-
-      {/* BACKGROUND EMERALD GRADIENT */}
-      <div className="absolute inset-0 bg-gradient-to-br from-black via-[#0B1A14] to-[#04120D] opacity-80"></div>
+    <div className="min-h-screen flex items-center justify-center bg-[#030303] relative overflow-hidden">
 
       {/* CONTENT */}
       <div className="relative z-10 text-center px-8 max-w-xl">
@@ -33,13 +30,13 @@ export default function Welcome() {
           onClick={() => navigate("/dashboard")}
           className="
             mt-4 px-8 py-4 text-lg font-medium
-            bg-gradient-to-br from-[#0D201A] to-[#07120E]
-            text-[#E8DCC0]
-            border border-[#CBB78A]/40
+            bg-[#050505]
+            text-[#F5EBD5]
+            border border-[#E8DCC0]/50
             rounded-2xl
-            shadow-[0_0_20px_rgba(203,183,138,0.25)]
-            hover:shadow-[0_0_26px_rgba(203,183,138,0.45)]
-            hover:border-[#E8DCC0]/70
+            shadow-[0_0_16px_rgba(232,220,192,0.18)]
+            hover:shadow-[0_0_24px_rgba(232,220,192,0.35)]
+            hover:border-[#F5EBD5]/70
             transition-all duration-300
             backdrop-blur-md
           "

@@ -20,10 +20,9 @@
   --lux-border: rgba(203, 183, 138, 0.35);
   --lux-border-strong: rgba(203, 183, 138, 0.65);
 
-  --lux-card-bg: rgba(0, 0, 0, 0.55);
-  --lux-card-border: rgba(255, 235, 200, 0.22);
-  --lux-card-glow: 0 0 26px rgba(255, 235, 200, 0.18);
-  --lux-champagne: #f7ebd3;
+  --lux-card-bg: linear-gradient(135deg, #050505, #0d0d0d);
+  --lux-card-border: rgba(255, 255, 255, 0.4);
+  --lux-card-glow: 0 0 40px rgba(255, 255, 255, 0.2);
 
   --lux-gold: #cbb78a;
   --lux-gold-glow: rgba(203, 183, 138, 0.42);

@@ -49,6 +49,7 @@ export default function Dashboard() {
         <p className="text-sm opacity-70 mt-1 tracking-wide">
           Luxury AI selling-prep. Fast. Polished. Profitable.
         </p>
+        <div className="lux-divider lux-divider-hero"></div>
       </div>
 
       <div className="rr-section-label">START SELLING</div>
@@ -75,6 +76,7 @@ export default function Dashboard() {
         title="TrendSense"
         subtitle="Insights"
         description="Real-time selling trends. See what’s moving right now."
+        premium
         onClick={handleTrendSense}
       />
 
@@ -82,16 +84,17 @@ export default function Dashboard() {
         title="Batch Mode"
         subtitle="Multi-Item"
         description="Prep large batches in one streamlined flow."
+        premium
         onClick={handleBatchMode}
       />
 
       {/* UPGRADE STRIP */}
+      <div className="lux-divider"></div>
       <div
-        className="mb-8 bg-[#CBB78A]/10 border border-[#CBB78A]/30 rounded-xl p-4 
-                   text-center cursor-pointer hover:bg-[#CBB78A]/20 transition mt-12"
+        className="lux-upgrade-card"
         onClick={() => navigate("/settings")}
       >
-        <div className="text-[13px] tracking-wide text-[#E8E1D0]">
+        <div className="lux-upgrade-text">
           Unlock unlimited Magic + Batch Mode → Upgrade to Premium
         </div>
       </div>
