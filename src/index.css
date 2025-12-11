@@ -17,20 +17,23 @@
   --lux-bg: #0a0a0a;
   --lux-text: #e8e1d0;
 
-  --lux-border: rgba(232, 213, 168, 0.35);
-  --lux-border-strong: rgba(232, 213, 168, 0.65);
+  --lux-border: rgba(203, 183, 138, 0.35);
+  --lux-border-strong: rgba(203, 183, 138, 0.65);
 
-  --lux-card-bg: linear-gradient(
-    140deg,
-    rgba(16, 16, 16, 0.82),
-    rgba(6, 6, 6, 0.92)
-  );
+  --lux-card-bg: rgba(0, 0, 0, 0.55);
+  --lux-card-border: rgba(255, 235, 200, 0.22);
+  --lux-card-glow: 0 0 26px rgba(255, 235, 200, 0.18);
+  --lux-champagne: #f7ebd3;
 
-  --lux-gold: #e8d7b9;
-  --lux-gold-glow: rgba(232, 213, 168, 0.42);
+  --lux-gold: #cbb78a;
+  --lux-gold-glow: rgba(203, 183, 138, 0.42);
 
-  --lux-emerald: rgba(42, 122, 94, 0.28);
-  --lux-emerald-glow: rgba(42, 122, 94, 0.55);
+  --lux-emerald-dark: #032920;
+  --lux-emerald-mid: #013024;
+  --lux-emerald-light: #02150f;
+
+  --lux-emerald: rgba(3, 41, 32, 0.5);
+  --lux-emerald-glow: rgba(3, 41, 32, 0.65);
 
   --lux-radius: 24px;
   --lux-radius-sm: 14px;
@@ -182,26 +185,46 @@ body::after {
 /* ------------------------------------------------------ */
 
 .lux-dashboard-card {
-  background: linear-gradient(
-      135deg,
-      rgba(14,14,14,0.96),
-      rgba(4,4,4,0.96)
-    );
-  border: 1.5px solid rgba(232, 213, 168, 0.8); /* stronger champagne outline */
-  border-radius: 24px;
-  padding: 24px 26px;
-  transition: all 0.28s ease;
+  position: relative;
+  overflow: hidden;
+  border-radius: 26px;
+  padding: 26px 28px;
+  border: 1.5px solid rgba(232, 213, 168, 0.35);
+  background: radial-gradient(circle at top left, rgba(34,34,34,0.85), rgba(5,5,5,0.9))
+    ,linear-gradient(135deg, rgba(12,12,12,0.95), rgba(4,4,4,0.95));
+  backdrop-filter: blur(20px) saturate(130%);
+  -webkit-backdrop-filter: blur(20px) saturate(130%);
   box-shadow:
-    0 0 22px rgba(0,0,0,0.7),
-    0 0 16px rgba(232,213,168,0.18);
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    0 12px 28px rgba(0,0,0,0.65),
+    0 0 25px rgba(4,4,4,0.7);
+  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.lux-dashboard-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(120deg, rgba(255,255,255,0.18), transparent 60%);
+  opacity: 0.15;
+  pointer-events: none;
+  transform: translateY(-30%);
+  transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
 .lux-dashboard-card:hover {
-  border-color: var(--lux-border-strong);
+  border-color: rgba(232, 213, 168, 0.8);
   box-shadow:
-    0 0 28px rgba(0,0,0,0.8),
-    0 0 22px rgba(232,213,168,0.28);
+    inset 0 1px 0 rgba(255,255,255,0.12),
+    0 18px 36px rgba(0,0,0,0.7),
+    0 0 32px rgba(232,213,168,0.35);
   transform: translateY(-3px);
+}
+
+.lux-dashboard-card:hover::after {
+  opacity: 0.25;
+  transform: translateY(0);
 }
 
 .lux-card-title {
@@ -216,6 +239,41 @@ body::after {
   opacity: 0.6;
   letter-spacing: 2.6px;
   text-transform: uppercase;
+}
+
+/* Luxe tint variations — subtle AF, not messy */
+.tint-gold {
+  background: linear-gradient(to bottom right, #1a1a1a, #0d0d0d);
+  border: 1px solid rgba(203, 183, 138, 0.25);
+}
+
+.tint-blue {
+  background: linear-gradient(to bottom right, #0f1117, #05070a);
+  border: 1px solid rgba(120, 160, 255, 0.15);
+}
+
+.tint-emerald {
+  background: linear-gradient(to bottom right, #0d120f, #050807);
+  border: 1px solid rgba(80, 255, 180, 0.12);
+}
+
+.tint-gold-premium {
+  background: linear-gradient(to bottom right, #1a1a1a, #111);
+  border: 1px solid rgba(203, 183, 138, 0.4);
+  position: relative;
+}
+
+.premium-pill {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: rgba(203, 183, 138, 0.18);
+  color: #E8E1D0;
+  border: 1px solid rgba(203, 183, 138, 0.35);
 }
 
 .lux-card-desc {

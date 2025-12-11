@@ -1,0 +1,285 @@
+/* BASE PAGE */
+.rr-dashboard {
+  min-height: 100vh;
+  background: radial-gradient(circle at top, rgba(6,10,12,0.96), #050607 65%);
+  color: #EAE4D7;
+  padding: 52px 32px;
+  font-family: Inter, sans-serif;
+  position: relative;
+}
+
+/* HEADER */
+.rr-title {
+  font-family: "Cinzel", serif;
+  font-size: 36px;
+  color: #EDE6D6;
+  letter-spacing: 1px;
+}
+
+.rr-sub {
+  opacity: 0.65;
+  margin-top: 4px;
+  font-size: 13px;
+}
+
+.rr-divider {
+  height: 1px;
+  width: 100%;
+  margin: 18px 0 30px;
+  background: linear-gradient(
+    to right,
+    rgba(203,183,138,0.25),
+    rgba(203,183,138,0.5),
+    rgba(203,183,138,0.25)
+  );
+  opacity: 0.9;
+}
+
+/* MAGIC STATUS */
+.rr-status {
+  background: rgba(203,183,138,0.08);
+  border: 1px solid rgba(203,183,138,0.25);
+  padding: 16px 18px;
+  border-radius: 14px;
+  margin: 26px 0;
+  font-size: 13px;
+  color: #EDE6D6;
+}
+
+.rr-status-used {
+  background: rgba(203,183,138,0.03);
+  color: #B09F89;
+}
+
+.rr-status-sub {
+  opacity: 0.7;
+  margin-top: 3px;
+  font-size: 12px;
+}
+
+.rr-section-label {
+  margin-top: 48px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  opacity: 0.85;
+  color: rgba(255, 227, 175, 0.95);
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.rr-section-label:first-of-type {
+  margin-top: 32px;
+}
+
+/* MODULE STACK */
+.rr-modules {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+/* MODULE CARD */
+.rr-module {
+  border-radius: 24px;
+  padding: 26px 28px;
+  border: 1.8px solid rgba(203,183,138,0.55);
+  position: relative;
+  cursor: pointer;
+  overflow: hidden;
+  background:
+    linear-gradient(145deg, rgba(255,255,255,0.08), rgba(255,255,255,0)) ,
+    linear-gradient(165deg, rgba(45,45,45,0.9), rgba(5,5,5,0.95));
+  box-shadow:
+    inset 0 0 18px rgba(11,58,46,0.20),
+    0 18px 38px rgba(0,0,0,0.78),
+    0 0 28px rgba(5,10,8,0.85);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.rr-module::before,
+.rr-module::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+.rr-module::before {
+  background:
+    radial-gradient(circle at 25% -25%, rgba(255,255,255,0.48), transparent 55%) ,
+    radial-gradient(circle at 85% 10%, rgba(255,255,255,0.18), transparent 65%);
+  opacity: 0.28;
+  mix-blend-mode: screen;
+}
+
+.rr-module::after {
+  width: 180%;
+  height: 110%;
+  top: -70%;
+  left: -40%;
+  border-radius: 55%;
+  background:
+    linear-gradient(125deg, rgba(255,255,255,0.32), rgba(255,255,255,0));
+  transform: rotate(-12deg);
+  opacity: 0.18;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.rr-module:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 0 20px rgba(11,58,46,0.32),
+    0 0 20px rgba(203,183,138,0.30),
+    0 22px 42px rgba(0,0,0,0.82);
+}
+
+.rr-module:hover::after {
+  opacity: 0.35;
+  transform: rotate(-6deg) translateY(16%);
+}
+
+/* PREMIUM MODULE */
+.rr-premium {
+  border-color: rgba(203,183,138,0.85);
+  box-shadow:
+    inset 0 0 22px rgba(11,58,46,0.35),
+    0 22px 44px rgba(0,0,0,0.82);
+  background:
+    linear-gradient(160deg, rgba(255,255,255,0.12), rgba(255,255,255,0)) ,
+    linear-gradient(145deg, rgba(30,30,30,0.95), rgba(5,5,5,0.95));
+}
+
+.rr-premium-tag {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  font-size: 11px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: linear-gradient(140deg, rgba(255,255,255,0.2), rgba(203,183,138,0.45));
+  border: 1.8px solid rgba(203,183,138,0.7);
+  color: #F5ECDD;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  font-weight: 600;
+  box-shadow:
+    inset 0 0 6px rgba(0,0,0,0.35),
+    0 3px 10px rgba(0,0,0,0.45);
+}
+
+/* MODULE TEXT */
+.rr-module-title {
+  font-family: "Cinzel", serif;
+  font-size: 24px;
+  letter-spacing: 1px;
+  margin-bottom: 10px;
+  color: #FFF9F0;
+}
+
+.rr-module-desc {
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+/* UPGRADE STRIP */
+.rr-upgrade {
+  margin-top: 40px;
+  text-align: center;
+  background: rgba(203,183,138,0.12);
+  border: 1px solid rgba(203,183,138,0.35);
+  padding: 16px;
+  border-radius: 14px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s ease;
+  box-shadow: 0 12px 26px rgba(0,0,0,0.65);
+}
+
+.rr-upgrade:hover {
+  background: rgba(203,183,138,0.22);
+  box-shadow: 0 14px 30px rgba(0,0,0,0.7);
+}
+
+.luxe-card {
+  position: relative;
+  z-index: 0;
+  display: block;
+  width: 100%;
+  min-height: 170px;
+  padding: 30px 36px;
+  border-radius: 20px;
+  overflow: hidden;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: linear-gradient(
+    135deg,
+    rgba(10, 10, 10, 0.95),
+    rgba(5, 5, 5, 0.9)
+  );
+  box-shadow: var(
+    --card-shadow,
+    0 0 55px rgba(255, 255, 255, 0.32),
+    0 0 120px rgba(255, 255, 255, 0.28),
+    0 14px 34px rgba(0, 0, 0, 0.6)
+  );
+  transform: translateY(-1px);
+  transition: box-shadow 0.25s ease, border-color 0.25s ease, transform 0.25s ease;
+}
+
+.luxe-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(
+    120deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    rgba(255, 255, 255, 0.02) 45%,
+    rgba(255, 255, 255, 0.16) 70%,
+    rgba(255, 255, 255, 0.04) 100%
+  );
+  pointer-events: none;
+  opacity: 0.7;
+  mix-blend-mode: screen;
+  z-index: -1;
+}
+
+.luxe-card:hover {
+  border-color: rgba(255, 255, 255, 0.75);
+  box-shadow:
+    0 0 65px rgba(255, 255, 255, 0.45),
+    0 0 160px rgba(255, 255, 255, 0.32),
+    0 18px 44px rgba(0, 0, 0, 0.7);
+  transform: translateY(-3px);
+}
+
+.luxe-card-category {
+  font-size: 11px;
+  letter-spacing: 2.5px;
+  color: rgba(255,255,255,0.9);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.luxe-card-title {
+  font-family: "Cinzel", serif;
+  font-size: 26px;
+  letter-spacing: 0.5px;
+  color: #ffffff;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.luxe-card-subtext {
+  font-size: 15px;
+  color: rgba(255,255,255,0.88);
+  line-height: 1.6;
+  max-width: 95%;
+  margin: 0 auto;
+}
