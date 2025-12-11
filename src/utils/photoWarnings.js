@@ -6,24 +6,33 @@ export async function getPhotoWarnings(imageUrl) {
 
   // ----- Brightness -----
   const brightness = getAverageBrightness(ctx, canvas);
-  if (brightness < 90) warnings.push("Photo is too dark — increase lighting.");
-  if (brightness > 200) warnings.push("Photo is overexposed — reduce glare.");
+  if (brightness < 90)
+    warnings.push("This photo would look even clearer with a touch more light.");
+
+  if (brightness > 200)
+    warnings.push("A softer brightness could give this an even cleaner look.");
 
   // ----- Contrast -----
   const contrast = getContrastScore(ctx, canvas);
-  if (contrast < 30) warnings.push("Low contrast — details may be hard to see.");
+  if (contrast < 30)
+    warnings.push("A bit more contrast could help the details stand out.");
 
   // ----- Sharpness -----
   const sharpness = getSharpnessScore(ctx, canvas);
-  if (sharpness < 18) warnings.push("Image looks slightly blurry — steady your phone.");
+  if (sharpness < 18)
+    warnings.push("A slight boost in clarity could make this item shine.");
 
   // ----- Tilt / crooked -----
   const tilt = getTiltScore(ctx, canvas);
-  if (tilt > 12) warnings.push("Camera angle is tilted — shoot straight-on.");
+  if (tilt > 12)
+    warnings.push("A more centered angle could create a polished presentation.");
 
   // ----- Busy background -----
   const bgNoise = getBackgroundNoise(ctx, canvas);
-  if (bgNoise > 85) warnings.push("Background is noisy — use a simpler surface.");
+  if (bgNoise > 85)
+    warnings.push(
+      "A smoother background would give your item an ultra-polished look."
+    );
 
   return warnings;
 }
@@ -90,7 +99,6 @@ function getSharpnessScore(ctx, canvas) {
 }
 
 function getTiltScore(ctx, canvas) {
-  // Simplified: checks brightness gradient left→right
   const left = ctx.getImageData(0, 0, canvas.width / 4, canvas.height).data;
   const right = ctx.getImageData(
     canvas.width * 0.75,
@@ -110,7 +118,6 @@ function getTiltScore(ctx, canvas) {
 }
 
 function getBackgroundNoise(ctx, canvas) {
-  // looks at color variation in outer border (top strip)
   const border = ctx.getImageData(
     0,
     0,
@@ -121,8 +128,7 @@ function getBackgroundNoise(ctx, canvas) {
   let variance = 0;
   for (let i = 0; i < border.length; i += 4) {
     const v = border[i] + border[i + 1] + border[i + 2];
-    variance += v % 50; // rough approximation
+    variance += v % 50;
   }
   return variance / 10000;
 }
-

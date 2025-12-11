@@ -18,3 +18,20 @@
   background-color: #e9dcc4 !important;
   transform: translateY(-1px) !important;
 }
+
+/* iOS cursor + zoom fixes for SingleListing inputs */
+input,
+textarea {
+  font-size: 16px !important;
+  line-height: 1.4 !important;
+  padding-top: 10px !important;
+  padding-bottom: 10px !important;
+  -webkit-text-size-adjust: 100%;
+  caret-color: #FCE9C9;
+}
+
+.luxe-card *,
+input,
+textarea {
+  transform: none !important;
+}

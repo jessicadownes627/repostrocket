@@ -290,10 +290,14 @@ export default function SingleListing() {
   // -------------------------------------------
   //  LUX HEADER BAR
   // -------------------------------------------
-  const HeaderBar = ({ label }) => (
+  const HeaderBar = ({ label, large = false }) => (
     <div className="w-full mt-8 mb-6">
       <div className="h-[1px] w-full bg-[var(--lux-border)] opacity-50"></div>
-      <div className="text-center text-[13px] tracking-[0.28em] uppercase text-[var(--lux-text)] opacity-70 py-3">
+      <div
+        className={`text-center uppercase text-[var(--lux-text)] ${
+          large ? "text-xl tracking-[0.4em] py-4" : "text-[13px] tracking-[0.28em] py-3 opacity-70"
+        }`}
+      >
         {label}
       </div>
       <div className="h-[1px] w-full bg-[var(--lux-border)] opacity-50"></div>
@@ -321,9 +325,10 @@ export default function SingleListing() {
       setMagicAccepted({});
       const raw = listingData || {};
       const current = {
-        title: raw.title || "",
-        description: raw.description || "",
-        price: raw.price ?? "",
+        title: localTitle?.trim() || raw.title || "",
+        description: localDescription?.trim() || raw.description || "",
+        price: localPrice?.trim() || raw.price || "",
+        brand: localBrand?.trim() || raw.brand || "",
         condition: raw.condition || "",
         category: raw.category || "",
         size: raw.size || "",
@@ -507,6 +512,12 @@ export default function SingleListing() {
   return (
     <div className="app-wrapper px-6 py-10 max-w-2xl mx-auto">
 
+      <button
+        onClick={() => navigate(-1)}
+        className="text-left text-sm text-[#E8DCC0] uppercase tracking-[0.2em] mb-4 w-fit hover:opacity-80 transition"
+      >
+        ← Back
+      </button>
       {/* ---------------------- */}
       {/*  PAGE TITLE            */}
       {/* ---------------------- */}
@@ -516,6 +527,7 @@ export default function SingleListing() {
       <p className="text-center lux-soft-text text-sm mb-10">
         Make your listing shine
       </p>
+      <div className="lux-divider w-2/3 mx-auto mb-10"></div>
 
       {/* ---------------------- */}
       {/*  MAIN PHOTO CARD       */}
@@ -534,7 +546,7 @@ export default function SingleListing() {
               <img
                 src={displayedPhoto}
                 alt="Main Photo"
-                className="rounded-[14px] w-full h-auto object-cover"
+                className="max-w-[500px] w-full mx-auto rounded-xl shadow-[0_0_40px_rgba(0,0,0,0.4)] object-cover"
               />
               {listingData?.editedPhoto && (
                 <div className="absolute top-2 right-2 z-10 px-2 py-1 rounded-md text-[10px] font-semibold bg-[#E8D5A8] text-black shadow-md border border-black/40">
@@ -571,7 +583,7 @@ export default function SingleListing() {
                 {cardError}
               </div>
             )}
-            <div className="flex flex-wrap gap-2 mt-4">
+            <div className="flex flex-wrap gap-2 mt-3">
               <button
                 className="lux-small-btn"
                 onClick={() => handleFix(brighten)}
@@ -627,29 +639,31 @@ export default function SingleListing() {
                 Auto-Fix
               </button>
             </div>
-            <button
-              className="lux-small-btn mt-2"
-              onClick={() =>
-                downloadImageFile(
-                  listingData?.editedPhoto || mainPhoto,
-                  "repostrocket-photo.jpg"
-                )
-              }
-            >
-              Save Photo
-            </button>
-            <div className="flex flex-wrap gap-2 mt-2">
+            <div className="mt-3 space-y-2">
+              <div className="flex flex-col md:flex-row gap-2">
+                <button
+                  className="flex-1 py-2.5 rounded-[16px] border border-[rgba(255,235,200,0.5)] bg-black/60 text-[#E8DCC0] text-sm tracking-[0.2em] uppercase hover:bg-black/80 transition"
+                  onClick={handleUndo}
+                >
+                  Undo
+                </button>
+                <button
+                  className="flex-1 py-2.5 rounded-[16px] border border-[rgba(255,235,200,0.5)] bg-black/60 text-[#E8DCC0] text-sm tracking-[0.2em] uppercase hover:bg-black/80 transition"
+                  onClick={handleRevertOriginal}
+                >
+                  Revert
+                </button>
+              </div>
               <button
-                className="lux-small-btn bg-black/40 border-white/20 text-white hover:bg-black/50"
-                onClick={handleUndo}
+                className="w-full py-2.5 rounded-[16px] border border-[rgba(80,140,120,0.6)] bg-transparent text-[#CFE7DA] text-sm tracking-[0.2em] uppercase hover:bg-[rgba(80,140,120,0.12)] transition"
+                onClick={() =>
+                  downloadImageFile(
+                    listingData?.editedPhoto || mainPhoto,
+                    "repostrocket-photo.jpg"
+                  )
+                }
               >
-                Undo
-              </button>
-              <button
-                className="lux-small-btn bg-red-500/20 border-red-500/40 text-red-200 hover:bg-red-500/30"
-                onClick={handleRevertOriginal}
-              >
-                Revert
+                Save Photo
               </button>
             </div>
           </>
@@ -657,6 +671,8 @@ export default function SingleListing() {
           <div className="opacity-60 text-sm">No photo found</div>
         )}
       </div>
+
+      <div className="lux-divider w-2/3 mx-auto my-12"></div>
 
       {/* ---------------------- */}
       {/*  MODE-SPECIFIC FIELDS  */}
@@ -831,28 +847,35 @@ export default function SingleListing() {
         </>
       ) : (
         <>
+          <HeaderBar label="Details" large />
+
           {/* MAGIC FILL CTA */}
-          <div className="mt-12 mb-6">
+          <div className="mt-4 mb-8">
             <button
               onClick={handleRunMagicFill}
               className="
-                w-full 
-                py-3.5 
-                rounded-2xl
-                bg-[#E8D5A8]
-                text-[#111]
+                w-full
+                py-4
+                rounded-[28px]
+                bg-gradient-to-r from-[#EED9B1] via-[#F9EACB] to-[#EFDDB9]
+                text-[#1B1208]
                 font-semibold
-                tracking-wide
-                text-sm
-                border border-[rgba(255,255,255,0.25)]
-                shadow-[0_4px_10px_rgba(0,0,0,0.45)]
-                hover:bg-[#f0e1bf]
-                transition-all
-                active:scale-[0.98]
+                tracking-[0.2em]
+                text-xs
+                border border-[rgba(255,255,255,0.35)]
+                shadow-[0_8px_24px_rgba(0,0,0,0.45)]
+                hover:shadow-[0_12px_30px_rgba(0,0,0,0.55)]
+                hover:translate-y-[-1px]
+                transition-all duration-300
+                active:scale-[0.99]
+                relative overflow-hidden
               "
               disabled={magicLoading}
             >
+              <span className="relative z-10">
               {magicLoading ? "Running Magic…" : "Run Magic Fill"}
+              </span>
+              <span className="absolute inset-0 bg-white/30 opacity-0 hover:opacity-20 transition" />
             </button>
             {magicError && (
               <div className="text-xs opacity-60 mt-2">
@@ -862,7 +885,6 @@ export default function SingleListing() {
           </div>
 
           {/* CORE INFORMATION */}
-          <HeaderBar label="Details Refined" />
 
           <LuxeInput
             label="Title"

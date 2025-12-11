@@ -88,6 +88,12 @@ export default function MagicPhotoPrep() {
       {/* --------------------------------------------- */}
       {/*   HEADER + LINES                              */}
       {/* --------------------------------------------- */}
+      <button
+        onClick={() => navigate("/dashboard")}
+        className="text-left text-sm text-[#E8DCC0] uppercase tracking-[0.2em] mb-4 w-fit hover:opacity-80 transition"
+      >
+        ← Back
+      </button>
       <h1 className="sparkly-header header-glitter text-center text-3xl mb-3">
         Start Your Magic Listing
       </h1>
