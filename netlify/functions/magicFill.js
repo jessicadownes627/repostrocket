@@ -7,32 +7,8 @@ import {
 } from "../../src/engines/glowHelpers.js";
 
 const SYSTEM_PROMPT = `
-You are Magic Fill, an expert multimodal resale assistant.
-
-Your job is to:
-1. Identify what the photo contains.
-2. Strongly prefer clothing/apparel when the item shows:
-   - folds, seams, soft texture,
-   - ribbing, cuffs, hems,
-   - sleeves, straps, collars, waistbands,
-   - knit patterns or sweater-like bulk.
-3. Only classify as home decor / objects when:
-   - the shape is rigid or structural,
-   - there are hard edges, ceramic/metallic reflections,
-   - the object has no fabric-like characteristics.
-
-If unsure: default to CLOTHING, not home goods.
-
-Return ONLY the structured JSON format below.
-
-### RULES:
-- If an item could be either apparel or decor, you MUST select apparel.
-- If the image is unclear, return a *soft apparel guess* such as "folded knit fabric (likely a sweater)".
-- Never return brands unless provided by the user.
-- Keep tags generic and resale-safe.
-- Avoid hallucinating specific materials unless visually obvious.
-
-### OUTPUT JSON:
+You are Magic Fill, a resale listing assistant.
+Using the structured input, output ONLY JSON in this format:
 {
   "title": "...",
   "description": "...",
@@ -45,6 +21,16 @@ Return ONLY the structured JSON format below.
     "confidence": "low" | "medium" | "high"
   }
 }
+
+Bias: when unsure, classify as Clothing. Do not invent brands or materials.
+`;
+
+const VISION_PROMPT = `
+Identify the object in the image.
+Return only factual, observable details.
+No marketing language.
+No assumptions.
+No adjectives.
 `;
 
 const EMPTY_RESPONSE = {
@@ -74,6 +60,12 @@ export async function handler(event) {
     } = JSON.parse(event.body || "{}");
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+    const sanitizeField = (value, limit = 200) => {
+      if (!value && value !== 0) return "";
+      const str = String(value);
+      return str.length > limit ? `${str.slice(0, limit)}…` : str;
+    };
+
     const normalizedImageUrl = (() => {
       if (!photoDataUrl) return null;
       if (photoDataUrl.startsWith("data:")) return photoDataUrl;
@@ -85,46 +77,64 @@ export async function handler(event) {
     if (normalizedImageUrl) {
       try {
         console.log("📸 Vision Prefilter: sending image_url");
-        const visionInput = `
-Describe this image in 1–2 sentences for product identification.
-
-<image>
-${normalizedImageUrl}
-</image>
-`;
-
         const visionResp = await client.responses.create({
-          model: "gpt-4o-mini",
-          input: visionInput,
+          model: "gpt-4o",
+          input: [
+            {
+              role: "system",
+              content: VISION_PROMPT,
+            },
+            {
+              role: "user",
+              content: [
+                {
+                  type: "input_text",
+                  text: "Describe this image in 1–2 sentences for product identification.",
+                },
+                {
+                  type: "input_image",
+                  image_url: normalizedImageUrl,
+                },
+              ],
+            },
+          ],
         });
 
         visionAlt = (visionResp.output_text || "No alt text").trim();
         console.log("📸 Vision Prefilter ALT TEXT:", visionAlt);
       } catch (err) {
         console.log("VISION PREFILTER ERROR:", err);
+        return {
+          statusCode: 500,
+          body: JSON.stringify({
+            error: "Vision prefilter failed",
+            details: err.message || String(err),
+          }),
+        };
       }
     }
 
     const forcedCategory = applyApparelBias(visionAlt);
 
-    const listingSnapshot = {
-      ...listing,
-      photoContext: photoContext || visionAlt,
-      userCategory: userCategory || forcedCategory,
+    const compactPayload = {
+      photo_context: sanitizeField(visionAlt || photoContext || "Unknown item", 160),
+      user_category: userCategory || forcedCategory,
+      brand: sanitizeField(listing.brand || ""),
+      title: sanitizeField(listing.userTitle || listing.title || "", 160),
+      description: sanitizeField(listing.userDescription || listing.description || "", 320),
+      price: sanitizeField(listing.price || ""),
+      size: sanitizeField(listing.size || ""),
+      condition: sanitizeField(listing.condition || ""),
+      tags: Array.isArray(listing.userTags || listing.tags)
+        ? (listing.userTags || listing.tags).slice(0, 8).map((tag) => sanitizeField(tag, 40))
+        : [],
     };
-
-    const photoSection = normalizedImageUrl
-      ? `<image>\n${normalizedImageUrl}\n</image>`
-      : "No photo provided";
 
     const mainInput = `
 ${SYSTEM_PROMPT}
 
-User listing data:
-${JSON.stringify(listingSnapshot, null, 2)}
-
-Photo:
-${photoSection}
+Input:
+${JSON.stringify(compactPayload, null, 2)}
 `;
 
     const response = await client.responses.create({
@@ -165,7 +175,7 @@ ${photoSection}
 function parseJsonSafe(str) {
   if (!str) return null;
   try {
-    const obj = JSON.parse(str);
+    const obj = JSON.parse(stripCodeFences(str));
     return {
       title: obj.title || "",
       description: obj.description || "",
@@ -180,6 +190,13 @@ function parseJsonSafe(str) {
     console.error("Magic Fill JSON parse failed:", err);
     return null;
   }
+}
+
+function stripCodeFences(str = "") {
+  return str
+    .replace(/```json/gi, "")
+    .replace(/```/g, "")
+    .trim();
 }
 function applyApparelBias(visionAlt = "") {
   const fabricSignals = [
