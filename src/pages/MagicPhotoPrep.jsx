@@ -53,8 +53,20 @@ export default function MagicPhotoPrep() {
         });
       }, 0);
 
-      // STORE PHOTOS — always save fresh URLs
-      setListingField("photos", urls);
+      // STORE PHOTOS — always save fresh URLs with fallback alt text
+      const photosWithAlt = urls.map((url, idx) => {
+        const file = converted[idx];
+        const fileName = file?.name || "";
+        const fallbackAlt = fileName
+          ? fileName.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ")
+          : "item photo";
+        return {
+          url,
+          altText: fallbackAlt,
+          file,
+        };
+      });
+      setListingField("photos", photosWithAlt);
     },
     [resetListing, setListingField]
   );

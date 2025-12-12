@@ -1,3 +1,5 @@
+import { mapPhotosToUrls } from "./photoHelpers";
+
 /**
  * Full deluxe formatting engine for all marketplaces.
  * Defensive coding everywhere — no assumptions about fields.
@@ -19,7 +21,7 @@ const stripEmojis = (text = "") => {
 
 const lower = (v) => clean(v).toLowerCase();
 const safeArray = (arr) => (Array.isArray(arr) ? arr : []);
-const safePhotos = (p) => (Array.isArray(p) ? p : []);
+const safePhotos = (p) => mapPhotosToUrls(p).filter(Boolean);
 
 
 // -------------------------------------------------------------

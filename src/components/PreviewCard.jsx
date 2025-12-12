@@ -1,5 +1,6 @@
 import React from "react";
 import { buildListingExportLinks } from "../utils/exportListing";
+import { getPhotoUrl } from "../utils/photoHelpers";
 
 function safeCopy(text) {
   if (!text) return;
@@ -34,7 +35,11 @@ export default function PreviewCard({
 }) {
   if (!item) return null;
 
-  const photo = item.editedPhoto || (item.photos && item.photos[0]) || null;
+  const photoList = Array.isArray(item.photos) ? item.photos : [];
+  const fallbackPhoto = photoList
+    .map((p) => getPhotoUrl(p))
+    .find((url) => Boolean(url));
+  const photo = item.editedPhoto || fallbackPhoto || null;
   const { label } = platformMeta(platform);
 
   const links = buildListingExportLinks({

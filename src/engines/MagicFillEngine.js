@@ -1,19 +1,45 @@
-export async function runMagicFill(listing) {
-  try {
-    const res = await fetch("/.netlify/functions/magicFill", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(listing),
-    });
+// src/engines/MagicFillEngine.js
 
-    if (!res.ok) {
-      console.error("Magic Fill function error:", await res.text());
-      return null;
-    }
+const EMPTY_FIELDS = {
+  title: { before: "", after: "", note: "" },
+  description: { before: "", after: "", note: "" },
+  price: { before: "", after: "", note: "" },
+  tags: { before: [], after: [], note: "" },
+  category_choice: null,
+  style_choices: [],
+  debug: {},
+};
 
-    return await res.json();
-  } catch (err) {
-    console.error("Magic Fill function call failed:", err);
-    return null;
+export function parseMagicFillOutput(payload) {
+  if (!payload || typeof payload !== "object") {
+    return EMPTY_FIELDS;
   }
+
+  return {
+    title: {
+      before: "",
+      after: payload.title || "",
+      note: "AI improved clarity and SEO.",
+    },
+    description: {
+      before: "",
+      after: payload.description || "",
+      note: "AI improved readability.",
+    },
+    price: {
+      before: "",
+      after: payload.price || "",
+      note: "Suggested based on similar listings.",
+    },
+    tags: {
+      before: [],
+      after: Array.isArray(payload.tags) ? payload.tags : [],
+      note: "Smart tags extracted from product.",
+    },
+    category_choice: payload.category_choice || null,
+    style_choices: Array.isArray(payload.style_choices)
+      ? payload.style_choices
+      : [],
+    debug: payload.debug || {},
+  };
 }

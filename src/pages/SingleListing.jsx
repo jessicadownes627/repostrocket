@@ -2,7 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useListingStore } from "../store/useListingStore";
 import { getPremiumStatus } from "../store/premiumStore";
-import { runMagicFill } from "../engines/MagicFillEngine";
+import { parseMagicFillOutput } from "../engines/MagicFillEngine";
+import { runMagicFill } from "../utils/runMagicFill";
+import {
+  fileToDataUrl,
+  getPhotoUrl,
+  normalizePhotosArray,
+} from "../utils/photoHelpers";
 import LuxeChipGroup from "../components/LuxeChipGroup";
 import LuxeInput from "../components/LuxeInput";
 import { useCardParser } from "../hooks/useCardParser";
@@ -24,6 +30,11 @@ import { getDynamicPrice } from "../utils/dynamicPricing";
 import { composeListing } from "../utils/listingComposer";
 import { buildListingExportLinks } from "../utils/exportListing";
 import "../styles/overrides.css";
+
+const cleanValue = (value) =>
+  value === null || value === undefined
+    ? ""
+    : String(value).trim().toLowerCase();
 
 export default function SingleListing() {
   const navigate = useNavigate();
@@ -48,11 +59,12 @@ export default function SingleListing() {
   const size = listingData?.size || "";
   const tags = Array.isArray(listingData?.tags) ? listingData.tags : [];
 
-  const mainPhoto =
+  const mainPhotoEntry =
     listingData?.photos && listingData.photos.length > 0
       ? listingData.photos[0]
       : null;
 
+  const mainPhoto = getPhotoUrl(mainPhotoEntry);
   const displayedPhoto = listingData?.editedPhoto || mainPhoto;
 
   const cardAttributes = listingData?.cardAttributes || null;
@@ -62,9 +74,9 @@ export default function SingleListing() {
       cardAttributes && typeof cardAttributes === "object" && Object.keys(cardAttributes).length
     );
 
-  const [showReview, setShowReview] = useState(false);
+  const [showMagicResults, setShowMagicResults] = useState(false);
   const [magicSuggestion, setMagicSuggestion] = useState(null);
-  const [magicDiff, setMagicDiff] = useState(null);
+  const [magicResults, setMagicResults] = useState([]);
   const [magicLoading, setMagicLoading] = useState(false);
   const [showUsageModal, setShowUsageModal] = useState(false);
   const [photoWarnings, setPhotoWarnings] = useState([]);
@@ -142,6 +154,25 @@ export default function SingleListing() {
     // run ONLY once on first load
     // DO NOT depend on listingData
   }, []);
+
+  useEffect(() => {
+    if (!Array.isArray(listingData?.photos) || listingData.photos.length === 0) {
+      return;
+    }
+    const requiresNormalization = listingData.photos.some(
+      (entry) =>
+        !entry ||
+        typeof entry === "string" ||
+        !entry.url ||
+        !entry.altText
+    );
+    if (requiresNormalization) {
+      setListingField(
+        "photos",
+        normalizePhotosArray(listingData.photos, "item photo")
+      );
+    }
+  }, [listingData?.photos, setListingField]);
 
   // TrendSense Autofill — apply any saved autofill payload once
   useEffect(() => {
@@ -308,7 +339,11 @@ export default function SingleListing() {
   //  MAGIC FILL HANDLERS
   // -------------------------------------------
   const handleRunMagicFill = async () => {
+    setMagicResults([]);
     setMagicError("");
+    if (listingData?.previousAiChoices) {
+      listingData.previousAiChoices = {};
+    }
     if (magicLoading) return;
     // Premium (including Jess override numbers + rr_dev_premium) bypasses daily limit
     const isPremiumUser =
@@ -336,70 +371,97 @@ export default function SingleListing() {
         photos: Array.isArray(raw.photos) ? raw.photos : [],
       };
 
-      const updated = await runMagicFill(current);
-      if (!updated) {
+      let photoDataUrl = null;
+      try {
+        const first = listingData?.photos?.[0];
+        if (first?.file instanceof File) {
+          photoDataUrl = await fileToDataUrl(first.file);
+        } else if (first?.url?.startsWith("data:image")) {
+          photoDataUrl = first.url;
+        } else if (listingData?.editedPhoto?.startsWith("data:image")) {
+          photoDataUrl = listingData.editedPhoto;
+        }
+      } catch (err) {
+        console.error("❌ Failed to build dataURL:", err);
+      }
+
+      const payload = {
+        photoDataUrl,
+        brand: current.brand || raw.brand || "",
+        category: current.category || raw.category || "",
+        size: current.size || raw.size || "",
+        condition: current.condition || raw.condition || "",
+        userTitle: current.title || raw.title || "",
+        userDescription: current.description || raw.description || "",
+        userTags: Array.isArray(raw.tags) ? raw.tags : [],
+        previousAiChoices: raw.previousAiChoices || {},
+      };
+
+      console.log("🔥 Payload photoContext image attached:", Boolean(photoDataUrl));
+      const ai = await runMagicFill(payload);
+      const parsed = parseMagicFillOutput(ai);
+      if (!parsed.title.after && !parsed.description.after && parsed.tags.after.length === 0) {
+        setMagicError("Magic Fill failed — please try again.");
         setMagicLoading(false);
         return;
       }
-
-       // consume daily Magic Fill use
-      consumeMagicUse();
-
-      setMagicSuggestion(updated);
-
-      const accepted = {};
       const diffs = [];
-      if (current.title !== updated.title) {
-        diffs.push({
-          fieldKey: "title",
-          label: "Title",
-          before: current.title || "",
-          after: updated.title || "",
-          reason: "AI improved clarity and searchability.",
-        });
-        accepted.title = true;
-      }
-      if (current.description !== updated.description) {
-        diffs.push({
-          fieldKey: "description",
-          label: "Description",
-          before: current.description || "",
-          after: updated.description || "",
-          reason: "AI expanded and polished the description.",
-        });
-        accepted.description = true;
-      }
-      if (current.price !== updated.price) {
-        diffs.push({
-          fieldKey: "price",
-          label: "Price",
-          before: current.price || "",
-          after: updated.price || "",
-          reason: "AI adjusted price based on demand and condition.",
-        });
-        accepted.price = true;
-      }
+      const accepted = {};
 
-      const beforeTags = Array.isArray(current.tags)
-        ? current.tags.join(", ")
-        : "";
-      const afterTags = Array.isArray(updated.tags)
-        ? updated.tags.join(", ")
-        : "";
-      if (beforeTags !== afterTags) {
+      const pushDiff = (fieldKey, label, before, after, note) => {
+        if (!after || cleanValue(before) === cleanValue(after)) return;
+        diffs.push({
+          fieldKey,
+          label,
+          before: before || "",
+          after: after || "",
+          reason: note,
+        });
+        accepted[fieldKey] = true;
+      };
+
+      pushDiff("title", "Title", current.title, parsed.title.after, parsed.title.note);
+      pushDiff(
+        "description",
+        "Description",
+        current.description,
+        parsed.description.after,
+        parsed.description.note
+      );
+      pushDiff("price", "Price", current.price, parsed.price.after, parsed.price.note);
+
+      const beforeTags = Array.isArray(current.tags) ? current.tags : [];
+      const afterTags = Array.isArray(parsed.tags.after) ? parsed.tags.after : [];
+      const beforeTagsStr = beforeTags.join(", ");
+      const afterTagsStr = afterTags.join(", ");
+      if (afterTags.length && cleanValue(beforeTagsStr) !== cleanValue(afterTagsStr)) {
         diffs.push({
           fieldKey: "tags",
           label: "Tags",
-          before: beforeTags,
-          after: afterTags,
-          reason: "AI refined your tags for better search visibility.",
+          before: beforeTagsStr,
+          after: afterTagsStr,
+          reason: parsed.tags.note,
         });
+        accepted.tags = true;
       }
 
-      // Always store diffs (even empty) so drawer can show
-      setMagicDiff(diffs);
+     const suggestion = {
+       title: parsed.title.after || current.title,
+       description: parsed.description.after || current.description,
+       price: parsed.price.after || current.price,
+       tags: afterTags.length ? afterTags : beforeTags,
+        category_choice: parsed.category_choice,
+        style_choices: parsed.style_choices,
+        debug: parsed.debug,
+     };
+
+      consumeMagicUse();
+
+      setMagicSuggestion(suggestion);
+      setMagicResults(diffs);
       setMagicAccepted(accepted);
-      setShowReview(true);
+      setShowMagicResults(true);
+      setMagicError("");
     } catch (err) {
       console.error("Magic Fill failed:", err);
       setMagicError(
@@ -498,7 +560,7 @@ export default function SingleListing() {
         setListingField("tags", magicSuggestion.tags);
       }
 
-      setShowReview(false);
+      setShowMagicResults(false);
     } catch (err) {
       console.error("APPLY MAGIC FAILED:", err);
     }
@@ -1144,18 +1206,18 @@ export default function SingleListing() {
       {/* ---------------------- */}
       {/*  MAGIC FILL DRAWER     */}
       {/* ---------------------- */}
-      {!isCardMode && showReview && (
+      {!isCardMode && showMagicResults && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-end justify-center px-4">
           <div className="lux-drawer w-full max-w-xl pb-8 pt-5 px-5 space-y-4">
             <div className="text-center">
-              <h2 className="text-[20px] font-semibold text-[#F4E9D5]">
+              <h2 className="text-[22px] font-semibold text-[#F4E9D5]">
                 Magic Fill Results
               </h2>
-              <p className="text-xs opacity-70 mt-1">
+              <p className="text-sm opacity-70 mt-1">
                 Review AI suggestions before applying them to your listing.
               </p>
-              {magicDiff.length === 0 && (
-                <p className="text-xs opacity-70 mt-2">
+              {magicResults.length === 0 && (
+                <p className="text-sm opacity-70 mt-2">
                   Magic added fresh suggestions to your listing
                 </p>
               )}
@@ -1164,18 +1226,18 @@ export default function SingleListing() {
             <div className="gold-divider" />
 
             <div className="space-y-4 max-h-[320px] overflow-y-auto pr-1">
-              {magicDiff.map((item, idx) => (
+              {magicResults.map((item, idx) => (
                 <div
                   key={idx}
                   className="border border-[rgba(232,213,168,0.28)] rounded-xl p-3 bg-black/30"
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <div className="text-xs uppercase tracking-wide opacity-70">
+                    <div className="text-[13px] uppercase tracking-wide opacity-70">
                       {item.label}
                     </div>
                     <button
                       type="button"
-                      className={`text-[10px] px-2 py-0.5 rounded-full border transition ${
+                      className={`text-[11px] px-2 py-0.5 rounded-full border transition ${
                         magicAccepted[item.fieldKey || item.label] !== false
                           ? "border-[rgba(232,213,168,0.65)] text-[rgba(232,213,168,0.9)] bg-black/40"
                           : "border-white/20 text-white/60 bg-black/20"
@@ -1200,20 +1262,20 @@ export default function SingleListing() {
                   </div>
                   <div className="flex flex-col gap-2 text-sm">
                     <div>
-                      <div className="text-[11px] opacity-60 mb-0.5">Before</div>
-                      <div className="text-[13px] opacity-85">
+                      <div className="text-[12px] opacity-60 mb-0.5">Before</div>
+                      <div className="text-[14px] opacity-85">
                         {item.before || <span className="opacity-50">—</span>}
                       </div>
                     </div>
                     <div>
-                      <div className="text-[11px] opacity-60 mb-0.5">After</div>
-                      <div className="text-[13px] text-[#F4E9D5]">
+                      <div className="text-[12px] opacity-60 mb-0.5">After</div>
+                      <div className="text-[14px] text-[#F4E9D5]">
                         {item.after || <span className="opacity-50">—</span>}
                       </div>
                     </div>
                   </div>
                   {item.reason && (
-                    <div className="mt-2 text-[11px] opacity-70">
+                    <div className="mt-2 text-[12px] opacity-70">
                       {item.reason}
                     </div>
                   )}
@@ -1226,7 +1288,7 @@ export default function SingleListing() {
             <div className="flex gap-3 pt-2">
               <button
                 className="flex-1 lux-quiet-btn"
-                onClick={() => setShowReview(false)}
+                onClick={() => setShowMagicResults(false)}
               >
                 Cancel
               </button>

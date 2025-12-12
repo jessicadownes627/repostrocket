@@ -1,4 +1,5 @@
 import heic2any from "heic2any";
+import { deriveAltTextFromFilename } from "./photoHelpers";
 
 export async function convertHeicToJpeg(file) {
   try {
@@ -19,6 +20,10 @@ export async function convertHeicToJpeg(file) {
 
   } catch (err) {
     console.error("HEIC conversion failed:", err);
-    return file;
+    const fallbackUrl = URL.createObjectURL(file);
+    return {
+      url: fallbackUrl,
+      altText: deriveAltTextFromFilename(file.name) || "uploaded item",
+    };
   }
 }

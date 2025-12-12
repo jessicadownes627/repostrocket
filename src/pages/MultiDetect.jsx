@@ -27,12 +27,17 @@ export default function MultiDetect() {
 
       setCount(crops.length);
 
-      const batchItems = crops.map((src) => ({
+      const batchItems = crops.map((src, idx) => ({
         id:
           typeof crypto !== "undefined" && crypto.randomUUID
             ? crypto.randomUUID()
             : `card-${Date.now()}-${Math.random()}`,
-        photos: [src],
+        photos: [
+          {
+            url: src,
+            altText: `detected card ${idx + 1}`,
+          },
+        ],
         title: "",
         description: "",
         tags: [],

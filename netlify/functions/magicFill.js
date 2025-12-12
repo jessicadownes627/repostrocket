@@ -1,159 +1,198 @@
 import OpenAI from "openai";
 
-function cleanSentence(str = "") {
-  return str
-    .replace(/\s+/g, " ")
-    .replace(/ ,/g, ",")
-    .replace(/ \./g, ".")
-    .trim();
-}
+const SYSTEM_PROMPT = `
+You are Magic Fill, an expert multimodal resale assistant.
 
-function cleanParagraph(str = "") {
-  return cleanSentence(
-    str
-      .replace(/\n+/g, " ")
-      .replace(/\s\s+/g, " ")
-      .trim()
-  );
-}
+Your job is to:
+1. Identify what the photo contains.
+2. Strongly prefer clothing/apparel when the item shows:
+   - folds, seams, soft texture,
+   - ribbing, cuffs, hems,
+   - sleeves, straps, collars, waistbands,
+   - knit patterns or sweater-like bulk.
+3. Only classify as home decor / objects when:
+   - the shape is rigid or structural,
+   - there are hard edges, ceramic/metallic reflections,
+   - the object has no fabric-like characteristics.
 
-function fallbackTitle({ brand, category, size }) {
-  return (
-    cleanSentence([brand, category, size].filter(Boolean).join(" · ")) ||
-    "Quality Item — Ready to Ship"
-  );
-}
+If unsure: default to CLOTHING, not home goods.
 
-function buildKeywords({ category, brand, size }) {
-  const words = [];
-  if (brand) words.push(brand);
-  if (category) words.push(category);
-  if (size) words.push(size);
-  words.push("quality", "verified", "seller", "ship fast");
-  return words;
-}
+Return ONLY the structured JSON format below.
 
-function smartPrice({ price, condition }) {
-  const base = Number(price);
-  if (!base || isNaN(base)) return "";
+### RULES:
+- If an item could be either apparel or decor, you MUST select apparel.
+- If the image is unclear, return a *soft apparel guess* such as "folded knit fabric (likely a sweater)".
+- Never return brands unless provided by the user.
+- Keep tags generic and resale-safe.
+- Avoid hallucinating specific materials unless visually obvious.
 
-  let adj = base;
-
-  switch (condition?.toLowerCase()) {
-    case "new":
-      adj = base + 5;
-      break;
-    case "like new":
-      adj = base + 2;
-      break;
-    case "fair":
-      adj = base - 2;
-      break;
-  }
-
-  return adj.toString();
-}
-
-function normalizeListing(listing = {}) {
-  const {
-    title = "",
-    description = "",
-    price = "",
-    category = "",
-    condition = "",
-    size = "",
-    brand = "",
-    tags = [],
-    photos = [],
-  } = listing;
-
-  return {
-    title: title?.trim() || "",
-    description: description?.trim() || "",
-    price: price?.toString().trim() || "",
-    category: category?.trim() || "",
-    condition: condition?.trim() || "",
-    size: size?.trim() || "",
-    brand: brand?.trim() || "",
-    tags: Array.isArray(tags) ? tags : [],
-    photos: Array.isArray(photos) ? photos : [],
-  };
-}
-
-function buildPrompt(listing, photoUrl) {
-  const keywords = buildKeywords(listing);
-  const fallback = fallbackTitle(listing);
-
-  return `You are Repost Rocket's Magic Fill model. Rewrite the listing data with concise, luxurious resale copy.
-
-Current listing data:
-Title: ${listing.title || fallback}
-Description: ${listing.description || "N/A"}
-Brand: ${listing.brand || "N/A"}
-Category: ${listing.category || "N/A"}
-Condition: ${listing.condition || "N/A"}
-Size: ${listing.size || "N/A"}
-Tags: ${listing.tags.join(", ") || "N/A"}
-Primary keywords: ${keywords.join(", ")}
-Here is the main product photo: ${photoUrl || "Not provided"}
-
-Return JSON with fields: title, description, price, tags.`;
-}
-
-function parseModelResponse(text = "") {
-  try {
-    const parsed = JSON.parse(text);
-    return {
-      title: parsed.title ? cleanSentence(parsed.title) : "",
-      description: parsed.description ? cleanParagraph(parsed.description) : "",
-      price: parsed.price ? parsed.price.toString().trim() : "",
-      tags: Array.isArray(parsed.tags)
-        ? parsed.tags.map((t) => cleanSentence(t)).filter(Boolean).slice(0, 12)
-        : [],
-    };
-  } catch (err) {
-    return null;
+### OUTPUT JSON:
+{
+  "title": "...",
+  "description": "...",
+  "tags": [],
+  "category_choice": "Clothing" | "Home" | "Beauty" | "Accessories" | "Other",
+  "style_choices": [],
+  "debug": {
+    "photo_detected_type": "...",
+    "reasoning": "...",
+    "confidence": "low" | "medium" | "high"
   }
 }
+`;
+
+const EMPTY_RESPONSE = {
+  title: "",
+  description: "",
+  tags: [],
+  category_choice: null,
+  style_choices: [],
+  debug: { error: "fallback" },
+};
 
 export async function handler(event) {
   try {
-    const listing = normalizeListing(JSON.parse(event.body || "{}"));
+    if (!process.env.OPENAI_API_KEY) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: "Missing OPENAI_API_KEY" }),
+      };
+    }
+
+    const listing = JSON.parse(event.body || "{}");
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-    const photoUrl = Array.isArray(listing.photos) ? listing.photos[0] : "";
+    const photoDataUrl = listing.photoDataUrl || null;
+    delete listing.photoDataUrl;
 
-    const prompt = buildPrompt(listing, photoUrl);
+    const normalizedImageUrl = (() => {
+      if (!photoDataUrl) return null;
+      if (photoDataUrl.startsWith("data:")) {
+        const base64 = photoDataUrl.split(",")[1] || "";
+        if (!base64) return null;
+        return `data:image/jpeg;base64,${base64}`;
+      }
+      return photoDataUrl;
+    })();
 
-    const completion = await client.responses.create({
-      model: "gpt-4.1-mini",
-      input: `### Prompt\n${prompt}\n\n### Output Format\n{\n  "title": "...",
-  "description": "...",
-  "price": "...",
-  "tags": ["...", "..."]
-}`,
+    let visionAlt = "No alt text";
+
+    if (normalizedImageUrl) {
+      try {
+        console.log("📸 Vision Prefilter: sending image_url");
+        const visionInput = `
+Describe this image in 1–2 sentences for product identification.
+
+<image>
+${normalizedImageUrl}
+</image>
+`;
+
+        const visionResp = await client.responses.create({
+          model: "gpt-4o-mini",
+          input: visionInput,
+        });
+
+        visionAlt = (visionResp.output_text || "No alt text").trim();
+        console.log("📸 Vision Prefilter ALT TEXT:", visionAlt);
+      } catch (err) {
+        console.log("VISION PREFILTER ERROR:", err);
+      }
+    }
+
+    const forcedCategory = applyApparelBias(visionAlt);
+
+    const listingSnapshot = {
+      ...listing,
+      photoContext: visionAlt,
+      userCategory: forcedCategory,
+    };
+
+    const mainInput = `
+${SYSTEM_PROMPT}
+
+User listing data:
+${JSON.stringify(listingSnapshot, null, 2)}
+
+Photo:
+<image>
+${normalizedImageUrl || ""}
+</image>
+`;
+
+    const response = await client.responses.create({
+      model: "gpt-4o",
+      input: mainInput,
     });
 
-    const rawOutput = completion.output?.[0]?.content?.[0]?.text || "";
-    const suggestion =
-      parseModelResponse(rawOutput) || {
-        title: fallbackTitle(listing),
-        description:
-          cleanParagraph(listing.description) ||
-          "Item is in good condition and ready to ship.",
-        price: smartPrice({ price: listing.price, condition: listing.condition }),
-        tags: buildKeywords(listing).slice(0, 5),
-      };
+    const rawText = response.output_text || "";
+
+    const parsed = parseJsonSafe(rawText);
 
     return {
       statusCode: 200,
-      body: JSON.stringify(suggestion),
+      body: JSON.stringify(parsed ?? EMPTY_RESPONSE),
     };
   } catch (err) {
-    console.error("Magic Fill function error:", err);
+    console.error("Magic Fill Backend Error:", err);
     return {
-      statusCode: 500,
-      body: JSON.stringify({ error: err.message }),
+      statusCode: 200,
+      body: JSON.stringify(EMPTY_RESPONSE),
     };
   }
+}
+
+function parseJsonSafe(str) {
+  if (!str) return null;
+  try {
+    const obj = JSON.parse(str);
+    return {
+      title: obj.title || "",
+      description: obj.description || "",
+      tags: Array.isArray(obj.tags) ? obj.tags : [],
+      category_choice: obj.category_choice || null,
+      style_choices: Array.isArray(obj.style_choices) ? obj.style_choices : [],
+      debug: obj.debug || {},
+    };
+  } catch (err) {
+    console.error("Magic Fill JSON parse failed:", err);
+    return null;
+  }
+}
+function applyApparelBias(visionAlt = "") {
+  const fabricSignals = [
+    "fabric",
+    "knit",
+    "ribbed",
+    "soft",
+    "folded",
+    "sweater",
+    "cotton",
+    "fleece",
+    "textile",
+    "seam",
+    "hem",
+    "cuff",
+  ];
+
+  const decorSignals = [
+    "ceramic",
+    "glass",
+    "hard",
+    "rigid",
+    "vase",
+    "bottle",
+    "container",
+    "home decor",
+  ];
+
+  const visionLower = visionAlt.toLowerCase();
+  const fabricMatch = fabricSignals.some((s) => visionLower.includes(s));
+  const decorMatch = decorSignals.some((s) => visionLower.includes(s));
+
+  if (fabricMatch && !decorMatch) return "Clothing";
+  if (fabricMatch && decorMatch) return "Clothing";
+  if (!fabricMatch && !decorMatch) return "Clothing";
+
+  return "Home";
 }

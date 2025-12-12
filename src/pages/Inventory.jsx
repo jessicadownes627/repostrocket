@@ -10,6 +10,7 @@ import { runTrendSenseUltra } from "../utils/trendSenseUltra";
 import { runTrendSenseInfinity } from "../utils/trendSenseInfinity";
 
 import "../styles/inventory.css";
+import { getPhotoUrl } from "../utils/photoHelpers";
 import MarkAsSoldModal from "../components/MarkAsSoldModal";
 import { runTrendSensePro } from "../engines/trendSensePro";
 import { generateSaleSnapshot } from "../utils/saleSnapshot";
@@ -252,8 +253,12 @@ export default function Inventory() {
             }`}
             onClick={() => toggleSelect(item.id)}
           >
-            {item.photos?.[0] && (
-              <img src={item.photos[0]} className="inventory-photo" />
+            {getPhotoUrl(item.photos?.[0]) && (
+              <img
+                src={getPhotoUrl(item.photos?.[0])}
+                className="inventory-photo"
+                alt={item.title || "Listing photo"}
+              />
             )}
 
             <div className="inventory-info">

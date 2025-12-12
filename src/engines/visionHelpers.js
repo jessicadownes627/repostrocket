@@ -1,9 +1,12 @@
+import { getPhotoUrl } from "../utils/photoHelpers";
+
 // --------------------------------------------
 // Basic Category Detection
 // --------------------------------------------
 export function predictCategoryFromPhoto(photos = []) {
-  const first = photos && photos.length > 0 ? String(photos[0]) : "";
-  const img = first.toLowerCase();
+  const firstEntry = photos && photos.length > 0 ? photos[0] : null;
+  const firstUrl = getPhotoUrl(firstEntry) || String(firstEntry || "");
+  const img = firstUrl.toLowerCase();
 
   if (/mug|cup|tumbler|coffee/.test(img)) return "Home · Kitchen";
   if (/sweater|hoodie|zip|fleece|top/.test(img)) return "Women’s Clothing";
@@ -18,8 +21,9 @@ export function predictCategoryFromPhoto(photos = []) {
 // Sports Card Detection
 // --------------------------------------------
 export function isSportsCardPhoto(photos = []) {
-  const first = photos && photos.length > 0 ? String(photos[0]) : "";
-  const img = first.toLowerCase();
+  const firstEntry = photos && photos.length > 0 ? photos[0] : null;
+  const firstUrl = getPhotoUrl(firstEntry) || String(firstEntry || "");
+  const img = firstUrl.toLowerCase();
 
   const pattern =
     /topps|panini|prizm|chrome|bowman|donruss|optic|rated\s*rookie/;
@@ -31,8 +35,9 @@ export function isSportsCardPhoto(photos = []) {
 // Basic Brand Guessing
 // --------------------------------------------
 export function guessBrandFromPhoto(photos = []) {
-  const first = photos && photos.length > 0 ? String(photos[0]) : "";
-  const img = first.toLowerCase();
+  const firstEntry = photos && photos.length > 0 ? photos[0] : null;
+  const firstUrl = getPhotoUrl(firstEntry) || String(firstEntry || "");
+  const img = firstUrl.toLowerCase();
 
   if (/yeti/.test(img)) return "YETI";
   if (/stanley/.test(img)) return "Stanley";

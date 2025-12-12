@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { mapPhotosToUrls } from "../utils/photoHelpers";
 
 const heroMessages = [
   "Your photo is already doing the heavy lifting.",
@@ -9,6 +10,7 @@ const heroMessages = [
 ];
 
 export default function HeroCarousel({ photos }) {
+  const normalizedPhotos = mapPhotosToUrls(photos).filter(Boolean);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showMessage, setShowMessage] = useState(true);
   const messageRef = useRef(null);
@@ -26,13 +28,13 @@ export default function HeroCarousel({ photos }) {
   }, []);
 
   const nextPhoto = () => {
-    if (!photos?.length) return;
-    setCurrentIndex((prev) => (prev + 1) % photos.length);
+    if (!normalizedPhotos.length) return;
+    setCurrentIndex((prev) => (prev + 1) % normalizedPhotos.length);
   };
 
   const prevPhoto = () => {
-    if (!photos?.length) return;
-    setCurrentIndex((prev) => (prev - 1 + photos.length) % photos.length);
+    if (!normalizedPhotos.length) return;
+    setCurrentIndex((prev) => (prev - 1 + normalizedPhotos.length) % normalizedPhotos.length);
   };
 
   // Hide the message when user scrolls
@@ -42,7 +44,7 @@ export default function HeroCarousel({ photos }) {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  if (!photos || photos.length === 0) return null;
+  if (!normalizedPhotos.length) return null;
 
   return (
     <div
@@ -55,13 +57,13 @@ export default function HeroCarousel({ photos }) {
     >
       {/* PHOTO */}
       <img
-        src={photos[currentIndex]}
+        src={normalizedPhotos[currentIndex]}
         alt="Listing"
         className="w-full h-full object-cover transition-all duration-500"
       />
 
       {/* LEFT & RIGHT NAV */}
-      {photos.length > 1 && (
+      {normalizedPhotos.length > 1 && (
         <>
           <button
             type="button"
@@ -106,4 +108,3 @@ export default function HeroCarousel({ photos }) {
     </div>
   );
 }
-

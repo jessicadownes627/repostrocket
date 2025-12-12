@@ -4,6 +4,7 @@ import { mapColorToName } from "../utils/colorNameMap";
 import { enhanceStyle } from "../utils/enhanceStyle";
 import { updateTagsForCategory } from "../utils/updateTagsForCategory";
 import { mergeAndCleanTags } from "../utils/mergeAndCleanTags";
+import { getPhotoUrl } from "../utils/photoHelpers";
 
 /* -------------------------------------------
    CATEGORY DETECTION (Deep rules)
@@ -149,8 +150,9 @@ export function useSmartFill(listingData, platform = "mercari") {
   // Extract dominant color from image
   useEffect(() => {
     async function runColor() {
-      if (listingData?.photos?.[0]) {
-        const rgb = await extractDominantColor(listingData.photos[0]);
+      const primaryPhoto = getPhotoUrl(listingData?.photos?.[0]);
+      if (primaryPhoto) {
+        const rgb = await extractDominantColor(primaryPhoto);
         setDominantColor(rgb);
         setColorName(mapColorToName(rgb));
       }

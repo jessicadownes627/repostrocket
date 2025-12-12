@@ -5,6 +5,7 @@ import PreviewCard from "../components/PreviewCard";
 import { buildPlatformPreview } from "../utils/platformPreview";
 import { formatDescriptionByPlatform } from "../utils/formatDescriptionByPlatform";
 import "../styles/overrides.css";
+import { getPhotoUrl } from "../utils/photoHelpers";
 
 export default function LaunchDeck() {
   const location = useLocation();
@@ -149,35 +150,50 @@ export default function LaunchDeck() {
 
             {/* IMAGE */}
             <div>
-              <div className="w-full h-56 overflow-hidden rounded-xl">
-                <img
-                  src={activeItem.photos?.[0]}
-                  className="w-full h-full object-cover"
-                  alt="listing"
-                />
-              </div>
+              {(() => {
+                const photoList = Array.isArray(activeItem.photos)
+                  ? activeItem.photos
+                  : [];
+                const photoUrls = photoList
+                  .map((p) => getPhotoUrl(p))
+                  .filter(Boolean);
+                const featured = activeItem.editedPhoto || photoUrls[0];
 
-              {Array.isArray(activeItem.photos) &&
-                activeItem.photos.length > 1 && (
-                  <div className="mt-3 flex gap-2 overflow-x-auto hide-scrollbar">
-                    {activeItem.photos.slice(1).map((url, idx) => (
-                      <div
-                        key={idx}
-                        className="
-                          w-16 h-16 rounded-lg overflow-hidden 
-                          border border-[rgba(232,213,168,0.28)]
-                          flex-shrink-0
-                        "
-                      >
+                return (
+                  <>
+                    {featured && (
+                      <div className="w-full h-56 overflow-hidden rounded-xl">
                         <img
-                          src={url}
-                          alt="additional"
+                          src={featured}
                           className="w-full h-full object-cover"
+                          alt="listing"
                         />
                       </div>
-                    ))}
-                  </div>
-                )}
+                    )}
+
+                    {photoUrls.length > 1 && (
+                      <div className="mt-3 flex gap-2 overflow-x-auto hide-scrollbar">
+                        {photoUrls.slice(1).map((url, idx) => (
+                          <div
+                            key={idx}
+                            className="
+                              w-16 h-16 rounded-lg overflow-hidden 
+                              border border-[rgba(232,213,168,0.28)]
+                              flex-shrink-0
+                            "
+                          >
+                            <img
+                              src={url}
+                              alt="additional"
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
 
             {/* TITLE */}

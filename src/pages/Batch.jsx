@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { useListingStore } from "../store/useListingStore";
 import { v4 as uuidv4 } from "uuid";
 import { convertHeicToJpeg } from "../utils/heicConverter";
+import { deriveAltTextFromFilename } from "../utils/photoHelpers";
 
 function Batch() {
   const navigate = useNavigate();
@@ -26,19 +27,31 @@ function Batch() {
     for (const file of fileList) {
       try {
         let previewUrl;
+        let finalFile = file;
+        let previewAlt = deriveAltTextFromFilename(file.name);
 
         // HEIC → JPEG conversion
         if (file.type === "image/heic" || file.name.toLowerCase().endsWith(".heic")) {
-          const jpegBlob = await convertHeicToJpeg(file);
-          previewUrl = URL.createObjectURL(jpegBlob);
+          const converted = await convertHeicToJpeg(file);
+          if (converted instanceof File) {
+            finalFile = converted;
+            previewUrl = URL.createObjectURL(converted);
+            previewAlt = deriveAltTextFromFilename(converted.name);
+          } else if (converted && typeof converted === "object" && converted.url) {
+            previewUrl = converted.url;
+            previewAlt = converted.altText || previewAlt;
+          } else {
+            previewUrl = URL.createObjectURL(file);
+          }
         } else {
           previewUrl = URL.createObjectURL(file);
         }
 
         newPhotos.push({
           id: uuidv4(),
-          file,
+          file: finalFile,
           preview: previewUrl,
+          altText: previewAlt,
         });
       } catch (err) {
         console.error("Failed to load file:", file.name, err);
@@ -65,9 +78,17 @@ function Batch() {
   const handleBuildBatch = () => {
     if (photos.length === 0) return;
 
-    const items = photos.map((p) => ({
+    const items = photos.map((p, idx) => ({
       id: p.id,
-      photos: [p.preview],   // LaunchDeckBatch-friendly shape
+      photos: [
+        {
+          url: p.preview,
+          altText:
+            p.altText ||
+            deriveAltTextFromFilename(p.file?.name) ||
+            `batch photo ${idx + 1}`,
+        },
+      ],   // LaunchDeckBatch-friendly shape
       title: "",
       description: "",
       tags: [],

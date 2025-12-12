@@ -22,7 +22,8 @@ import { runAIReview } from "../utils/safeAI/runAIReview";
 import { runMagicFill } from "../utils/safeAI/runMagicFill";
 import { runAutoFill } from "../utils/safeAI/runAutoFill";
 import { mergeAITurboSignals } from "../utils/aiTurboMerge";
-import { runMagicFill as runMagicFillEngine } from "../engines/MagicFillEngine";
+import { parseMagicFillOutput } from "../engines/MagicFillEngine";
+import { runMagicFill as callMagicFillFunction } from "../utils/runMagicFill";
 import { autoCropCard } from "../utils/autoCropCard";
 import { autoEnhanceCard } from "../utils/autoEnhanceCard";
 import {
@@ -55,6 +56,62 @@ import {
 } from "../engines/visionHelpers";
 import { smartPriceSense } from "../engines/smartPriceSense";
 import CardDetailSidebar from "../components/CardDetailSidebar";
+import { fileToDataUrl, getPhotoUrl, mapPhotosToUrls } from "../utils/photoHelpers";
+
+async function ensureDataUrl(source) {
+  if (!source) return "";
+  if (source.startsWith("data:")) return source;
+  try {
+    const res = await fetch(source);
+    const blob = await res.blob();
+    const file = new File([blob], "batch-photo", {
+      type: blob.type || "image/jpeg",
+    });
+    return await fileToDataUrl(file);
+  } catch (err) {
+    console.error("ensureDataUrl failed:", err);
+    return "";
+  }
+}
+
+async function runMagicFillEngine(item) {
+  try {
+    const firstPhotoEntry = Array.isArray(item?.photos) ? item.photos[0] : null;
+    const primaryPhoto =
+      item?.editedPhoto ||
+      (firstPhotoEntry && (getPhotoUrl(firstPhotoEntry) || "")) ||
+      "";
+    const photoDataUrl = await ensureDataUrl(primaryPhoto);
+    const payload = {
+      photoDataUrl,
+      brand: item?.brand || "",
+      category: item?.category || "",
+      size: item?.size || "",
+      condition: item?.condition || "",
+      userTitle: item?.title || "",
+      userDescription: item?.description || "",
+      userTags: Array.isArray(item?.tags) ? item.tags : [],
+      previousAiChoices: item?.previousAiChoices || {},
+    };
+
+    const ai = await callMagicFillFunction(payload);
+    if (!ai?.output) return null;
+
+    const parsed = parseMagicFillOutput(ai.output);
+    return {
+      title: parsed.title.after || item.title || "",
+      description: parsed.description.after || item.description || "",
+      price: parsed.price.after || item.price || "",
+      tags:
+        Array.isArray(parsed.tags.after) && parsed.tags.after.length
+          ? parsed.tags.after
+          : item.tags || [],
+    };
+  } catch (err) {
+    console.error("runMagicFillEngine failed:", err);
+    return null;
+  }
+}
 
 const platformFormatters = {
   ebay: formatEbay,
@@ -99,13 +156,14 @@ export default function LaunchDeckBatch() {
     const updated = [];
 
     for (const item of processedItems) {
-      if (!item.photos || !item.photos.length) {
+      const sourcePhoto = getPhotoUrl(item?.photos?.[0]);
+      if (!sourcePhoto) {
         updated.push(item);
         continue;
       }
 
       try {
-        const edited = await autoCropCard(item.photos[0]);
+        const edited = await autoCropCard(sourcePhoto);
         updated.push({ ...item, editedPhoto: edited });
       } catch (err) {
         console.error("Auto crop failed for batch item:", item.id, err);
@@ -122,13 +180,14 @@ export default function LaunchDeckBatch() {
     const updated = [];
 
     for (const item of processedItems) {
-      if (!item.photos || !item.photos.length) {
+      const sourcePhoto = getPhotoUrl(item?.photos?.[0]);
+      if (!sourcePhoto) {
         updated.push(item);
         continue;
       }
 
       try {
-        const enhanced = await autoEnhanceCard(item.photos[0]);
+        const enhanced = await autoEnhanceCard(sourcePhoto);
         updated.push({ ...item, editedPhoto: enhanced });
       } catch (err) {
         console.error("Auto enhance failed for batch item:", item.id, err);
@@ -156,8 +215,9 @@ export default function LaunchDeckBatch() {
           const filled = await runMagicFillEngine(item);
           const base = filled ? { ...item, ...filled } : { ...item };
 
-          const autoCategory = predictCategoryFromPhoto(base.photos || []);
-          const autoBrand = guessBrandFromPhoto(base.photos || []);
+          const normalizedPhotos = mapPhotosToUrls(base.photos || []);
+          const autoCategory = predictCategoryFromPhoto(normalizedPhotos);
+          const autoBrand = guessBrandFromPhoto(normalizedPhotos);
           const seoKeywords = buildSeoKeywords({
             title: base.title || "",
             description: base.description || "",
@@ -171,7 +231,7 @@ export default function LaunchDeckBatch() {
             seoKeywords,
           };
 
-          if (isSportsCardPhoto(base.photos || [])) {
+          if (isSportsCardPhoto(normalizedPhotos)) {
             enriched = {
               ...enriched,
               cardPlayer: "",
@@ -187,7 +247,7 @@ export default function LaunchDeckBatch() {
               ${base.title || ""}
               ${base.description || ""}
               ${base.tags?.join(" ") || ""}
-              ${String(base.photos?.[0] || "")}
+              ${getPhotoUrl(base.photos?.[0]) || ""}
             `.toLowerCase();
 
             const cardYear = extractCardYear(combinedText);
@@ -737,42 +797,46 @@ function BatchCard({ item, index, updateItem, setActiveDetailIndex }) {
       )}
 
       {/* Per-card image tools */}
-      {item?.cardPlayer !== undefined && item.photos?.[0] && (
-        <div className="flex gap-2 mb-3">
-          <button
-            onClick={async () => {
-              try {
-                const edited = await autoCropCard(item.photos[0]);
-                updateItem(index, (prev) => ({
-                  ...prev,
-                  editedPhoto: edited,
-                }));
-              } catch (err) {
-                console.error("Per-card crop failed:", err);
-              }
-            }}
-            className="text-xs px-2 py-1 bg-black/30 border border-white/20 rounded-lg text-white hover:bg-black/50 transition"
-          >
-            Crop
-          </button>
-          <button
-            onClick={async () => {
-              try {
-                const enhanced = await autoEnhanceCard(item.photos[0]);
-                updateItem(index, (prev) => ({
-                  ...prev,
-                  editedPhoto: enhanced,
-                }));
-              } catch (err) {
-                console.error("Per-card enhance failed:", err);
-              }
-            }}
-            className="text-xs px-2 py-1 bg-black/30 border border-white/20 rounded-lg text-white hover:bg-black/50 transition"
-          >
-            Enhance
-          </button>
-        </div>
-      )}
+      {(() => {
+        const primaryPhoto = getPhotoUrl(item?.photos?.[0]);
+        if (item?.cardPlayer === undefined || !primaryPhoto) return null;
+        return (
+          <div className="flex gap-2 mb-3">
+            <button
+              onClick={async () => {
+                try {
+                  const edited = await autoCropCard(primaryPhoto);
+                  updateItem(index, (prev) => ({
+                    ...prev,
+                    editedPhoto: edited,
+                  }));
+                } catch (err) {
+                  console.error("Per-card crop failed:", err);
+                }
+              }}
+              className="text-xs px-2 py-1 bg-black/30 border border-white/20 rounded-lg text-white hover:bg-black/50 transition"
+            >
+              Crop
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  const enhanced = await autoEnhanceCard(primaryPhoto);
+                  updateItem(index, (prev) => ({
+                    ...prev,
+                    editedPhoto: enhanced,
+                  }));
+                } catch (err) {
+                  console.error("Per-card enhance failed:", err);
+                }
+              }}
+              className="text-xs px-2 py-1 bg-black/30 border border-white/20 rounded-lg text-white hover:bg-black/50 transition"
+            >
+              Enhance
+            </button>
+          </div>
+        );
+      })()}
 
       {/* Sports Card Suite Copy Toolbar */}
       {item?.autoListing && (

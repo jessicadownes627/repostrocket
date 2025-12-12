@@ -1,4 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import {
+  deriveAltTextFromFilename,
+  normalizePhotosArray,
+} from "../utils/photoHelpers";
 
 const ListingContext = createContext(null);
 const STORAGE_KEY = "rr_draft_listing";
@@ -49,7 +53,15 @@ export function ListingProvider({ children }) {
           setSelectedPlatforms(parsed.selectedPlatforms);
         }
         if (parsed.listingData) {
-          setListingData({ ...defaultListing, ...parsed.listingData });
+          const normalizedPhotos = normalizePhotosArray(
+            parsed.listingData.photos,
+            "item photo"
+          );
+          setListingData({
+            ...defaultListing,
+            ...parsed.listingData,
+            photos: normalizedPhotos,
+          });
         }
       }
     } catch (err) {
@@ -113,7 +125,13 @@ export function ListingProvider({ children }) {
 
   const value = useMemo(() => {
     const setListingField = (key, value) => {
-      setListingData((prev) => ({ ...prev, [key]: value }));
+      setListingData((prev) => {
+        let nextValue = value;
+        if (key === "photos") {
+          nextValue = normalizePhotosArray(value, "item photo");
+        }
+        return { ...prev, [key]: nextValue };
+      });
     };
 
     const setBatchItems = (items) => {
@@ -130,10 +148,17 @@ export function ListingProvider({ children }) {
 
     const addPhotos = (files) => {
       const incoming = Array.from(files || []);
-      const urls = incoming.map((f) => URL.createObjectURL(f));
+      if (!incoming.length) return;
+
+      const entries = incoming.map((file, idx) => {
+        const url = URL.createObjectURL(file);
+        const fallbackAlt = deriveAltTextFromFilename(file?.name);
+        return { url, altText: fallbackAlt, file };
+      });
+
       setListingData((prev) => ({
         ...prev,
-        photos: [...(prev.photos || []), ...urls],
+        photos: [...(prev.photos || []), ...entries],
       }));
     };
 
@@ -169,13 +194,25 @@ export function ListingProvider({ children }) {
       const draft = savedDrafts.find((d) => d.id === id);
       if (draft) {
         setSelectedPlatforms(draft.selectedPlatforms || []);
-        setListingData({ ...defaultListing, ...draft });
+        setListingData({
+          ...defaultListing,
+          ...draft,
+          photos: normalizePhotosArray(draft.photos, "item photo"),
+        });
       }
       return draft;
     };
 
     const setListing = (data) => {
-      setListingData(data || defaultListing);
+      if (!data) {
+        setListingData(defaultListing);
+        return;
+      }
+      setListingData({
+        ...defaultListing,
+        ...data,
+        photos: normalizePhotosArray(data.photos, "item photo"),
+      });
     };
 
     const consumeMagicUse = () => {

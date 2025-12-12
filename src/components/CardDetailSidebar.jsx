@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { getPhotoUrl } from "../utils/photoHelpers";
 
 export default function CardDetailSidebar({
   item,
@@ -49,13 +50,15 @@ export default function CardDetailSidebar({
         </div>
 
         {/* Image preview */}
-        <div className="w-full mb-6">
-          <img
-            src={item?.photos?.[0]}
-            alt="Card"
-            className="w-full rounded-lg border border-white/20 shadow-xl"
-          />
-        </div>
+        {getPhotoUrl(item?.photos?.[0]) && (
+          <div className="w-full mb-6">
+            <img
+              src={getPhotoUrl(item?.photos?.[0])}
+              alt="Card preview"
+              className="w-full rounded-lg border border-white/20 shadow-xl"
+            />
+          </div>
+        )}
 
         {/* Field list */}
         <div className="space-y-4 mb-10">

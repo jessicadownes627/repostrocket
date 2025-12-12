@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useListingStore } from "../store/useListingStore";
+import { getPhotoUrl } from "../utils/photoHelpers";
 import "../styles/drafts.css";
 
 function formatDate(ts) {
@@ -9,7 +10,7 @@ function formatDate(ts) {
 }
 
 function DraftCard({ draft, onEdit, onDelete }) {
-  const thumb = draft.photos?.[0];
+  const thumb = getPhotoUrl(draft.photos?.[0]);
   return (
     <div className="draft-card">
       <div className="draft-thumb">

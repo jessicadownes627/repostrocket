@@ -2,6 +2,7 @@ import { useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useListingStore } from "../store/useListingStore";
 import { convertHeicIfNeeded } from "../utils/imageTools";
+import { deriveAltTextFromFilename } from "../utils/photoHelpers";
 import "../styles/createListing.css"; // still safe to reuse
 
 export default function MagicCardPrep() {
@@ -48,7 +49,13 @@ export default function MagicCardPrep() {
       });
 
       // Store photos + mark as sports card flow
-      setListingField("photos", urls);
+      const photosWithAlt = urls.map((url, idx) => {
+        const file = converted[idx];
+        const fallbackAlt =
+          deriveAltTextFromFilename(file?.name) || `card photo ${idx + 1}`;
+        return { url, altText: fallbackAlt, file };
+      });
+      setListingField("photos", photosWithAlt);
       setListingField("category", "Sports Cards");
     },
     [resetListing, setListingField]

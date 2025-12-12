@@ -1,7 +1,10 @@
+import { getPhotoUrl } from "./photoHelpers";
+
 export async function mockAnalyzePhotos(photos = []) {
   // Simple heuristic: use filename hints if any
-  const first = photos[0] || "";
-  const hint = typeof first === "string" ? first.toLowerCase() : "";
+  const firstEntry = photos && photos.length > 0 ? photos[0] : "";
+  const hintSource = getPhotoUrl(firstEntry) || String(firstEntry || "");
+  const hint = hintSource.toLowerCase();
   const isDenim = hint.includes("denim") || hint.includes("jean");
   const isJacket = hint.includes("jacket") || hint.includes("coat");
   const isDress = hint.includes("dress");
