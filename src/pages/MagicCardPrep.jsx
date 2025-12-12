@@ -3,7 +3,24 @@ import { useNavigate } from "react-router-dom";
 import { useListingStore } from "../store/useListingStore";
 import { convertHeicIfNeeded } from "../utils/imageTools";
 import { deriveAltTextFromFilename } from "../utils/photoHelpers";
+import { runMagicFill } from "../utils/runMagicFill";
+import { parseMagicFillOutput } from "../engines/MagicFillEngine";
 import "../styles/createListing.css"; // still safe to reuse
+
+const fileToDataUrl = (file) =>
+  new Promise((resolve, reject) => {
+    if (!(file instanceof File)) {
+      resolve(null);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") resolve(reader.result);
+      else resolve(null);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 
 export default function MagicCardPrep() {
   const navigate = useNavigate();
@@ -12,6 +29,7 @@ export default function MagicCardPrep() {
 
   const [previews, setPreviews] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
 
   /* ------------------------------------------------------ */
   /*  SIMPLE CARD FILE HANDLER (no HEIC, no clothes logic)  */
@@ -21,8 +39,8 @@ export default function MagicCardPrep() {
       const incoming = Array.from(files || []);
       if (!incoming.length) return;
 
-      // New card upload: start from a clean listing
       resetListing();
+      setAnalyzing(false);
 
       const converted = [];
 
@@ -38,7 +56,6 @@ export default function MagicCardPrep() {
 
       const urls = converted.map((f) => URL.createObjectURL(f));
 
-      // Set previews
       urls.forEach((url) => {
         const img = new Image();
         const commit = () =>
@@ -48,15 +65,66 @@ export default function MagicCardPrep() {
         img.src = url;
       });
 
-      // Store photos + mark as sports card flow
       const photosWithAlt = urls.map((url, idx) => {
         const file = converted[idx];
         const fallbackAlt =
           deriveAltTextFromFilename(file?.name) || `card photo ${idx + 1}`;
         return { url, altText: fallbackAlt, file };
       });
+
       setListingField("photos", photosWithAlt);
       setListingField("category", "Sports Cards");
+
+      if (!photosWithAlt.length) return;
+
+      setAnalyzing(true);
+      try {
+        const primaryPhoto = photosWithAlt[0];
+        const photoDataUrl = await fileToDataUrl(primaryPhoto.file);
+
+        const listingPayload = {
+          title: "",
+          description: "",
+          price: "",
+          brand: "",
+          condition: "",
+          category: "Sports Cards",
+          size: "",
+          tags: [],
+          photos: photosWithAlt,
+          previousAiChoices: {},
+        };
+
+        const requestPayload = {
+          listing: listingPayload,
+          userCategory: "Sports Cards",
+          photoContext: primaryPhoto.altText || "",
+          photoDataUrl,
+        };
+
+        const ai = await runMagicFill(requestPayload);
+        const parsed = parseMagicFillOutput(ai);
+
+        if (parsed?.title?.after) {
+          setListingField("title", parsed.title.after);
+        }
+        if (parsed?.description?.after) {
+          setListingField("description", parsed.description.after);
+        }
+        if (parsed?.price?.after) {
+          setListingField("price", parsed.price.after);
+        }
+        if (Array.isArray(parsed?.tags?.after) && parsed.tags.after.length) {
+          setListingField("tags", parsed.tags.after);
+        }
+        if (parsed?.category_choice) {
+          setListingField("category", parsed.category_choice);
+        }
+      } catch (err) {
+        console.error("Magic Fill card prep failed:", err);
+      } finally {
+        setAnalyzing(false);
+      }
     },
     [resetListing, setListingField]
   );
@@ -89,6 +157,12 @@ export default function MagicCardPrep() {
       {/* --------------------------------------------- */}
       {/*   HEADER                                       */}
       {/* --------------------------------------------- */}
+      <button
+        onClick={() => navigate(-1)}
+        className="text-left text-sm text-[#E8DCC0] uppercase tracking-[0.2em] mb-4 w-fit hover:opacity-80 transition"
+      >
+        ← Back
+      </button>
       <h1 className="sparkly-header header-glitter text-center text-3xl mb-3">
         Upload Your Sports Card
       </h1>
@@ -129,20 +203,27 @@ export default function MagicCardPrep() {
 
       {/* PREVIEWS */}
       {previews.length > 0 && (
-        <div className="mt-6 grid grid-cols-2 gap-4 fade-in relative z-20">
-          {previews.map((url, i) => (
-            <div
-              key={i}
-              className="rounded-xl overflow-hidden border border-[rgba(232,213,168,0.25)] bg-black/30"
-            >
-              <img
-                src={url}
-                alt="preview"
-                className="w-full h-full object-cover"
-              />
+        <>
+          {analyzing && (
+            <div className="text-center mt-6 text-sm uppercase tracking-[0.35em] text-[#E8DCC0]">
+              Analyzing card…
             </div>
-          ))}
-        </div>
+          )}
+          <div className="mt-6 grid grid-cols-2 gap-4 fade-in relative z-20">
+            {previews.map((url, i) => (
+              <div
+                key={i}
+                className="rounded-xl overflow-hidden border border-[rgba(232,213,168,0.25)] bg-black/30"
+              >
+                <img
+                  src={url}
+                  alt="preview"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
       {/* --------------------------------------------- */}
@@ -151,7 +232,7 @@ export default function MagicCardPrep() {
       <div className="mt-auto pt-10 relative z-30">
         <button
           onClick={goNext}
-          disabled={!previews.length}
+          disabled={!previews.length || analyzing}
           className={`
             w-full py-4 text-lg font-semibold rounded-xl
             lux-continue-btn
