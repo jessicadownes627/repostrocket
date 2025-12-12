@@ -5,6 +5,39 @@ import { loadListingLibrary } from "../utils/savedListings";
 export default function SportsCardSuite() {
   const navigate = useNavigate();
   const [hasCards, setHasCards] = useState(true);
+  const handleNavigate = (path) => navigate(path);
+
+  const primaryTools = [
+    {
+      title: "Bulk Card Upload",
+      description: "Import a stack of cards and auto-create listings in one run.",
+      cta: "Start Bulk Run",
+      path: "/batch",
+      accent: "gold",
+    },
+    {
+      title: "Single Card Pro Editor",
+      description: "Fine-tune one card at a time with full title + photo controls.",
+      cta: "Open Pro Editor",
+      path: "/card-prep",
+      accent: "neutral",
+    },
+    {
+      title: "Market Assist Workspace",
+      description: "Price check, comps, and keywords in a single panel.",
+      cta: "Start Market Assist",
+      path: "/batch-comps",
+      accent: "neutral",
+    },
+  ];
+
+  const multiCardInfo = {
+    title: "Multi-Card Auto Detection",
+    description: "One photo → automatic card slicing + detection.",
+    disclaimer: "Experimental • Optimized for well-lit photos • Accuracy varies",
+    trustNote: "Does not alter your original files.",
+    path: "/multi-detect",
+  };
 
   useEffect(() => {
     try {
@@ -33,52 +66,49 @@ export default function SportsCardSuite() {
         </p>
 
         {/* CTA Section */}
-        <div className="flex flex-col gap-6 mt-8">
+        <div className="flex flex-col gap-5 mt-8">
+          {primaryTools.map((tool) => (
+            <button
+              key={tool.title}
+              onClick={() => handleNavigate(tool.path)}
+              className={`w-full text-left px-5 py-5 rounded-2xl border transition-all ${
+                tool.accent === "gold"
+                  ? "border-[#E8DCC0] text-[#F8EED5] bg-black/25 hover:bg-black/40"
+                  : "border-white/15 text-white bg-white/5 hover:bg-white/10"
+              }`}
+            >
+              <div className="text-sm uppercase tracking-[0.28em] opacity-70 mb-2">
+                {tool.title}
+              </div>
+              <div className="text-base text-white/80 leading-relaxed mb-3">
+                {tool.description}
+              </div>
+              <span className="text-xs tracking-[0.3em] uppercase">
+                {tool.cta}
+              </span>
+            </button>
+          ))}
 
-          {/* Batch Upload */}
           <button
-            onClick={() => navigate("/batch")}
-            className="w-full py-4 rounded-xl border border-[#E8DCC0] text-[#E8DCC0] bg-black/20 
-                       hover:bg-black/40 transition-all text-xl"
+            onClick={() => handleNavigate(multiCardInfo.path)}
+            className="w-full text-left px-5 py-5 rounded-2xl border border-white/10 bg-black/20 text-white/80 hover:bg-black/35 transition-all opacity-80"
           >
-            Batch Card Upload
-          </button>
-
-          {/* Single Card Mode */}
-          <button
-            onClick={() => navigate("/card-prep")}
-            className="w-full py-4 rounded-xl border border-white/20 text-white bg-white/5
-                       hover:bg-white/10 transition-all text-xl"
-          >
-            Single Card Pro Editor
-          </button>
-
-          {/* Multi-Card Auto Detection */}
-          <button
-            onClick={() => navigate("/multi-detect")}
-            className="w-full py-4 rounded-xl border border-white/20 text-white bg-black/30
-                       hover:bg-black/50 transition-all text-xl text-left px-5"
-          >
-            <div className="text-xs uppercase tracking-[0.22em] opacity-70 mb-1">
-              BETA
+            <div className="text-[10px] uppercase tracking-[0.4em] text-white/50 mb-2">
+              Experimental
             </div>
-            <div className="text-lg font-semibold">
-              Multi-Card Auto Detection
+            <div className="text-lg font-semibold text-white">
+              {multiCardInfo.title}
             </div>
-            <div className="text-sm opacity-75 mt-1">
-              Upload one photo → Repost Rocket detects and slices every card.
+            <div className="text-sm opacity-70 mt-1">
+              {multiCardInfo.description}
+            </div>
+            <div className="text-[11px] opacity-60 mt-3 italic">
+              {multiCardInfo.disclaimer}
+            </div>
+            <div className="text-[11px] opacity-55 mt-1">
+              {multiCardInfo.trustNote}
             </div>
           </button>
-
-          {/* Batch Market Assist */}
-          <button
-            onClick={() => navigate("/batch-comps")}
-            className="w-full py-4 rounded-xl border border-white/20 text-white bg-white/5
-                       hover:bg-white/10 transition-all text-xl"
-          >
-            Batch Market Assist
-          </button>
-
         </div>
 
         {/* Features */}

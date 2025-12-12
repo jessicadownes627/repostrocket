@@ -13,6 +13,7 @@ function Batch() {
 
   const [photos, setPhotos] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
+  const hasPhotos = photos.length > 0;
 
   // ---------------------------------------
   // HANDLE FILE UPLOAD (HEIC SAFE + MOBILE SAFE)
@@ -103,11 +104,20 @@ function Batch() {
 
   return (
     <div className="min-h-screen bg-black text-white px-6 py-10">
+      <button
+        onClick={() => navigate(-1)}
+        className="text-left text-sm text-[#E8DCC0] uppercase tracking-[0.2em] mb-4 w-fit hover:opacity-80 transition"
+      >
+        ← Back
+      </button>
       <h1 className="text-4xl mb-6 font-cinzel text-center tracking-wide">
         Batch Mode
       </h1>
 
       {/* UPLOAD AREA */}
+      <div className="text-xs uppercase tracking-[0.35em] text-center text-white/60 mb-4">
+        Step 1 — Upload Photos
+      </div>
       <div
         className="
           border border-[#4cc790] border-dashed 
@@ -146,9 +156,22 @@ function Batch() {
         </p>
       )}
 
+      {!isUploading && hasPhotos && (
+        <div className="flex justify-center mt-6">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/15 bg-black/30 text-[11px] uppercase tracking-[0.3em] text-white/70">
+            <span className="w-2 h-2 rounded-full bg-[#4cc790] animate-pulse" />
+            Batch ready · {photos.length} card{photos.length > 1 ? "s" : ""} queued
+          </div>
+        </div>
+      )}
+
       {/* THUMBNAIL GRID */}
-      {photos.length > 0 && (
-        <div className="mt-10 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 max-w-5xl mx-auto">
+      {hasPhotos && (
+        <>
+          <div className="text-xs uppercase tracking-[0.35em] text-center text-white/60 mt-10 mb-4">
+            Step 2 — Review Cards
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 max-w-5xl mx-auto">
           {photos.map((p) => (
             <div
               key={p.id}
@@ -168,33 +191,32 @@ function Batch() {
                 onClick={() => removePhoto(p.id)}
                 className="
                   absolute top-2 right-2 
-                  bg-black/60 
-                  text-white 
-                  rounded-full 
-                  w-8 h-8 
-                  flex items-center justify-center 
-                  border border-[#4cc790]
-                  hover:bg-black/80
+                  bg-black/45 
+                  text-white/80 
+                  rounded-full px-3 py-1 text-xs
+                  border border-white/30
+                  hover:bg-black/65
                   transition
                 "
               >
-                ✕
+                Remove
               </button>
             </div>
           ))}
         </div>
+        </>
       )}
 
       {/* ADD MORE PHOTOS */}
-      {photos.length > 0 && (
+      {hasPhotos && (
         <div className="text-center mt-8">
           <button
             onClick={() => document.getElementById("batchUpload").click()}
             className="
               text-[#E8DCC0] 
               underline 
-              text-lg 
-              tracking-wide 
+              text-sm
+              tracking-[0.3em]
               hover:opacity-80 
               transition
             "
@@ -205,8 +227,11 @@ function Batch() {
       )}
 
       {/* CONTINUE */}
-      {photos.length > 0 && (
+      {hasPhotos && (
         <div className="text-center mt-10">
+          <div className="text-xs uppercase tracking-[0.35em] text-white/60 mb-4">
+            Step 3 — Launch Batch
+          </div>
           <button
             onClick={handleBuildBatch}
             className="
