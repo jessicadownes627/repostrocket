@@ -437,6 +437,79 @@ body::after {
   opacity: 1;
 }
 
+.shimmer-divider {
+  position: relative;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    rgba(232, 213, 168, 0),
+    rgba(232, 213, 168, 0.4),
+    rgba(232, 213, 168, 0)
+  );
+  overflow: hidden;
+}
+
+.shimmer-divider::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.8),
+    transparent
+  );
+  animation: shimmerSweep 5s linear infinite;
+}
+
+@keyframes shimmerSweep {
+  0% { transform: translateX(-60%); }
+  100% { transform: translateX(60%); }
+}
+
+.ready-launch-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 22px;
+  border-radius: 999px;
+  border: 1px solid rgba(232, 213, 168, 0.45);
+  background: rgba(0, 0, 0, 0.35);
+  text-transform: uppercase;
+  letter-spacing: 0.35em;
+  font-size: 12px;
+  color: rgba(232, 213, 168, 0.8);
+  overflow: hidden;
+}
+
+.ready-launch-badge::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(232, 213, 168, 0.15),
+    rgba(232, 213, 168, 0.55),
+    rgba(232, 213, 168, 0.15)
+  );
+  transform: translateX(-100%);
+  animation: badgeFill 6s ease-in-out infinite;
+  z-index: 0;
+}
+
+.ready-launch-badge span {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes badgeFill {
+  0% { transform: translateX(-100%); }
+  40% { transform: translateX(0); }
+  60% { transform: translateX(0); }
+  100% { transform: translateX(100%); }
+}
+
 /* ------------------------------------------------------ */
 /*   ✨ MAGIC PREP — CHAMPAGNE HEADER LINE                 */
 /* ------------------------------------------------------ */

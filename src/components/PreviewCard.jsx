@@ -32,6 +32,8 @@ export default function PreviewCard({
   onEdit,
   platformTitle,
   platformDescription,
+  onLaunch,
+  isPrimary = false,
 }) {
   if (!item) return null;
 
@@ -64,12 +66,19 @@ export default function PreviewCard({
       px-4 py-5 mb-8
       shadow-[0_4px_16px_rgba(0,0,0,0.55)]
       backdrop-blur-sm
+      transition duration-300 group
     "
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <div className="text-[11px] uppercase tracking-[0.15em] text-[rgba(232,213,168,0.55)]">
-          {label} Preview
+        <div
+          className={`uppercase tracking-[0.25em] ${
+            isPrimary
+              ? "text-[13px] text-[rgba(232,213,168,0.92)]"
+              : "text-[12px] text-[rgba(232,213,168,0.65)]"
+          }`}
+        >
+          {label}
         </div>
         {onEdit && (
           <button
@@ -98,12 +107,24 @@ export default function PreviewCard({
         {/* Text content */}
         <div className="flex-1">
           {/* Title */}
-          <div className="text-[15px] font-semibold text-[#F4E9D5] leading-snug mb-1">
-            {displayTitle}
-          </div>
+          <div
+          className={`font-semibold leading-snug mb-1 transition-colors ${
+            isPrimary
+              ? "text-[15px] text-[#F4E9D5] group-hover:text-white"
+              : "text-[14px] text-white/70 group-hover:text-white/85"
+          }`}
+        >
+          {displayTitle}
+        </div>
 
-          {/* Details line */}
-          <div className="text-[12px] text-white/50 mb-2">
+        {/* Details line */}
+        <div
+          className={`text-[12px] mb-2 transition-colors ${
+            isPrimary
+              ? "text-white/60 group-hover:text-white/80"
+              : "text-white/30 group-hover:text-white/60"
+          }`}
+        >
             {[
               item.price ? `$${item.price}` : "",
               item.condition || "",
@@ -115,7 +136,13 @@ export default function PreviewCard({
           </div>
 
           {/* Description – main hero text */}
-          <div className="text-[13px] text-white/70 leading-relaxed line-clamp-4 whitespace-pre-line mb-3">
+          <div
+            className={`text-[13px] leading-relaxed line-clamp-3 whitespace-pre-line mb-3 transition-colors ${
+              isPrimary
+                ? "text-white/75 group-hover:text-white"
+                : "text-white/40 group-hover:text-white/70"
+            }`}
+          >
             {displayDescription}
           </div>
 
@@ -124,7 +151,7 @@ export default function PreviewCard({
               {item.tags.slice(0, 4).map((tag) => (
                 <span
                   key={tag}
-                  className="text-[11px] px-2 py-0.5 rounded-full border border-[rgba(232,213,168,0.25)] text-[rgba(232,213,168,0.75)]"
+                  className="text-[11px] px-2 py-0.5 rounded-full border border-[rgba(232,213,168,0.25)] text-[rgba(232,213,168,0.75)] transition-colors group-hover:border-[rgba(232,213,168,0.55)] group-hover:text-[rgba(232,213,168,0.95)]"
                 >
                   {tag}
                 </span>
@@ -132,18 +159,18 @@ export default function PreviewCard({
             </div>
           )}
 
-          {/* Copy actions – high priority */}
-          <div className="flex flex-col gap-2 mb-3">
+          {/* Copy actions – secondary */}
+          <div className="flex flex-col gap-2 mb-4">
             <button
               type="button"
-              className="w-full text-[12px] px-3 py-2 rounded-xl bg-[rgba(232,213,168,0.90)] text-black font-semibold tracking-wide border border-[rgba(232,213,168,0.45)]"
+              className="w-full text-[11px] px-3 py-2 rounded-xl border border-[rgba(232,213,168,0.45)] text-[rgba(232,213,168,0.9)] bg-transparent hover:bg-black/25 transition"
               onClick={() => safeCopy(displayTitle)}
             >
               Copy Title
             </button>
             <button
               type="button"
-              className="w-full text-[12px] px-3 py-2 rounded-xl bg-black/30 text-[#F4E9D5] border border-[rgba(232,213,168,0.35)] hover:bg-black/50 transition"
+              className="w-full text-[11px] px-3 py-2 rounded-xl border border-[rgba(232,213,168,0.35)] text-[rgba(232,213,168,0.85)] bg-transparent hover:bg-black/25 transition"
               onClick={() => safeCopy(displayDescription)}
             >
               Copy Description
@@ -151,7 +178,7 @@ export default function PreviewCard({
             {item.price && (
               <button
                 type="button"
-                className="w-full text-[12px] px-3 py-2 rounded-xl bg-black/30 text-[#F4E9D5] border border-[rgba(232,213,168,0.35)] hover:bg-black/50 transition"
+                className="w-full text-[11px] px-3 py-2 rounded-xl border border-[rgba(232,213,168,0.35)] text-[rgba(232,213,168,0.85)] bg-transparent hover:bg-black/25 transition"
                 onClick={() =>
                   safeCopy(
                     typeof item.price === "number"
@@ -168,19 +195,32 @@ export default function PreviewCard({
       </div>
 
       {/* Launch row */}
-      <div className="px-4 pb-4">
+      <div className="px-4 pb-5 pt-1">
         <button
           type="button"
           disabled={!launchUrl}
           onClick={() => {
             if (!launchUrl) return;
+            if (onLaunch) {
+              onLaunch({
+                platform,
+                label,
+                launchUrl,
+                title: displayTitle,
+                description: displayDescription,
+                price: item.price,
+              });
+              return;
+            }
             window.open(launchUrl, "_blank", "noopener");
           }}
           className={`
-            w-full mt-2 py-2 rounded-xl text-[11px] font-semibold tracking-wide
-            ${launchUrl
-              ? "bg-black/60 text-[#F5E7D0] border border-[rgba(232,213,168,0.25)] hover:bg-black/75 transition"
-              : "bg-black/30 text-white/40 border border-white/20 cursor-not-allowed"}
+            w-full mt-2 py-3 rounded-2xl text-[11px] font-semibold tracking-[0.3em] launch-pulse
+            ${
+              launchUrl
+                ? "bg-gradient-to-r from-[#F7E8C8] via-[#F2DDB1] to-[#E3CFA0] text-[#1B1208] border border-[rgba(248,233,207,0.6)] shadow-[0_10px_25px_rgba(0,0,0,0.45)] hover:shadow-[0_14px_30px_rgba(0,0,0,0.55)] transition"
+                : "bg-black/30 text-white/35 border border-white/10 cursor-not-allowed"
+            }
           `}
         >
           {launchUrl ? `Launch to ${label}` : "Launch unavailable"}

@@ -42,6 +42,10 @@ textarea {
   animation: glowPulse 2.6s ease-in-out infinite;
 }
 
+.launch-pulse {
+  animation: launchPulse 6s ease-in-out infinite;
+}
+
 /* Animated champagne dividers */
 .lux-animated-bar {
   position: relative;
@@ -109,5 +113,32 @@ textarea {
   100% {
     transform: translateX(60%);
     opacity: 0.2;
+  }
+}
+
+@keyframes launchPulse {
+  0% {
+    box-shadow:
+      0 10px 24px rgba(0, 0, 0, 0.45),
+      0 0 12px rgba(248, 233, 207, 0.25);
+    filter: brightness(1);
+  }
+  45% {
+    box-shadow:
+      0 14px 32px rgba(0, 0, 0, 0.5),
+      0 0 30px rgba(248, 233, 207, 0.45);
+    filter: brightness(1.04);
+  }
+  55% {
+    box-shadow:
+      0 14px 32px rgba(0, 0, 0, 0.5),
+      0 0 30px rgba(248, 233, 207, 0.45);
+    filter: brightness(1.04);
+  }
+  100% {
+    box-shadow:
+      0 10px 24px rgba(0, 0, 0, 0.45),
+      0 0 12px rgba(248, 233, 207, 0.25);
+    filter: brightness(1);
   }
 }
