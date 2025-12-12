@@ -76,7 +76,7 @@ export default function SingleListing() {
 
   const [showMagicResults, setShowMagicResults] = useState(false);
   const [magicSuggestion, setMagicSuggestion] = useState(null);
-  const [magicResults, setMagicResults] = useState([]);
+  const [magicResults, setMagicResults] = useState({ diffs: [] });
   const [magicLoading, setMagicLoading] = useState(false);
   const [showUsageModal, setShowUsageModal] = useState(false);
   const [photoWarnings, setPhotoWarnings] = useState([]);
@@ -92,6 +92,14 @@ export default function SingleListing() {
   const [localDescription, setLocalDescription] = useState(description);
   const [localBrand, setLocalBrand] = useState(brand);
   const [localPrice, setLocalPrice] = useState(price);
+  const [glowMode, setGlowMode] = useState(true);
+  const magicDiffs = Array.isArray(magicResults?.diffs)
+    ? magicResults.diffs
+    : [];
+  const glowScore = magicResults?.glowScore || null;
+  const glowRecommendations = Array.isArray(glowScore?.recommendations)
+    ? glowScore.recommendations
+    : [];
 
 
   const CATEGORY_OPTIONS = [
@@ -339,7 +347,7 @@ export default function SingleListing() {
   //  MAGIC FILL HANDLERS
   // -------------------------------------------
   const handleRunMagicFill = async () => {
-    setMagicResults([]);
+    setMagicResults({ diffs: [] });
     setMagicError("");
     if (listingData?.previousAiChoices) {
       listingData.previousAiChoices = {};
@@ -385,8 +393,7 @@ export default function SingleListing() {
         console.error("❌ Failed to build dataURL:", err);
       }
 
-      const payload = {
-        photoDataUrl,
+      const listingPayload = {
         brand: current.brand || raw.brand || "",
         category: current.category || raw.category || "",
         size: current.size || raw.size || "",
@@ -397,8 +404,16 @@ export default function SingleListing() {
         previousAiChoices: raw.previousAiChoices || {},
       };
 
+      const requestPayload = {
+        listing: listingPayload,
+        userCategory: current.category || raw.category || "",
+        photoContext: raw.photos?.[0]?.altText || "",
+        photoDataUrl,
+        glowMode,
+      };
+
       console.log("🔥 Payload photoContext image attached:", Boolean(photoDataUrl));
-      const ai = await runMagicFill(payload);
+      const ai = await runMagicFill(requestPayload);
       const parsed = parseMagicFillOutput(ai);
       if (!parsed.title.after && !parsed.description.after && parsed.tags.after.length === 0) {
         setMagicError("Magic Fill failed — please try again.");
@@ -458,7 +473,11 @@ export default function SingleListing() {
       consumeMagicUse();
 
       setMagicSuggestion(suggestion);
-      setMagicResults(diffs);
+      setMagicResults({
+        diffs,
+        glowScore: ai?.glowScore || null,
+        intent: ai?.intent || null,
+      });
       setMagicAccepted(accepted);
       setShowMagicResults(true);
       setMagicError("");
@@ -946,6 +965,15 @@ export default function SingleListing() {
             )}
           </div>
 
+          <div className="flex items-center gap-2 my-4">
+            <label className="text-sm tracking-wide">Glow Mode ✨</label>
+            <input
+              type="checkbox"
+              checked={glowMode}
+              onChange={() => setGlowMode((prev) => !prev)}
+            />
+          </div>
+
           {/* CORE INFORMATION */}
 
           <LuxeInput
@@ -1216,7 +1244,7 @@ export default function SingleListing() {
               <p className="text-sm opacity-70 mt-1">
                 Review AI suggestions before applying them to your listing.
               </p>
-              {magicResults.length === 0 && (
+              {magicDiffs.length === 0 && (
                 <p className="text-sm opacity-70 mt-2">
                   Magic added fresh suggestions to your listing
                 </p>
@@ -1226,7 +1254,7 @@ export default function SingleListing() {
             <div className="gold-divider" />
 
             <div className="space-y-4 max-h-[320px] overflow-y-auto pr-1">
-              {magicResults.map((item, idx) => (
+              {magicDiffs.map((item, idx) => (
                 <div
                   key={idx}
                   className="border border-[rgba(232,213,168,0.28)] rounded-xl p-3 bg-black/30"
@@ -1284,6 +1312,24 @@ export default function SingleListing() {
             </div>
 
             <div className="gold-divider" />
+
+            {glowScore && (
+              <div className="mt-4 rounded-lg p-4 bg-black/30 border border-white/10">
+                <h3 className="text-sm font-semibold tracking-wider mb-2">
+                  Glow Score ✨
+                </h3>
+                <p>Clarity: {glowScore.clarity}/5</p>
+                <p>Fit: {glowScore.fit}/5</p>
+                <p>Vibe: {glowScore.vibe}/5</p>
+                {glowRecommendations.length > 0 && (
+                  <ul className="mt-2 text-xs opacity-80">
+                    {glowRecommendations.map((rec, index) => (
+                      <li key={index}>• {rec}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
 
             <div className="flex gap-3 pt-2">
               <button

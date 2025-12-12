@@ -82,8 +82,7 @@ async function runMagicFillEngine(item) {
       (firstPhotoEntry && (getPhotoUrl(firstPhotoEntry) || "")) ||
       "";
     const photoDataUrl = await ensureDataUrl(primaryPhoto);
-    const payload = {
-      photoDataUrl,
+    const listingPayload = {
       brand: item?.brand || "",
       category: item?.category || "",
       size: item?.size || "",
@@ -94,10 +93,16 @@ async function runMagicFillEngine(item) {
       previousAiChoices: item?.previousAiChoices || {},
     };
 
-    const ai = await callMagicFillFunction(payload);
-    if (!ai?.output) return null;
+    const ai = await callMagicFillFunction({
+      listing: listingPayload,
+      userCategory: item?.category || "",
+      photoDataUrl,
+      photoContext: firstPhotoEntry?.altText || "",
+      glowMode: false,
+    });
+    if (!ai) return null;
 
-    const parsed = parseMagicFillOutput(ai.output);
+    const parsed = parseMagicFillOutput(ai);
     return {
       title: parsed.title.after || item.title || "",
       description: parsed.description.after || item.description || "",

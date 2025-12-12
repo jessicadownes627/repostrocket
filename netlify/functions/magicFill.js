@@ -1,4 +1,10 @@
 import OpenAI from "openai";
+import {
+  enhanceDescriptionForGlow,
+  enhanceTitleForGlow,
+  generateGlowScore,
+  glowIntentClassifier,
+} from "../../src/engines/glowHelpers.js";
 
 const SYSTEM_PROMPT = `
 You are Magic Fill, an expert multimodal resale assistant.
@@ -59,20 +65,19 @@ export async function handler(event) {
       };
     }
 
-    const listing = JSON.parse(event.body || "{}");
+    const {
+      listing = {},
+      userCategory = "",
+      glowMode = false,
+      photoContext = "",
+      photoDataUrl = null,
+    } = JSON.parse(event.body || "{}");
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-    const photoDataUrl = listing.photoDataUrl || null;
-    delete listing.photoDataUrl;
 
     const normalizedImageUrl = (() => {
       if (!photoDataUrl) return null;
-      if (photoDataUrl.startsWith("data:")) {
-        const base64 = photoDataUrl.split(",")[1] || "";
-        if (!base64) return null;
-        return `data:image/jpeg;base64,${base64}`;
-      }
-      return photoDataUrl;
+      if (photoDataUrl.startsWith("data:")) return photoDataUrl;
+      return null;
     })();
 
     let visionAlt = "No alt text";
@@ -104,9 +109,13 @@ ${normalizedImageUrl}
 
     const listingSnapshot = {
       ...listing,
-      photoContext: visionAlt,
-      userCategory: forcedCategory,
+      photoContext: photoContext || visionAlt,
+      userCategory: userCategory || forcedCategory,
     };
+
+    const photoSection = normalizedImageUrl
+      ? `<image>\n${normalizedImageUrl}\n</image>`
+      : "No photo provided";
 
     const mainInput = `
 ${SYSTEM_PROMPT}
@@ -115,9 +124,7 @@ User listing data:
 ${JSON.stringify(listingSnapshot, null, 2)}
 
 Photo:
-<image>
-${normalizedImageUrl || ""}
-</image>
+${photoSection}
 `;
 
     const response = await client.responses.create({
@@ -127,11 +134,24 @@ ${normalizedImageUrl || ""}
 
     const rawText = response.output_text || "";
 
-    const parsed = parseJsonSafe(rawText);
+    const finalResult = parseJsonSafe(rawText) || { ...EMPTY_RESPONSE };
+
+    const glowIntent = glowIntentClassifier(JSON.stringify(finalResult));
+
+    if (glowMode) {
+      if (finalResult.description) {
+        finalResult.description = enhanceDescriptionForGlow(finalResult.description);
+      }
+      if (finalResult.title) {
+        finalResult.title = enhanceTitleForGlow(finalResult.title);
+      }
+      finalResult.glowScore = generateGlowScore(finalResult);
+      finalResult.intent = glowIntent;
+    }
 
     return {
       statusCode: 200,
-      body: JSON.stringify(parsed ?? EMPTY_RESPONSE),
+      body: JSON.stringify(finalResult),
     };
   } catch (err) {
     console.error("Magic Fill Backend Error:", err);
@@ -153,6 +173,8 @@ function parseJsonSafe(str) {
       category_choice: obj.category_choice || null,
       style_choices: Array.isArray(obj.style_choices) ? obj.style_choices : [],
       debug: obj.debug || {},
+      glowScore: obj.glowScore || null,
+      intent: obj.intent || null,
     };
   } catch (err) {
     console.error("Magic Fill JSON parse failed:", err);
