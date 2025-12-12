@@ -13,6 +13,8 @@ import SmartPriceBandCard from "../components/SmartPriceBandCard";
 import CategoryMomentumCard from "../components/CategoryMomentumCard";
 import TrendSenseSearchPanel from "../components/TrendSenseSearchPanel";
 import SalesAlertsPanel from "../components/SalesAlertsPanel";
+import usePaywallGate from "../hooks/usePaywallGate";
+import PremiumModal from "../components/PremiumModal";
 import {
   trendingPairs,
   trendingOpportunities,
@@ -26,6 +28,58 @@ import {
   IconBrain,
 } from "../components/LuxIcons";
 
+const SAMPLE_REPORTS = [
+  {
+    item: { id: "sample-1", title: "90s Starter Chicago Bulls Jacket" },
+    trendScore: 82,
+    eventLinked: true,
+    eventHeadline: "Playoff spike pushing prices 30% higher",
+    buyerHint: "List before tonight's tipoff for peak demand.",
+    ts: {
+      demandLabel: "Heating",
+      smartBands: { floor: 110, target: 135, ceiling: 160 },
+      smartPriceRange: { min: 110, target: 135, max: 160 },
+      buyerHint: "BIN + watchers captures the premium right now.",
+      profitPotential: 45,
+    },
+  },
+];
+
+const SAMPLE_INFINITY = {
+  listNext: SAMPLE_REPORTS,
+  flipPotential: [
+    {
+      item: { id: "sample-2", title: "Shohei Rookie Chrome PSA 9", price: 95 },
+      ts: {
+        demandLabel: "Hot",
+        smartBands: { floor: 140, target: 165, ceiling: 190 },
+        smartPriceRange: { min: 140, target: 165, max: 190 },
+        buyerHint: "Opening week buzz is fueling bids.",
+        profitPotential: 70,
+      },
+    },
+  ],
+  hotTags: [
+    { keyword: "starter jacket", score: 78 },
+    { keyword: "shohei rookie", score: 83 },
+  ],
+  categoryMomentum: {
+    "Vintage Outerwear": {
+      score: 72,
+      direction: "rise",
+      trend: "up",
+      insight: "NBA playoff merch is driving traffic.",
+    },
+  },
+  reports: SAMPLE_REPORTS.map((rep) => ({
+    ...rep,
+  })),
+};
+
+const SAMPLE_ALERTS = [
+  { message: "Starter jackets up +45% week over week in Chicago." },
+];
+
 export default function TrendSenseDashboard() {
   const [reports, setReports] = useState([]);
   const [infinity, setInfinity] = useState(null);
@@ -33,8 +87,23 @@ export default function TrendSenseDashboard() {
   const [alerts, setAlerts] = useState([]);
   const navigate = useNavigate();
   const [openItem, setOpenItem] = useState(null);
+  const { gate, paywallState, closePaywall } = usePaywallGate();
+  const [hasAccess, setHasAccess] = useState(false);
 
   useEffect(() => {
+    const allowed = gate("trendsense", () => setHasAccess(true));
+    if (!allowed) {
+      setHasAccess(false);
+      setReports(SAMPLE_REPORTS);
+      setInfinity(SAMPLE_INFINITY);
+      setAlerts(SAMPLE_ALERTS);
+      setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (hasAccess !== true) return;
     async function load() {
       const items = loadListingLibrary() || [];
       if (!items.length) {
@@ -75,7 +144,7 @@ export default function TrendSenseDashboard() {
       setLoading(false);
     }
     load();
-  }, []);
+  }, [hasAccess]);
 
   if (loading) {
     return (
@@ -100,10 +169,15 @@ export default function TrendSenseDashboard() {
           Live demand signals, category momentum, and smart “list next”
           insights for your saved listings.
         </p>
+        {hasAccess === false && (
+          <div className="text-xs uppercase tracking-[0.35em] text-center text-white/60 bg-black/30 border border-white/10 rounded-full py-2 mb-6">
+            Preview mode — upgrade to Premium for live TrendSense data.
+          </div>
+        )}
 
         {/* 🔎 TrendSense Search */}
         <div className="mt-8 mb-12">
-          <TrendSenseSearchPanel />
+          <TrendSenseSearchPanel disabled={hasAccess === false} />
         </div>
 
         {/* 🔥 Trending Today Panel */}
@@ -355,6 +429,14 @@ export default function TrendSenseDashboard() {
           )}
         </div>
       </div>
+
+      <PremiumModal
+        open={paywallState.open}
+        reason={paywallState.reason}
+        usage={paywallState.usage}
+        limit={paywallState.limit}
+        onClose={closePaywall}
+      />
 
       {openItem && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 z-50">

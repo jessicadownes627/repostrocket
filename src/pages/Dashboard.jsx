@@ -26,9 +26,7 @@ export default function Dashboard() {
     return () => window.removeEventListener("focus", handleFocus);
   }, []);
 
-  const handleTrendSense = () => {
-    gate("trendsense", () => navigate("/trendsense"));
-  };
+  const handleTrendSense = () => navigate("/trendsense");
 
   const handleBatchMode = () => {
     gate("batchMode", () => navigate("/batch"));

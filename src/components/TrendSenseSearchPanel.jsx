@@ -4,7 +4,7 @@ import {
   extractAutofillData,
 } from "../utils/trendSenseSearch";
 
-export default function TrendSenseSearchPanel() {
+export default function TrendSenseSearchPanel({ disabled = false }) {
   const [query, setQuery] = useState("");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -15,6 +15,11 @@ export default function TrendSenseSearchPanel() {
     const v = e.target.value;
     setQuery(v);
     setError(false);
+
+    if (disabled) {
+      setResult(null);
+      return;
+    }
 
     if (!v || v.trim().length < 2) {
       setResult(null);
@@ -40,8 +45,15 @@ export default function TrendSenseSearchPanel() {
         value={query}
         onChange={handleSearch}
         placeholder="Search any item…"
+        disabled={disabled}
         className="w-full bg-[#050708] border border-[#2E3235] rounded-lg px-3 py-2 text-sm focus:outline-none mb-4"
       />
+
+      {disabled && (
+        <div className="text-xs opacity-60 mb-3">
+          TrendSense search requires Premium.
+        </div>
+      )}
 
       {(error || lastUpdated) && (
         <div className="flex items-center justify-between mb-1 text-[11px]">
