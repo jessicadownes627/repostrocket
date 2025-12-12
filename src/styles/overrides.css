@@ -35,3 +35,79 @@ input,
 textarea {
   transform: none !important;
 }
+
+.chip-flash .lux-chip-active {
+  position: relative;
+  box-shadow: 0 0 14px rgba(249, 233, 205, 0.45);
+  animation: glowPulse 2.6s ease-in-out infinite;
+}
+
+/* Animated champagne dividers */
+.lux-animated-bar {
+  position: relative;
+  height: 1px;
+  width: 100%;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0),
+    rgba(248, 233, 207, 0.9),
+    rgba(255, 255, 255, 0)
+  );
+  box-shadow: 0 0 18px rgba(248, 233, 207, 0.35);
+  overflow: hidden;
+}
+
+.lux-animated-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.95),
+    transparent
+  );
+  animation: barSweep 3.6s ease-in-out infinite;
+}
+
+.lux-animated-bar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(255, 255, 255, 0.45),
+    transparent 55%
+  );
+  opacity: 0.35;
+}
+
+@keyframes glowPulse {
+  0% {
+    box-shadow: 0 0 6px rgba(249, 233, 205, 0.2);
+    transform: translateY(0);
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(249, 233, 205, 0.55);
+    transform: translateY(-1px);
+  }
+  100% {
+    box-shadow: 0 0 6px rgba(249, 233, 205, 0.2);
+    transform: translateY(0);
+  }
+}
+
+@keyframes barSweep {
+  0% {
+    transform: translateX(-60%);
+    opacity: 0.2;
+  }
+  40% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(60%);
+    opacity: 0.2;
+  }
+}

@@ -12,7 +12,7 @@ const LuxeInput = memo(function LuxeInput({
 
   return (
     <div className="mb-6">
-      <div className="text-xs uppercase opacity-70 tracking-wide mb-2">
+      <div className="text-sm uppercase opacity-70 tracking-wide mb-2">
         {label}
       </div>
 

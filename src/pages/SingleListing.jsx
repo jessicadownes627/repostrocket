@@ -31,6 +31,7 @@ import { getPhotoWarnings } from "../utils/photoWarnings";
 import { getDynamicPrice } from "../utils/dynamicPricing";
 import { composeListing } from "../utils/listingComposer";
 import { buildListingExportLinks } from "../utils/exportListing";
+import { getCategoryFromText } from "../utils/textClassifiers";
 import "../styles/overrides.css";
 
 // --- TAG FALLBACKS (must be defined first) ---
@@ -116,9 +117,11 @@ export default function SingleListing() {
   const [localDescription, setLocalDescription] = useState(description);
   const [localBrand, setLocalBrand] = useState(brand);
   const [localPrice, setLocalPrice] = useState(price);
-  const [glowMode, setGlowMode] = useState(true);
   const [showShippingTips, setShowShippingTips] = useState(true);
   const [shippingAudience, setShippingAudience] = useState("sellers");
+  const [chipFlash, setChipFlash] = useState({});
+  const chipFlashTimeouts = useRef({});
+  const [customTag, setCustomTag] = useState("");
   const photoPickerRef = useRef(null);
   const magicDiffs = Array.isArray(magicResults?.diffs)
     ? magicResults.diffs
@@ -166,17 +169,88 @@ export default function SingleListing() {
   const BABY_SIZE_OPTIONS = ["NB", "0-3m", "3-6m", "6-9m", "9-12m", "12-18m", "18-24m"];
   const SHOE_SIZE_OPTIONS = ["5", "5.5", "6", "6.5", "7", "7.5", "8", "8.5", "9", "9.5", "10", "11", "12"];
 
+  const CATEGORY_ALIAS_MAP = {
+    Handbags: "Bags",
+    "General Merchandise": "Other",
+    General: "Other",
+  };
+  const CATEGORY_OPTION_SET = new Set(CATEGORY_OPTIONS);
+  const ALL_SIZE_KEYWORDS = [
+    ...ADULT_SIZE_OPTIONS,
+    ...KIDS_SIZE_OPTIONS,
+    ...BABY_SIZE_OPTIONS,
+    ...SHOE_SIZE_OPTIONS,
+  ].map((value) => ({
+    value,
+    token: value.toLowerCase().replace(/[^a-z0-9]/g, ""),
+  }));
+
+  const normalizeCategoryGuess = (guess = "") => {
+    if (!guess) return "";
+    const trimmed = guess.trim();
+    if (CATEGORY_OPTION_SET.has(trimmed)) return trimmed;
+    if (CATEGORY_ALIAS_MAP[trimmed]) return CATEGORY_ALIAS_MAP[trimmed];
+    if (trimmed.toLowerCase().includes("card")) return "Sports Cards";
+    return CATEGORY_OPTION_SET.has("Other") ? "Other" : "";
+  };
+
+  const inferCategoryFromText = (text = "") => {
+    const guess = getCategoryFromText(text);
+    return normalizeCategoryGuess(guess);
+  };
+
+  const inferConditionFromText = (text = "") => {
+    const lower = text.toLowerCase();
+    if (
+      /\bnwt\b/.test(lower) ||
+      lower.includes("new with tags") ||
+      lower.includes("brand new") ||
+      lower.includes("never worn")
+    ) {
+      return "New";
+    }
+    if (
+      lower.includes("like new") ||
+      lower.includes("excellent") ||
+      lower.includes("gently used")
+    ) {
+      return "Like New";
+    }
+    if (lower.includes("fair condition") || lower.includes("well loved")) {
+      return "Fair";
+    }
+    return "Good";
+  };
+
+  const inferSizeFromText = (text = "") => {
+    const compressed = text.toLowerCase().replace(/[^a-z0-9]/g, "");
+    for (const entry of ALL_SIZE_KEYWORDS) {
+      if (entry.token && compressed.includes(entry.token)) {
+        return entry.value;
+      }
+    }
+    const match = text.toLowerCase().match(/size\s*(\d{1,2}(?:t|m)?)/);
+    if (match) {
+      const candidate = match[1].toUpperCase();
+      const mapped = ALL_SIZE_KEYWORDS.find(
+        (entry) => entry.token === candidate.toLowerCase()
+      );
+      return mapped ? mapped.value : candidate;
+    }
+    return "";
+  };
+
   const SELLER_TIPS = [
     "Ship within 1 business day so marketplaces boost your seller score.",
     "Match packaging to the item—poly mailers for soft goods, boxes for structured pieces.",
     "Include tracking and snap a photo of the packed label before mailing.",
   ];
 
-  const BUYER_TIPS = [
-    "Send tracking the moment the label prints to build instant trust.",
-    "Use insured services for any order over $200 to avoid payout delays.",
-    "Upgrade to signature confirmation for collectibles or electronics.",
-  ];
+const BUYER_TIPS = [
+  "Send tracking the moment the label prints to build instant trust.",
+  "Use insured services for any order over $200 to avoid payout delays.",
+  "Upgrade to signature confirmation for collectibles or electronics.",
+];
 
   const sizeOptionsForCategory = (() => {
     if (category === "Kids & Baby") {
@@ -195,8 +269,77 @@ export default function SingleListing() {
 
   const tagOptionsForCategory = buildTagOptionsForCategory(category);
 
-  const shippingTips =
-    shippingAudience === "buyers" ? BUYER_TIPS : SELLER_TIPS;
+const shippingTips =
+  shippingAudience === "buyers" ? BUYER_TIPS : SELLER_TIPS;
+
+const triggerChipFlash = useCallback((key) => {
+  if (!key) return;
+  setChipFlash((prev) => ({ ...prev, [key]: true }));
+  if (chipFlashTimeouts.current[key]) {
+    clearTimeout(chipFlashTimeouts.current[key]);
+  }
+  chipFlashTimeouts.current[key] = setTimeout(() => {
+    setChipFlash((prev) => ({ ...prev, [key]: false }));
+    chipFlashTimeouts.current[key] = null;
+  }, 900);
+}, []);
+
+useEffect(() => {
+  return () => {
+    Object.values(chipFlashTimeouts.current || {}).forEach((timer) => {
+      if (timer) clearTimeout(timer);
+    });
+  };
+}, []);
+
+  useEffect(() => {
+    const text = `${localTitle} ${localDescription}`.trim();
+    if (!text) return;
+
+    let resolvedCategory = category;
+    if (!resolvedCategory) {
+      const inferredCategory = inferCategoryFromText(text);
+      if (inferredCategory && inferredCategory !== category) {
+        resolvedCategory = inferredCategory;
+        setListingField("category", inferredCategory);
+        triggerChipFlash("category");
+      }
+    }
+
+    if (!condition) {
+      const inferredCondition = inferConditionFromText(text);
+      if (inferredCondition) {
+        setListingField("condition", inferredCondition);
+        triggerChipFlash("condition");
+      }
+    }
+
+    if (!size) {
+      const inferredSize = inferSizeFromText(text);
+      if (inferredSize) {
+        setListingField("size", inferredSize);
+        triggerChipFlash("size");
+      }
+    }
+
+    const baseCategory = resolvedCategory || category;
+    if ((!tags || tags.length === 0) && baseCategory) {
+      const suggestedTags = buildTagOptionsForCategory(baseCategory).slice(0, 6);
+      if (suggestedTags.length) {
+        setListingField("tags", suggestedTags);
+        triggerChipFlash("tags");
+      }
+    }
+  }, [
+    localTitle,
+    localDescription,
+    category,
+    condition,
+    size,
+    tags,
+    setListingField,
+    triggerChipFlash,
+  ]);
 
   const triggerPhotoPicker = () => {
     if (photoPickerRef.current) {
@@ -227,6 +370,22 @@ export default function SingleListing() {
     removePhoto(0);
     setListingField("editedPhoto", null);
     setListingField("editHistory", []);
+  };
+
+  const handleAddCustomTag = () => {
+    const normalized = customTag.trim();
+    if (!normalized) return;
+    const existing = Array.isArray(tags) ? tags : [];
+    const alreadyExists = existing.some(
+      (tag) => tag.toLowerCase() === normalized.toLowerCase()
+    );
+    if (alreadyExists) {
+      setCustomTag("");
+      return;
+    }
+    setListingField("tags", [...existing, normalized]);
+    setCustomTag("");
+    triggerChipFlash("tags");
   };
 
   useEffect(() => {
@@ -483,7 +642,6 @@ export default function SingleListing() {
         userCategory: current.category || raw.category || "",
         photoContext: raw.photos?.[0]?.altText || "",
         photoDataUrl,
-        glowMode,
       };
 
       console.log("🔥 Payload photoContext image attached:", Boolean(photoDataUrl));
@@ -1071,15 +1229,6 @@ export default function SingleListing() {
             )}
           </div>
 
-          <div className="flex items-center gap-2 my-4">
-            <label className="text-sm tracking-wide">Glow Mode ✨</label>
-            <input
-              type="checkbox"
-              checked={glowMode}
-              onChange={() => setGlowMode((prev) => !prev)}
-            />
-          </div>
-
           {/* CORE INFORMATION */}
 
           <LuxeInput
@@ -1282,8 +1431,8 @@ export default function SingleListing() {
             </>
           )}
 
-          <div className="mb-6">
-            <div className="text-xs uppercase opacity-70 tracking-wide mb-2">
+          <div className={`mb-6 ${chipFlash.category ? "chip-flash" : ""}`}>
+            <div className="text-sm uppercase opacity-70 tracking-wide mb-2">
               Category
             </div>
             <LuxeChipGroup
@@ -1302,8 +1451,8 @@ export default function SingleListing() {
           />
 
           {shouldShowSize && (
-            <div className="mb-6">
-              <div className="text-xs uppercase opacity-70 tracking-wide mb-2">
+            <div className={`mb-6 ${chipFlash.size ? "chip-flash" : ""}`}>
+              <div className="text-sm uppercase opacity-70 tracking-wide mb-2">
                 Size
               </div>
               <LuxeChipGroup
@@ -1314,8 +1463,8 @@ export default function SingleListing() {
             </div>
           )}
 
-          <div className="mb-6">
-            <div className="text-xs uppercase opacity-70 tracking-wide mb-2">
+          <div className={`mb-6 ${chipFlash.condition ? "chip-flash" : ""}`}>
+            <div className="text-sm uppercase opacity-70 tracking-wide mb-2">
               Condition
             </div>
             <LuxeChipGroup
@@ -1326,23 +1475,49 @@ export default function SingleListing() {
           </div>
 
           {tagOptionsForCategory.length > 0 && (
-            <div className="mb-6">
-              <div className="text-xs uppercase opacity-70 tracking-wide mb-2">
-                Tags
+            <>
+              <div className={`mb-6 ${chipFlash.tags ? "chip-flash" : ""}`}>
+                <div className="text-sm uppercase opacity-70 tracking-wide mb-2">
+                  Tags
+                </div>
+                <LuxeChipGroup
+                  options={tagOptionsForCategory}
+                  value={tags}
+                  multiple
+                  onChange={(val) => setListingField("tags", val)}
+                />
+                <div className="flex items-center gap-2 mt-3">
+                  <input
+                    type="text"
+                    value={customTag}
+                    onChange={(e) => setCustomTag(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddCustomTag();
+                      }
+                    }}
+                    placeholder="Add custom tag"
+                    className="flex-1 bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-white/40 transition"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddCustomTag}
+                    className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.2em] border border-[#E8D5A8] text-[#E8D5A8] rounded-xl hover:bg-[#E8D5A8]/10 transition"
+                  >
+                    Add
+                  </button>
+                </div>
               </div>
-              <LuxeChipGroup
-                options={tagOptionsForCategory}
-                value={tags}
-                multiple
-                onChange={(val) => setListingField("tags", val)}
-              />
-            </div>
+
+              <div className="lux-animated-bar w-1/2 mx-auto my-12" />
+            </>
           )}
         </>
       )}
 
       {showShippingTips && (
-        <div className="lux-card mt-8">
+        <div className="lux-card mt-16">
           <div className="flex items-center justify-between mb-3">
             <div className="text-xs uppercase opacity-70 tracking-[0.3em]">
               Shipping Tips
@@ -1474,7 +1649,7 @@ export default function SingleListing() {
             {glowScore && (
               <div className="mt-4 rounded-lg p-4 bg-black/30 border border-white/10">
                 <h3 className="text-sm font-semibold tracking-wider mb-2">
-                  Glow Score ✨
+                  Glow Score
                 </h3>
                 <p>Clarity: {glowScore.clarity}/5</p>
                 <p>Fit: {glowScore.fit}/5</p>
@@ -1510,9 +1685,11 @@ export default function SingleListing() {
       {/* ---------------------- */}
       {/*  ACTION BUTTONS        */}
       {/* ---------------------- */}
-      <div className="mt-14 space-y-4">
+      <div className="mt-16 space-y-4">
+        <div className="lux-animated-bar w-1/4 mx-auto mb-6" />
+
         <button
-          className="lux-continue-btn shadow-lg"
+          className="lux-continue-btn shadow-lg w-full py-5 text-base tracking-[0.32em]"
           onClick={() => {
             document.body.classList.add("lux-page-transition");
             setTimeout(() => {
@@ -1529,7 +1706,7 @@ export default function SingleListing() {
             resetListing();
             navigate("/dashboard");
           }}
-          className="lux-quiet-btn w-full"
+          className="lux-quiet-btn w-full md:w-2/3 mx-auto text-[11px] tracking-[0.32em] py-3 opacity-80 hover:opacity-100 transition"
         >
           Cancel Listing
         </button>
