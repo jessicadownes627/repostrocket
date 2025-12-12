@@ -88,6 +88,11 @@ export default function SingleListing() {
     removePhoto,
   } = useListingStore();
 
+  const devPremiumOverride =
+    typeof window !== "undefined" &&
+    window.localStorage.getItem("rr_dev_premium") === "true";
+  const isPremiumUser = getPremiumStatus() || devPremiumOverride;
+
   const { cardData, parseCard, loading: parsingCard } = useCardParser();
 
   const title = listingData?.title || "";
@@ -587,11 +592,6 @@ useEffect(() => {
     }
     if (magicLoading) return;
     // Premium (including Jess override numbers + rr_dev_premium) bypasses daily limit
-    const isPremiumUser =
-      getPremiumStatus() ||
-      (typeof window !== "undefined" &&
-        window.localStorage.getItem("rr_dev_premium") === "true");
-
     if (!isPremiumUser && premiumUsesRemaining <= 0) {
       setShowUsageModal(true);
       return;
@@ -1221,12 +1221,17 @@ useEffect(() => {
               {magicLoading ? "Running Magic…" : "Run Magic Fill"}
               </span>
               <span className="absolute inset-0 bg-white/30 opacity-0 hover:opacity-20 transition" />
-            </button>
-            {magicError && (
-              <div className="text-xs opacity-60 mt-2">
-                {magicError}
-              </div>
-            )}
+          </button>
+          <div className="text-center text-[11px] uppercase tracking-[0.32em] text-white/55 mt-3">
+            {isPremiumUser
+              ? "Unlimited Magic Fill with Premium"
+              : "1 free Magic Fill per day · Upgrade for unlimited"}
+          </div>
+          {magicError && (
+            <div className="text-xs opacity-60 mt-2">
+              {magicError}
+            </div>
+          )}
           </div>
 
           {/* CORE INFORMATION */}
