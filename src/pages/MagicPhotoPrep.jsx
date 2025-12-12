@@ -12,6 +12,7 @@ export default function MagicPhotoPrep() {
 
   const [previews, setPreviews] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState("");
 
   /* ------------------------------------------------------ */
   /*  FILE HANDLING + HEIC CONVERSION                      */
@@ -20,53 +21,46 @@ export default function MagicPhotoPrep() {
     async (files) => {
       if (!files || files.length === 0) return;
 
+      const list = Array.from(files);
+      if (list.length > 1) {
+        setUploadMessage("Single Listing supports one photo at a time. Using the first image you selected.");
+      } else {
+        setUploadMessage("");
+      }
+
       // New item: clear any existing listing data before setting photos
       resetListing();
 
-      const converted = [];
-
-      for (const original of files || []) {
-        try {
-          const file = await convertHeicIfNeeded(original);
-          converted.push(file);
-        } catch (err) {
-          console.error("HEIC conversion failed:", err);
-          converted.push(original);
-        }
+      const firstOriginal = list[0];
+      let processedFile = firstOriginal;
+      try {
+        processedFile = await convertHeicIfNeeded(firstOriginal);
+      } catch (err) {
+        console.error("HEIC conversion failed:", err);
       }
 
-      // Generate fresh object URLs once for this batch
-      const urls = converted.map((f) => URL.createObjectURL(f));
+      const url = URL.createObjectURL(processedFile);
 
-      // PREVIEW URLs — FIX for Chrome race condition + preload
       setTimeout(() => {
-        urls.forEach((url) => {
-          const img = new Image();
-          const commit = () => {
-            setPreviews((prev) =>
-              prev.includes(url) ? prev : [...prev, url]
-            );
-          };
-          img.onload = commit;
-          img.onerror = commit;
-          img.src = url;
-        });
+        const img = new Image();
+        const commit = () => setPreviews([url]);
+        img.onload = commit;
+        img.onerror = commit;
+        img.src = url;
       }, 0);
 
-      // STORE PHOTOS — always save fresh URLs with fallback alt text
-      const photosWithAlt = urls.map((url, idx) => {
-        const file = converted[idx];
-        const fileName = file?.name || "";
-        const fallbackAlt = fileName
-          ? fileName.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ")
-          : "item photo";
-        return {
+      const fileName = processedFile?.name || "";
+      const fallbackAlt = fileName
+        ? fileName.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ")
+        : "item photo";
+
+      setListingField("photos", [
+        {
           url,
           altText: fallbackAlt,
-          file,
-        };
-      });
-      setListingField("photos", photosWithAlt);
+          file: processedFile,
+        },
+      ]);
     },
     [resetListing, setListingField]
   );
@@ -107,7 +101,7 @@ export default function MagicPhotoPrep() {
         ← Back
       </button>
       <h1 className="sparkly-header header-glitter text-center text-3xl mb-3">
-        Start Your Magic Listing
+        Start Your Listing
       </h1>
 
       {/* Single animated champagne line under the main heading */}
@@ -133,13 +127,15 @@ export default function MagicPhotoPrep() {
         onDrop={handleDrop}
         onClick={handleBrowse}
       >
-        <p className="text-lg opacity-80 mb-2">Drop photos or click to upload</p>
-        <p className="text-sm opacity-60">HEIC / JPEG / PNG supported</p>
+        <p className="text-lg opacity-80 mb-2">Drop a photo or click to upload</p>
+        <p className="text-sm opacity-60 mb-2">Single Listing supports one photo at a time (HEIC / JPEG / PNG)</p>
+        {uploadMessage && (
+          <p className="text-xs text-[#E8D5A8] tracking-wide">{uploadMessage}</p>
+        )}
 
         <input
           type="file"
           accept="image/*,image/heic,heic"
-          multiple
           className="hidden"
           ref={fileInputRef}
           onChange={(e) => handleFiles(e.target.files)}

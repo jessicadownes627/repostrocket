@@ -128,7 +128,11 @@ export function ListingProvider({ children }) {
       setListingData((prev) => {
         let nextValue = value;
         if (key === "photos") {
-          nextValue = normalizePhotosArray(value, "item photo");
+          let normalized = normalizePhotosArray(value, "item photo");
+          if (normalized.length > 1) {
+            normalized = normalized.slice(0, 1);
+          }
+          nextValue = normalized;
         }
         return { ...prev, [key]: nextValue };
       });
@@ -150,15 +154,14 @@ export function ListingProvider({ children }) {
       const incoming = Array.from(files || []);
       if (!incoming.length) return;
 
-      const entries = incoming.map((file, idx) => {
-        const url = URL.createObjectURL(file);
-        const fallbackAlt = deriveAltTextFromFilename(file?.name);
-        return { url, altText: fallbackAlt, file };
-      });
+      const first = incoming[0];
+      const url = URL.createObjectURL(first);
+      const fallbackAlt = deriveAltTextFromFilename(first?.name);
+      const entry = { url, altText: fallbackAlt, file: first };
 
       setListingData((prev) => ({
         ...prev,
-        photos: [...(prev.photos || []), ...entries],
+        photos: [entry],
       }));
     };
 

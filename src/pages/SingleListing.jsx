@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useListingStore } from "../store/useListingStore";
 import { getPremiumStatus } from "../store/premiumStore";
 import { parseMagicFillOutput } from "../engines/MagicFillEngine";
 import { runMagicFill } from "../utils/runMagicFill";
 import {
+  deriveAltTextFromFilename,
   fileToDataUrl,
   getPhotoUrl,
   normalizePhotosArray,
@@ -13,6 +14,7 @@ import LuxeChipGroup from "../components/LuxeChipGroup";
 import LuxeInput from "../components/LuxeInput";
 import { useCardParser } from "../hooks/useCardParser";
 import { buildCardTitle } from "../utils/buildCardTitle";
+import { getCuratedTags } from "../utils/curatedTagBank";
 import {
   brighten,
   warm,
@@ -31,10 +33,46 @@ import { composeListing } from "../utils/listingComposer";
 import { buildListingExportLinks } from "../utils/exportListing";
 import "../styles/overrides.css";
 
+// --- TAG FALLBACKS (must be defined first) ---
+const FALLBACK_TAG_OPTIONS = [
+  "Neutral",
+  "Modern",
+  "Minimal",
+  "Classic",
+  "Statement",
+];
+
+const CLOTHING_CATEGORY_LIST = [
+  "Tops",
+  "Bottoms",
+  "Dresses",
+  "Outerwear",
+  "Activewear",
+  "Shoes",
+  "Accessories",
+  "Bags",
+  "Kids & Baby",
+];
+
+const CLOTHING_CATEGORY_SET = new Set(CLOTHING_CATEGORY_LIST);
+
 const cleanValue = (value) =>
   value === null || value === undefined
     ? ""
     : String(value).trim().toLowerCase();
+
+const buildTagOptionsForCategory = (category) => {
+  if (!category) return FALLBACK_TAG_OPTIONS;
+  const curated = getCuratedTags(category);
+  if (curated && curated.length) {
+    return curated;
+  }
+  if (category && !CLOTHING_CATEGORY_SET.has(category)) {
+    const homeTags = getCuratedTags("Home Goods");
+    if (homeTags.length) return homeTags;
+  }
+  return FALLBACK_TAG_OPTIONS;
+};
 
 export default function SingleListing() {
   const navigate = useNavigate();
@@ -46,6 +84,7 @@ export default function SingleListing() {
     resetListing,
     premiumUsesRemaining,
     consumeMagicUse,
+    removePhoto,
   } = useListingStore();
 
   const { cardData, parseCard, loading: parsingCard } = useCardParser();
@@ -58,21 +97,6 @@ export default function SingleListing() {
   const brand = listingData?.brand || "";
   const size = listingData?.size || "";
   const tags = Array.isArray(listingData?.tags) ? listingData.tags : [];
-
-  const mainPhotoEntry =
-    listingData?.photos && listingData.photos.length > 0
-      ? listingData.photos[0]
-      : null;
-
-  const mainPhoto = getPhotoUrl(mainPhotoEntry);
-  const displayedPhoto = listingData?.editedPhoto || mainPhoto;
-
-  const cardAttributes = listingData?.cardAttributes || null;
-  const isCardMode =
-    category === "Sports Cards" ||
-    Boolean(
-      cardAttributes && typeof cardAttributes === "object" && Object.keys(cardAttributes).length
-    );
 
   const [showMagicResults, setShowMagicResults] = useState(false);
   const [magicSuggestion, setMagicSuggestion] = useState(null);
@@ -93,6 +117,9 @@ export default function SingleListing() {
   const [localBrand, setLocalBrand] = useState(brand);
   const [localPrice, setLocalPrice] = useState(price);
   const [glowMode, setGlowMode] = useState(true);
+  const [showShippingTips, setShowShippingTips] = useState(true);
+  const [shippingAudience, setShippingAudience] = useState("sellers");
+  const photoPickerRef = useRef(null);
   const magicDiffs = Array.isArray(magicResults?.diffs)
     ? magicResults.diffs
     : [];
@@ -101,6 +128,18 @@ export default function SingleListing() {
     ? glowScore.recommendations
     : [];
 
+  const hasPhoto =
+    Array.isArray(listingData?.photos) && listingData.photos.length > 0;
+  const mainPhotoEntry = hasPhoto ? listingData.photos[0] : null;
+  const mainPhoto = getPhotoUrl(mainPhotoEntry);
+  const displayedPhoto = listingData?.editedPhoto || mainPhoto;
+
+  const cardAttributes = listingData?.cardAttributes || null;
+  const isCardMode =
+    category === "Sports Cards" ||
+    Boolean(
+      cardAttributes && typeof cardAttributes === "object" && Object.keys(cardAttributes).length
+    );
 
   const CATEGORY_OPTIONS = [
     "Tops",
@@ -122,38 +161,73 @@ export default function SingleListing() {
 
   const CONDITION_OPTIONS = ["New", "Like New", "Good", "Fair"];
 
-  const SIZE_OPTIONS = [
-    "XXS",
-    "XS",
-    "S",
-    "M",
-    "L",
-    "XL",
-    "XXL",
+  const ADULT_SIZE_OPTIONS = ["XXS", "XS", "S", "M", "L", "XL", "XXL"];
+  const KIDS_SIZE_OPTIONS = ["2T", "3T", "4T", "5", "6", "7", "8", "10", "12", "14"];
+  const BABY_SIZE_OPTIONS = ["NB", "0-3m", "3-6m", "6-9m", "9-12m", "12-18m", "18-24m"];
+  const SHOE_SIZE_OPTIONS = ["5", "5.5", "6", "6.5", "7", "7.5", "8", "8.5", "9", "9.5", "10", "11", "12"];
+
+  const SELLER_TIPS = [
+    "Ship within 1 business day so marketplaces boost your seller score.",
+    "Match packaging to the item—poly mailers for soft goods, boxes for structured pieces.",
+    "Include tracking and snap a photo of the packed label before mailing.",
   ];
 
-  const SMART_TAG_OPTIONS = [
-    "Minimalist",
-    "Cozy",
-    "Classic",
-    "Y2K",
-    "Streetwear",
-    "Vintage",
-    "Oversized",
-    "Petite",
-    "Neutral",
-    "Modern",
-    "Boho",
-    "Athleisure",
-    "Layering",
-    "Statement",
-    "Designer",
-    "Workwear",
-    "Casual",
-    "Lounge",
-    "Bold",
-    "Sporty",
+  const BUYER_TIPS = [
+    "Send tracking the moment the label prints to build instant trust.",
+    "Use insured services for any order over $200 to avoid payout delays.",
+    "Upgrade to signature confirmation for collectibles or electronics.",
   ];
+
+  const sizeOptionsForCategory = (() => {
+    if (category === "Kids & Baby") {
+      return [...BABY_SIZE_OPTIONS, ...KIDS_SIZE_OPTIONS];
+    }
+    if (category === "Shoes") {
+      return SHOE_SIZE_OPTIONS;
+    }
+    if (category && CLOTHING_CATEGORY_SET.has(category)) {
+      return ADULT_SIZE_OPTIONS;
+    }
+    return [];
+  })();
+
+  const shouldShowSize = sizeOptionsForCategory.length > 0;
+
+  const tagOptionsForCategory = buildTagOptionsForCategory(category);
+
+  const shippingTips =
+    shippingAudience === "buyers" ? BUYER_TIPS : SELLER_TIPS;
+
+  const triggerPhotoPicker = () => {
+    if (photoPickerRef.current) {
+      photoPickerRef.current.value = "";
+      photoPickerRef.current.click();
+    }
+  };
+
+  const handlePhotoFileChange = (event) => {
+    const file = event.target?.files?.[0];
+    if (!file) return;
+
+    const url = URL.createObjectURL(file);
+    const altText = deriveAltTextFromFilename(file.name);
+    const newEntry = { url, altText, file };
+
+    setListingField("photos", [newEntry]);
+    setListingField("editedPhoto", null);
+    setListingField("editHistory", []);
+
+    if (photoPickerRef.current) {
+      photoPickerRef.current.value = "";
+    }
+  };
+
+  const handleRemoveMainPhoto = () => {
+    if (!hasPhoto) return;
+    removePhoto(0);
+    setListingField("editedPhoto", null);
+    setListingField("editHistory", []);
+  };
 
   useEffect(() => {
     if (!listingData?.photos || listingData.photos.length === 0) {
@@ -210,9 +284,9 @@ export default function SingleListing() {
     }
   }, []);
 
-  // Photo warnings based on current main/edited photo
+  // Photo warnings based on current active/edited photo
   useEffect(() => {
-    const src = listingData?.editedPhoto || mainPhoto;
+    const src = displayedPhoto;
     if (!src) {
       setPhotoWarnings([]);
       return;
@@ -230,7 +304,7 @@ export default function SingleListing() {
     return () => {
       cancelled = true;
     };
-  }, [listingData?.editedPhoto, mainPhoto]);
+  }, [displayedPhoto]);
 
   const runDynamicPricing = useCallback(
     (rawTitle) => {
@@ -523,7 +597,7 @@ export default function SingleListing() {
   // -------------------------------------------
   const handleFix = async (fn) => {
     try {
-      const src = listingData?.editedPhoto || mainPhoto;
+      const src = displayedPhoto;
       if (!src) return;
       const updated = await fn(src);
       setListingField("editedPhoto", updated);
@@ -602,10 +676,10 @@ export default function SingleListing() {
       {/* ---------------------- */}
       {/*  PAGE TITLE            */}
       {/* ---------------------- */}
-      <h1 className="sparkly-header header-glitter text-center text-3xl mb-3">
+      <h1 className="sparkly-header header-glitter text-center text-3xl">
         Single Listing
       </h1>
-      <p className="text-center lux-soft-text text-sm mb-10">
+      <p className="text-center lux-soft-text text-sm mb-8">
         Make your listing shine
       </p>
       <div className="lux-divider w-2/3 mx-auto mb-10"></div>
@@ -613,13 +687,20 @@ export default function SingleListing() {
       {/* ---------------------- */}
       {/*  MAIN PHOTO CARD       */}
       {/* ---------------------- */}
-      <div className="lux-card relative mb-14 shadow-xl">
+      <div className="lux-card relative mb-14 mt-6 shadow-xl">
         <div className="premium-gloss"></div>
 
-        <div className="lux-card-title mb-3">Main Photo</div>
+        <div className="lux-card-title mb-3">Primary Listing Photo</div>
         <div className="text-sm opacity-70 mb-3">
-          This is your primary listing photo.
+          This photo is used to generate your title, description, and details.
         </div>
+        <input
+          type="file"
+          accept="image/*"
+          ref={photoPickerRef}
+          className="hidden"
+          onChange={handlePhotoFileChange}
+        />
 
         {displayedPhoto ? (
           <>
@@ -637,6 +718,22 @@ export default function SingleListing() {
             </div>
             <div className="text-center text-xs opacity-70 mt-3 select-none">
               Use the tools below to refine your photo.
+            </div>
+            <div className="flex flex-col md:flex-row gap-2 mt-4">
+              <button
+                type="button"
+                className="flex-1 py-2.5 rounded-[16px] border border-[rgba(255,235,200,0.5)] bg-black/40 text-[#E8DCC0] text-sm tracking-[0.2em] uppercase hover:bg-black/60 transition"
+                onClick={triggerPhotoPicker}
+              >
+                Replace Photo
+              </button>
+              <button
+                type="button"
+                className="flex-1 py-2.5 rounded-[16px] border border-[rgba(255,93,93,0.4)] bg-black/20 text-[#F7B3B3] text-sm tracking-[0.2em] uppercase hover:bg-black/40 transition"
+                onClick={handleRemoveMainPhoto}
+              >
+                Remove Photo
+              </button>
             </div>
             {!listingData?.editedPhoto && photoWarnings.length > 0 && (
               <div className="mt-3 space-y-1">
@@ -739,7 +836,7 @@ export default function SingleListing() {
                 className="w-full py-2.5 rounded-[16px] border border-[rgba(80,140,120,0.6)] bg-transparent text-[#CFE7DA] text-sm tracking-[0.2em] uppercase hover:bg-[rgba(80,140,120,0.12)] transition"
                 onClick={() =>
                   downloadImageFile(
-                    listingData?.editedPhoto || mainPhoto,
+                    displayedPhoto,
                     "repostrocket-photo.jpg"
                   )
                 }
@@ -749,7 +846,16 @@ export default function SingleListing() {
             </div>
           </>
         ) : (
-          <div className="opacity-60 text-sm">No photo found</div>
+          <div>
+            <div className="opacity-60 text-sm mb-4">No photo found</div>
+            <button
+              type="button"
+              className="w-full py-2.5 rounded-[16px] border border-[rgba(255,235,200,0.5)] bg-black/60 text-[#E8DCC0] text-sm tracking-[0.2em] uppercase hover:bg-black/80 transition"
+              onClick={triggerPhotoPicker}
+            >
+              Upload Photo
+            </button>
+          </div>
         )}
       </div>
 
@@ -1195,16 +1301,18 @@ export default function SingleListing() {
             placeholder="e.g., Lululemon, Nike, Zara"
           />
 
-          <div className="mb-6">
-            <div className="text-xs uppercase opacity-70 tracking-wide mb-2">
-              Size
+          {shouldShowSize && (
+            <div className="mb-6">
+              <div className="text-xs uppercase opacity-70 tracking-wide mb-2">
+                Size
+              </div>
+              <LuxeChipGroup
+                options={sizeOptionsForCategory}
+                value={size}
+                onChange={(val) => setListingField("size", val)}
+              />
             </div>
-            <LuxeChipGroup
-              options={SIZE_OPTIONS}
-              value={size}
-              onChange={(val) => setListingField("size", val)}
-            />
-          </div>
+          )}
 
           <div className="mb-6">
             <div className="text-xs uppercase opacity-70 tracking-wide mb-2">
@@ -1217,18 +1325,68 @@ export default function SingleListing() {
             />
           </div>
 
-          <div className="mb-6">
-            <div className="text-xs uppercase opacity-70 tracking-wide mb-2">
-              Tags
+          {tagOptionsForCategory.length > 0 && (
+            <div className="mb-6">
+              <div className="text-xs uppercase opacity-70 tracking-wide mb-2">
+                Tags
+              </div>
+              <LuxeChipGroup
+                options={tagOptionsForCategory}
+                value={tags}
+                multiple
+                onChange={(val) => setListingField("tags", val)}
+              />
             </div>
-            <LuxeChipGroup
-              options={SMART_TAG_OPTIONS}
-              value={tags}
-              multiple
-              onChange={(val) => setListingField("tags", val)}
-            />
-          </div>
+          )}
         </>
+      )}
+
+      {showShippingTips && (
+        <div className="lux-card mt-8">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xs uppercase opacity-70 tracking-[0.3em]">
+              Shipping Tips
+            </div>
+            <button
+              type="button"
+              className="text-[11px] uppercase tracking-[0.3em] text-[#E8D5A8] hover:opacity-80 transition"
+              onClick={() => setShowShippingTips(false)}
+            >
+              Dismiss
+            </button>
+          </div>
+          <div className="flex gap-2 mb-4">
+            <button
+              type="button"
+              className={`flex-1 py-2 rounded-xl border text-[11px] tracking-[0.25em] ${
+                shippingAudience === "sellers"
+                  ? "border-[#E8D5A8] text-[#E8D5A8]"
+                  : "border-white/10 text-white/60"
+              }`}
+              onClick={() => setShippingAudience("sellers")}
+            >
+              For Sellers
+            </button>
+            <button
+              type="button"
+              className={`flex-1 py-2 rounded-xl border text-[11px] tracking-[0.25em] ${
+                shippingAudience === "buyers"
+                  ? "border-[#E8D5A8] text-[#E8D5A8]"
+                  : "border-white/10 text-white/60"
+              }`}
+              onClick={() => setShippingAudience("buyers")}
+            >
+              For Buyers
+            </button>
+          </div>
+          <ul className="space-y-2 text-sm opacity-80">
+            {shippingTips.map((tip, idx) => (
+              <li key={idx} className="border-l border-[#E8D5A8] pl-3">
+                {tip}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {/* ---------------------- */}
@@ -1364,13 +1522,6 @@ export default function SingleListing() {
           }}
         >
           Preview Your Listing →
-        </button>
-
-        <button
-          onClick={() => navigate("/launch-listing")}
-          className="w-full py-3.5 rounded-2xl bg-[#E8D5A8] text-[#111] font-semibold tracking-wide text-sm border border-[rgba(255,255,255,0.25)] shadow-[0_4px_10px_rgba(0,0,0,0.45)] hover:bg-[#f0e1bf] transition-all active:scale-[0.98]"
-        >
-          Launch Listing (Advanced Titles)
         </button>
 
         <button
