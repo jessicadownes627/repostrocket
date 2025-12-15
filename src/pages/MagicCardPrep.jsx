@@ -237,7 +237,7 @@ export default function MagicCardPrep() {
   ]);
 
   const goNext = () => {
-    if (!frontPhoto || analyzing) return;
+    if (!frontPhoto || !backPhoto || analyzing) return;
     navigate("/single-listing");
   };
 
@@ -379,11 +379,18 @@ export default function MagicCardPrep() {
       )}
 
       <div className="mt-auto pt-10 relative z-30">
+        {frontPhoto && !backPhoto && (
+          <p className="text-center text-xs text-red-300 mb-3">
+            Add a photo of the back of the card to continue.
+          </p>
+        )}
         <button
           onClick={goNext}
-          disabled={!frontPhoto || analyzing}
+          disabled={!frontPhoto || !backPhoto || analyzing}
           className={`w-full py-4 text-lg font-semibold rounded-xl lux-continue-btn ${
-            !frontPhoto || analyzing ? "opacity-40 cursor-not-allowed" : ""
+            !frontPhoto || !backPhoto || analyzing
+              ? "opacity-40 cursor-not-allowed"
+              : ""
           }`}
         >
           Continue →

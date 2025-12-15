@@ -878,6 +878,7 @@ export default function TrendSenseDashboard() {
 }
 
 /* ——————— Reusable Components ——————— */
+;
 
 function Section({ title, children }) {
   return (
