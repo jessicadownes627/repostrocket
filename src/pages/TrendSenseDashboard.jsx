@@ -77,14 +77,39 @@ function formatLastCheckedText(daysSinceHeadline, fallbackTime) {
   return `${daysSinceHeadline} days ago`;
 }
 
-function getActionExplainer(action) {
-  const map = {
-    Hold: "No catalyst detected — pricing stability confirmed.",
-    Watch: "Monitoring catalysts — prepare to act if signals strengthen.",
-    Increase: "Demand catalyst detected — lean into pricing confidence.",
-    Decrease: "Cooling demand detected — consider pricing protection.",
-  };
-  return map[action] || "Monitoring catalysts in real time.";
+function getGuidanceSentences(action) {
+  switch (action) {
+    case "Increase":
+      return [
+        "Demand catalyst detected.",
+        "Pricing momentum is favorable.",
+      ];
+    case "Watch":
+      return [
+        "Signals are forming.",
+        "Prepare to adjust pricing quickly.",
+      ];
+    case "Decrease":
+      return [
+        "Cooling demand detected.",
+        "Consider defensive pricing.",
+      ];
+    case "Hold":
+    default:
+      return [
+        "No demand catalysts detected.",
+        "Pricing stability confirmed.",
+      ];
+  }
+}
+
+function formatStatValue(value) {
+  if (value == null || Number.isNaN(value)) return "—";
+  if (typeof value === "string") return value;
+  if (value >= 1000) {
+    return `${Math.round(value / 100) / 10}k`;
+  }
+  return value;
 }
 
 const SAMPLE_REPORTS = [
@@ -311,9 +336,7 @@ export default function TrendSenseDashboard() {
       ? `Based on ${previewGuidance.headlineCount} recent headline${
           previewGuidance.headlineCount > 1 ? "s" : ""
         }.`
-      : previewGuidance.daysSinceHeadline != null
-      ? `Monitoring — no demand-shifting headlines in the last ${previewGuidance.daysSinceHeadline} days.`
-      : "Monitoring — no recent demand-shifting news detected.";
+      : "Market conditions remain stable across tracked categories.";
   const currentTimeLabel = new Date().toLocaleTimeString([], {
     hour: "numeric",
     minute: "2-digit",
@@ -324,7 +347,7 @@ export default function TrendSenseDashboard() {
   );
   const guidanceSources = previewGuidance.headlineCount ?? 0;
   const reassuranceCopy = `Last checked: ${lastCheckedCopy} • Sources scanned: ${guidanceSources}`;
-  const actionExplainer = getActionExplainer(previewGuidance.action);
+  const guidanceSentences = getGuidanceSentences(previewGuidance.action);
   const renderHeadlineList = (headlines) => {
     if (!Array.isArray(headlines) || !headlines.length) return null;
     return (
@@ -364,6 +387,41 @@ export default function TrendSenseDashboard() {
       </div>
     );
   };
+  const listingsEvaluatedCount = savedListingCount;
+  const categoriesScannedCount = Math.max(categorySet.size, listingsEvaluatedCount ? 1 : 0);
+  const marketSourcesChecked = Math.max(
+    previewGuidance.headlineCount || 0,
+    actionableAlerts.length
+  );
+  const priceBandsRecalculated = smartPriceEntries.length || 0;
+  const systemActivityStats = [
+    {
+      label: "Saved listings evaluated",
+      value: formatStatValue(listingsEvaluatedCount),
+      status: "Live",
+    },
+    {
+      label: "Relevant categories scanned",
+      value: formatStatValue(categoriesScannedCount),
+      status: "Today",
+    },
+    {
+      label: "Market sources checked",
+      value: formatStatValue(marketSourcesChecked),
+      status: "Live",
+    },
+    {
+      label: "Price bands recalculated",
+      value: formatStatValue(priceBandsRecalculated),
+      status: "Today",
+    },
+  ];
+  const categoryExamples = Array.from(categorySet).slice(0, 3);
+  const premiumSignals = [
+    { label: "Outlook", value: "Short-term (14–30 days)" },
+    { label: "Confidence", value: savedListingCount >= 3 ? "High" : "Moderate" },
+    { label: "Next scan", value: "Within 24 hours" },
+  ];
 
   return (
     <div className="min-h-screen bg-[#050807] text-[#E8E1D0] px-6 py-10">
@@ -381,6 +439,28 @@ export default function TrendSenseDashboard() {
           </div>
         )}
 
+        {/* System Activity Strip */}
+        <div className="bg-[#060b0f] border border-white/10 rounded-2xl p-4 mb-2 grid gap-4 sm:grid-cols-2">
+          {systemActivityStats.map((stat) => (
+            <div key={stat.label}>
+              <div className="text-[11px] uppercase tracking-[0.3em] text-white/45">
+                {stat.label}
+              </div>
+              <div className="text-2xl font-semibold text-white mt-1">
+                {stat.value}
+              </div>
+              <div className="text-[11px] text-white/45">{stat.status}</div>
+            </div>
+          ))}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-[11px] text-white/45 mb-8">
+          <span>TrendSense evaluates your saved listings in real time.</span>
+          {savedListingCount === 0 && (
+            <span className="mt-2 sm:mt-0">
+              No saved listings yet — add one to begin live analysis.
+            </span>
+          )}
+        </div>
+
         {/* TrendSense Preview */}
         <div className="lux-bento-card bg-[#05090C] border border-[#1D252C] rounded-2xl p-6 mb-10 relative overflow-hidden">
           <div className="absolute inset-0 opacity-30 bg-gradient-to-r from-transparent via-[#0b2a23]/40 to-transparent animate-pulse-slow"></div>
@@ -389,35 +469,43 @@ export default function TrendSenseDashboard() {
               <div className="flex items-center gap-3 text-xs uppercase tracking-[0.35em] text-white/60">
                 <span className="inline-flex h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(19,236,158,0.5)] animate-pulse"></span>
                 TrendSense Preview
-                <MonitoringBadge active label="Live" />
+                <SectionStatus active label="• Live" />
               </div>
               <div className="text-sm text-white/75 mt-2">
-                Watching headlines, comps, and saved listings.
+                Evaluating your saved listings against live demand.
               </div>
               <div className="bg-white/5 border border-white/10 rounded-xl p-4 text-[13px] text-white/80 leading-relaxed mt-5">
                 {previewGuidance.reason}
               </div>
-              <div className="flex flex-wrap gap-2 mt-4">
-                {previewGuidanceDetail && (
-                  <HelperChip>{previewGuidanceDetail}</HelperChip>
-                )}
-                <HelperChip>
-                  TrendSense adapts as you add cards, apparel, or collectibles.
-                </HelperChip>
-              </div>
-              <div className="flex flex-wrap gap-2 mt-3">
-                <HelperChip>{reassuranceCopy}</HelperChip>
-                <HelperChip>
-                  What would trigger this? A verified catalyst within 21 days or
-                  a new marketplace event.
-                </HelperChip>
-              </div>
+              {previewGuidanceDetail && (
+                <p className="text-[12px] text-white/65 mt-3">
+                  {previewGuidanceDetail}
+                </p>
+              )}
+              <p className="text-[11px] text-white/55 mt-2">
+                Guidance refreshes the moment market conditions shift.
+              </p>
+              <p className="text-[11px] text-white/45 mt-2">
+                {reassuranceCopy}
+              </p>
             </div>
             <GuidancePanel
               action={previewGuidance.action}
-              explainer={actionExplainer}
-              detail={previewGuidanceDetail}
+              sentences={guidanceSentences}
             />
+          </div>
+          <div className="relative z-10 grid gap-3 mt-4 sm:grid-cols-3 text-[11px] text-white/65">
+            {premiumSignals.map((signal) => (
+              <div
+                key={signal.label}
+                className="bg-white/5 border border-white/10 rounded-xl px-3 py-2"
+              >
+                <div className="uppercase tracking-[0.3em] text-white/40">
+                  {signal.label}
+                </div>
+                <div className="mt-1 text-white/80">{signal.value}</div>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -427,17 +515,25 @@ export default function TrendSenseDashboard() {
         </div>
 
         {/* Your Listings */}
-        <div className="mt-6 mb-12">
+        <div className="mt-6 mb-12 relative">
           <div className="flex items-center justify-between mb-2">
             <h2 className="sparkly-header text-2xl">Your Listings</h2>
-            <MonitoringBadge
+            <SectionStatus
               active={reports.length > 0}
-              label={reports.length > 0 ? "Tracking" : "Monitoring"}
+              label={reports.length > 0 ? "• Live" : "• Standing by"}
             />
           </div>
-          <p className="text-xs opacity-60 mb-4">
-            Each saved listing gets a live status — expand any row for evidence.
+          <p className="text-xs opacity-60">
+            Live guidance for every saved listing.
           </p>
+          <p className="text-[11px] text-white/40 mb-4 hidden sm:block">
+            {categoryExamples.length
+              ? `Currently evaluating: ${categoryExamples.join(", ")}`
+              : "Ready to evaluate once listings are added."}
+          </p>
+          <div className="absolute inset-0 pointer-events-none hidden lg:block">
+            <div className="w-32 h-32 rounded-full bg-[rgba(232,213,168,0.06)] blur-3xl translate-x-[60%] -translate-y-[20%]"></div>
+          </div>
 
           {reports.length > 0 ? (
             <div className="space-y-3">
@@ -457,8 +553,9 @@ export default function TrendSenseDashboard() {
             </div>
           ) : (
             <EmptyStateCard
-              title="No saved listings yet."
-              helper="Add a listing and TrendSense will start monitoring it instantly."
+              title="No listings are live in TrendSense yet."
+              helper="Add a listing and TrendSense will begin evaluating immediately."
+              status="• Standing by"
             />
           )}
         </div>
@@ -469,13 +566,13 @@ export default function TrendSenseDashboard() {
             <h2 className="sparkly-header text-2xl">
               Trending Today
             </h2>
-            <MonitoringBadge
+            <SectionStatus
               active={trendingToday.length > 0}
-              label={trendingToday.length > 0 ? "Signal live" : "Monitoring"}
+              label={trendingToday.length > 0 ? "• Live" : "• Standing by"}
             />
           </div>
-          <p className="text-xs opacity-60 mb-4">
-            Items seeing the strongest real-time momentum.
+          <p className="text-xs opacity-60 mb-3">
+            Live picks drawn from your saved listings.
           </p>
 
           {trendingToday.length > 0 ? (
@@ -484,8 +581,9 @@ export default function TrendSenseDashboard() {
             ))
           ) : (
             <EmptyStateCard
-              title="Monitoring — no recent demand-shifting news detected."
-              helper="TrendSense will surface picks the moment a catalyst hits."
+              title="Market conditions remain stable across tracked categories."
+              helper="Awaiting new catalysts to elevate featured listings."
+              status="• Standing by"
             />
           )}
         </div>
@@ -498,13 +596,16 @@ export default function TrendSenseDashboard() {
                 <IconFlame />
                 Today’s Trending Duo
               </div>
-              <MonitoringBadge
+              <SectionStatus
                 active={Boolean(trendingPair)}
-                label={trendingPair ? "Signal live" : "Monitoring"}
+                label={trendingPair ? "• Live" : "• Standing by"}
               />
             </div>
           }
         >
+      <p className="text-xs opacity-60 mb-4">
+        Dual-market movers surfaced when paired catalysts align.
+      </p>
       {trendingPair ? (
         <div className="grid grid-cols-2 gap-4">
               {/* LEFT BOX */}
@@ -547,22 +648,37 @@ export default function TrendSenseDashboard() {
         </div>
       ) : (
             <EmptyStateCard
-              title="No strong momentum signals this week — TrendSense will surface a duo when new headlines break."
-              helper="Triggered by two listings with fresh catalyst headlines."
+              title="Momentum signals remain neutral, favoring price stability."
+              helper="Requires dual catalysts across two listings to activate."
+              status="• Standing by"
             />
           )}
         </Section>
 
         {/* OPPORTUNITY PANEL — Only if no saved listings */}
-        {reports.length === 0 && (
-          <Section
-            title={
-              <>
-                <IconFlame />
-                Trending Opportunities
-              </>
-            }
-          >
+{reports.length === 0 && (
+  <Section
+    title={
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xl">🔥</span>
+          <div>
+            <div className="sparkly-header text-2xl">What’s Heating Up</div>
+          </div>
+        </div>
+        <SectionStatus
+          active={filteredOpportunities.length > 0}
+          label={filteredOpportunities.length > 0 ? "• Live" : "• Standing by"}
+        />
+      </div>
+    }
+  >
+    <p className="text-xs opacity-80 text-[#FFDBA9]">
+      Items seeing early momentum—even if you don’t have them yet.
+    </p>
+    <p className="text-[11px] text-white/55 mb-4">
+      Coming in hot? We’ll surface it instantly so you can ride the wave.
+    </p>
             {filteredOpportunities.length > 0 ? (
               filteredOpportunities.map((op, i) => (
                 <Card key={i}>
@@ -585,8 +701,9 @@ export default function TrendSenseDashboard() {
               ))
             ) : (
               <EmptyStateCard
-                title="Monitoring — no breakout opportunities yet."
-                helper="Triggered by at least one saved listing plus a fresh, demand-shifting headline."
+                title="No early surges spotted yet."
+                helper="Add a saved listing and we’ll signal the next category that comes in hot."
+                status="• Standing by"
               />
             )}
           </Section>
@@ -824,17 +941,18 @@ function Empty({ children }) {
   return <div className="text-xs opacity-50 italic p-2">{children}</div>;
 }
 
-function MonitoringBadge({ active, label }) {
+function SectionStatus({ active = false, label }) {
+  const text = label || (active ? "• Live" : "• Standing by");
   return (
     <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.35em] text-white/55">
       <span
         className={`inline-flex h-2 w-2 rounded-full ${
           active
             ? "bg-emerald-400 shadow-[0_0_10px_rgba(19,236,158,0.55)]"
-            : "bg-white/30"
+            : "bg-white/25"
         } animate-pulse`}
       ></span>
-      {label || (active ? "Signal live" : "Monitoring")}
+      {text}
     </div>
   );
 }
@@ -847,10 +965,10 @@ function HelperChip({ children }) {
   );
 }
 
-function EmptyStateCard({ title, helper }) {
+function EmptyStateCard({ title, helper, status }) {
   return (
     <div className="bg-black/30 border border-white/10 rounded-xl p-4 text-sm text-white/80">
-      <MonitoringBadge active={false} label="Monitoring" />
+      <SectionStatus active={false} label={status || "• Standing by"} />
       <div className="mt-2 text-[13px] text-white/80">{title}</div>
       {helper && (
         <div className="mt-3">
@@ -981,7 +1099,7 @@ function ListingGuidanceItem({ report, isOpen, onToggle }) {
   );
 }
 
-function GuidancePanel({ action, explainer, detail }) {
+function GuidancePanel({ action, sentences = [] }) {
   const accent =
     action === "Increase"
       ? "text-emerald-300"
@@ -990,9 +1108,16 @@ function GuidancePanel({ action, explainer, detail }) {
       : action === "Hold"
       ? "text-white"
       : "text-white";
+  const gradient =
+    action === "Increase"
+      ? "from-[rgba(18,70,53,0.9)] via-[#06110c] to-[#050808]"
+      : action === "Watch"
+      ? "from-[rgba(70,65,28,0.85)] via-[#110f05] to-[#050404]"
+      : "from-[#07130F] via-[#050909] to-[#040606]";
   return (
-    <div className="relative p-5 rounded-2xl border border-[#1F4133] bg-gradient-to-b from-[#07130F] via-[#050909] to-[#040606] shadow-[0_20px_40px_rgba(0,0,0,0.45)] overflow-hidden">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(19,236,158,0.25),_transparent_60%)] opacity-50"></div>
+    <div className={`relative p-5 rounded-2xl border border-[#1F4133] bg-gradient-to-b ${gradient} shadow-[0_20px_40px_rgba(0,0,0,0.45)] overflow-hidden transform transition-transform duration-500 hover:-translate-y-0.5`}>
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(19,236,158,0.25),_transparent_60%)] opacity-50 animate-slow-pulse"></div>
+      <div className="absolute inset-0 rounded-2xl border border-white/5 [mask-image:radial-gradient(circle,_rgba(255,255,255,0.4),_transparent_70%)] animate-border-fade pointer-events-none"></div>
       <div className="relative z-10">
         <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.35em] text-white/50 mb-2">
           <span>Current Guidance</span>
@@ -1001,13 +1126,14 @@ function GuidancePanel({ action, explainer, detail }) {
             Live
           </span>
         </div>
-        <div className={`text-4xl font-semibold ${accent} drop-shadow-[0_0_25px_rgba(19,236,158,0.35)]`}>
+        <div className={`text-4xl font-semibold ${accent} drop-shadow-[0_0_25px_rgba(19,236,158,0.35)] animate-guidance-word`}>
           {action}
         </div>
-        <div className="text-xs text-white/70 mt-3">{explainer}</div>
-        {detail && (
-          <div className="text-[11px] text-white/40 mt-2">{detail}</div>
-        )}
+        {sentences.slice(0, 2).map((sentence, idx) => (
+          <div key={idx} className="text-[12px] text-white/70 mt-2">
+            {sentence}
+          </div>
+        ))}
       </div>
     </div>
   );
