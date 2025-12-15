@@ -9,6 +9,30 @@ function safeCopy(text) {
   }
 }
 
+const APPAREL_CATEGORIES = new Set([
+  "Tops",
+  "Bottoms",
+  "Dresses",
+  "Outerwear",
+  "Activewear",
+  "Shoes",
+  "Accessories",
+  "Bags",
+  "Kids & Baby",
+]);
+
+const shouldDisplaySize = (item = {}) => {
+  if (!item?.size) return false;
+  const category = (item.category || "").trim();
+  if (category && APPAREL_CATEGORIES.has(category)) {
+    return true;
+  }
+  if (item?.apparelAttributes?.size || item?.apparelIntel?.size) {
+    return true;
+  }
+  return false;
+};
+
 function platformMeta(key) {
   switch (key) {
     case "ebay":
@@ -43,6 +67,7 @@ export default function PreviewCard({
     .find((url) => Boolean(url));
   const photo = item.editedPhoto || fallbackPhoto || null;
   const { label } = platformMeta(platform);
+  const displaySize = shouldDisplaySize(item) ? item.size : "";
 
   const links = buildListingExportLinks({
     title: item.title || "",
@@ -129,7 +154,7 @@ export default function PreviewCard({
               item.price ? `$${item.price}` : "",
               item.condition || "",
               item.category || "",
-              item.size ? `Size ${item.size}` : "",
+              displaySize ? `Size ${displaySize}` : "",
             ]
               .filter(Boolean)
               .join(" · ") || "Details incomplete"}

@@ -15,10 +15,11 @@ export async function fetchRSSFeed(url) {
     return items.map((item) => ({
       title: item.querySelector("title")?.textContent || "",
       description: item.querySelector("description")?.textContent || "",
+      link: item.querySelector("link")?.textContent || "",
+      publishedAt: item.querySelector("pubDate")?.textContent || "",
     }));
   } catch (err) {
     console.warn("RSS error:", url, err);
     return [];
   }
 }
-

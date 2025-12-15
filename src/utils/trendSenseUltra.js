@@ -87,6 +87,11 @@ Return JSON ONLY with:
           : boostedScore > 50
           ? "Buyers are active here — expect quicker sellouts."
           : "If you're trying to buy, you may find softer pricing this week.",
+      trendGuidance:
+        events?.trendGuidance || {
+          action: "Hold",
+          reason: "No major headlines tied to this listing right now.",
+        },
     };
   } catch (err) {
     console.error("TrendSense ULTRA error:", err);

@@ -1,11 +1,20 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { loadListingLibrary } from "../utils/savedListings";
+import usePaywallGate from "../hooks/usePaywallGate";
+import PremiumModal from "../components/PremiumModal";
 
 export default function SportsCardSuite() {
   const navigate = useNavigate();
+  const { gate, paywallState, closePaywall } = usePaywallGate();
   const [hasCards, setHasCards] = useState(true);
-  const handleNavigate = (path) => navigate(path);
+  const handleNavigate = (path, premiumKey = null) => {
+    if (premiumKey) {
+      gate(premiumKey, () => navigate(path));
+    } else {
+      navigate(path);
+    }
+  };
 
   const primaryTools = [
     {
@@ -14,6 +23,8 @@ export default function SportsCardSuite() {
       cta: "Start Bulk Run",
       path: "/batch",
       accent: "gold",
+      premium: true,
+      premiumKey: "batchMode",
     },
     {
       title: "Single Card Pro Editor",
@@ -21,6 +32,7 @@ export default function SportsCardSuite() {
       cta: "Open Pro Editor",
       path: "/card-prep",
       accent: "neutral",
+      premium: false,
     },
     {
       title: "Market Assist Workspace",
@@ -28,6 +40,8 @@ export default function SportsCardSuite() {
       cta: "Start Market Assist",
       path: "/batch-comps",
       accent: "neutral",
+      premium: true,
+      premiumKey: "batchMode",
     },
   ];
 
@@ -38,6 +52,7 @@ export default function SportsCardSuite() {
     trustNote: "Does not alter your original files.",
     path: "/multi-detect",
   };
+  const SHOW_MULTI_CARD_EXPERIMENT = false;
 
   useEffect(() => {
     try {
@@ -70,7 +85,7 @@ export default function SportsCardSuite() {
           {primaryTools.map((tool) => (
             <button
               key={tool.title}
-              onClick={() => handleNavigate(tool.path)}
+              onClick={() => handleNavigate(tool.path, tool.premiumKey)}
               className={`w-full text-left px-5 py-5 rounded-2xl border transition-all ${
                 tool.accent === "gold"
                   ? "border-[#E8DCC0] text-[#F8EED5] bg-black/25 hover:bg-black/40"
@@ -79,6 +94,11 @@ export default function SportsCardSuite() {
             >
               <div className="text-sm uppercase tracking-[0.28em] opacity-70 mb-2">
                 {tool.title}
+                {tool.premium && (
+                  <span className="ml-3 px-2 py-0.5 text-[10px] rounded-full border border-[#CBB78A]/40 text-[#CBB78A] uppercase tracking-[0.3em]">
+                    Premium
+                  </span>
+                )}
               </div>
               <div className="text-base text-white/80 leading-relaxed mb-3">
                 {tool.description}
@@ -89,26 +109,28 @@ export default function SportsCardSuite() {
             </button>
           ))}
 
-          <button
-            onClick={() => handleNavigate(multiCardInfo.path)}
-            className="w-full text-left px-5 py-5 rounded-2xl border border-white/10 bg-black/20 text-white/80 hover:bg-black/35 transition-all opacity-80"
-          >
-            <div className="text-[10px] uppercase tracking-[0.4em] text-white/50 mb-2">
-              Experimental
-            </div>
-            <div className="text-lg font-semibold text-white">
-              {multiCardInfo.title}
-            </div>
-            <div className="text-sm opacity-70 mt-1">
-              {multiCardInfo.description}
-            </div>
-            <div className="text-[11px] opacity-60 mt-3 italic">
-              {multiCardInfo.disclaimer}
-            </div>
-            <div className="text-[11px] opacity-55 mt-1">
-              {multiCardInfo.trustNote}
-            </div>
-          </button>
+          {SHOW_MULTI_CARD_EXPERIMENT && (
+            <button
+              onClick={() => handleNavigate(multiCardInfo.path)}
+              className="w-full text-left px-5 py-5 rounded-2xl border border-white/10 bg-black/20 text-white/80 hover:bg-black/35 transition-all opacity-80"
+            >
+              <div className="text-[10px] uppercase tracking-[0.4em] text-white/50 mb-2">
+                Experimental
+              </div>
+              <div className="text-lg font-semibold text-white">
+                {multiCardInfo.title}
+              </div>
+              <div className="text-sm opacity-70 mt-1">
+                {multiCardInfo.description}
+              </div>
+              <div className="text-[11px] opacity-60 mt-3 italic">
+                {multiCardInfo.disclaimer}
+              </div>
+              <div className="text-[11px] opacity-55 mt-1">
+                {multiCardInfo.trustNote}
+              </div>
+            </button>
+          )}
         </div>
 
         {/* Features */}
@@ -137,6 +159,14 @@ export default function SportsCardSuite() {
         <p className="text-center text-white/40 text-sm mt-14">
           Sports Card Suite™ • Powered by Repost Rocket
         </p>
+
+        <PremiumModal
+          open={paywallState.open}
+          reason={paywallState.reason}
+          usage={paywallState.usage}
+          limit={paywallState.limit}
+          onClose={closePaywall}
+        />
       </div>
     </div>
   );

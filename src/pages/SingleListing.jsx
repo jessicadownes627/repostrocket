@@ -2,14 +2,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useListingStore } from "../store/useListingStore";
 import { getPremiumStatus } from "../store/premiumStore";
-import { parseMagicFillOutput } from "../engines/MagicFillEngine";
-import { runMagicFill } from "../utils/runMagicFill";
 import {
   deriveAltTextFromFilename,
-  fileToDataUrl,
   getPhotoUrl,
   normalizePhotosArray,
 } from "../utils/photoHelpers";
+import { generateMagicDraft } from "../utils/generateMagicDraft";
+import { buildApparelAttributesFromIntel } from "../utils/apparelIntel";
+import {
+  buildCardAttributesFromIntel,
+  extractCornerPhotoEntries,
+} from "../utils/cardIntel";
 import LuxeChipGroup from "../components/LuxeChipGroup";
 import LuxeInput from "../components/LuxeInput";
 import { useCardParser } from "../hooks/useCardParser";
@@ -42,6 +45,39 @@ const FALLBACK_TAG_OPTIONS = [
   "Classic",
   "Statement",
 ];
+const CORNER_LABELS = {
+  topLeft: "Top Left",
+  topRight: "Top Right",
+  bottomLeft: "Bottom Left",
+  bottomRight: "Bottom Right",
+};
+const GRADING_PATHS = {
+  featured: null, // reserved for future partner
+  primary: [
+    {
+      label: "PSA",
+      description: "Industry-standard grading with broad buyer trust.",
+      url: "https://www.psacard.com/",
+    },
+  ],
+  alternatives: [
+    {
+      label: "SGC",
+      description: "Popular for vintage + modern slabs.",
+      url: "https://gosgc.com/",
+    },
+    {
+      label: "BGS",
+      description: "Beckett grading with subgrades available.",
+      url: "https://www.beckett.com/grading/",
+    },
+    {
+      label: "CGC",
+      description: "Trusted crossover grader for sports & collectibles.",
+      url: "https://www.cgccards.com/",
+    },
+  ],
+};
 
 const CLOTHING_CATEGORY_LIST = [
   "Tops",
@@ -143,6 +179,16 @@ export default function SingleListing() {
   const displayedPhoto = listingData?.editedPhoto || mainPhoto;
 
   const cardAttributes = listingData?.cardAttributes || null;
+  const cornerPhotos = listingData?.cornerPhotos || [];
+  const apparelIntel = listingData?.apparelIntel || null;
+  const apparelAttributes = listingData?.apparelAttributes || null;
+  const hasApparelSignals =
+    Boolean(apparelAttributes?.itemType) ||
+    Boolean(apparelAttributes?.brand) ||
+    Boolean(apparelAttributes?.size) ||
+    Boolean(apparelAttributes?.condition) ||
+    Boolean(apparelIntel?.notes);
+  const cardIntel = listingData?.cardIntel || null;
   const isCardMode =
     category === "Sports Cards" ||
     Boolean(
@@ -273,6 +319,12 @@ const BUYER_TIPS = [
   const shouldShowSize = sizeOptionsForCategory.length > 0;
 
   const tagOptionsForCategory = buildTagOptionsForCategory(category);
+  const tagChipOptions = Array.from(
+    new Set([
+      ...tagOptionsForCategory,
+      ...(Array.isArray(tags) ? tags : []),
+    ])
+  );
 
 const shippingTips =
   shippingAudience === "buyers" ? BUYER_TIPS : SELLER_TIPS;
@@ -494,6 +546,85 @@ useEffect(() => {
     [condition]
   );
 
+  const isBabyApparel = useMemo(() => {
+    const lower = (category || "").toLowerCase();
+    if (lower.includes("baby") || lower.includes("kids") || lower.includes("toddler")) {
+      return true;
+    }
+    const text = `${title} ${description}`.toLowerCase();
+    return /\b(onesie|romper|bodysuit|nb|newborn|3m|6m|toddler)\b/.test(text);
+  }, [category, title, description]);
+
+  const renderCardConfidence = useCallback(
+    (field) => {
+      const level = cardIntel?.confidence?.[field];
+      if (!level) return null;
+      const tone =
+        level === "high"
+          ? "text-emerald-300 border-emerald-300/40"
+          : level === "medium"
+          ? "text-[#CBB78A] border-[#CBB78A]/50"
+          : "text-white/60 border-white/20";
+      return (
+        <span
+          className={`ml-2 text-[9px] uppercase tracking-[0.3em] px-2 py-0.5 rounded-full border ${tone}`}
+        >
+          {level}
+        </span>
+      );
+    },
+    [cardIntel]
+  );
+
+  const renderApparelConfidence = useCallback(
+    (field) => {
+      const level = apparelIntel?.confidence?.[field];
+      if (!level) return null;
+      const tone =
+        level === "high"
+          ? "text-emerald-300 border-emerald-300/40"
+          : level === "medium"
+          ? "text-[#CBB78A] border-[#CBB78A]/50"
+          : "text-white/60 border-white/20";
+      return (
+        <span
+          className={`ml-2 text-[9px] uppercase tracking-[0.3em] px-2 py-0.5 rounded-full border ${tone}`}
+        >
+          {level}
+        </span>
+      );
+    },
+    [apparelIntel]
+  );
+
+  const renderCornerBadge = useCallback((level) => {
+    if (!level) return null;
+    const tone =
+      level === "high"
+        ? "text-emerald-300 border-emerald-300/40"
+        : level === "medium"
+        ? "text-[#CBB78A] border-[#CBB78A]/50"
+        : "text-white/60 border-white/20";
+    return (
+      <span
+        className={`ml-2 text-[9px] uppercase tracking-[0.3em] px-2 py-0.5 rounded-full border ${tone}`}
+      >
+        {level}
+      </span>
+    );
+  }, []);
+
+  const handleSaveCornerImages = useCallback(() => {
+    if (!cornerPhotos.length) return;
+    cornerPhotos.forEach((entry, idx) => {
+      if (!entry?.url) return;
+      const filename =
+        entry.label?.toLowerCase().replace(/\s+/g, "-") ||
+        `corner-${idx + 1}`;
+      downloadImageFile(entry.url, `${filename}.jpg`);
+    });
+  }, [cornerPhotos]);
+
   useEffect(() => {
     if (magicAccepted?.title || parsingCard) {
       setLocalTitle(title);
@@ -611,42 +742,49 @@ useEffect(() => {
         tags: Array.isArray(raw.tags) ? raw.tags : [],
         photos: Array.isArray(raw.photos) ? raw.photos : [],
       };
+      const draftInput = {
+        ...raw,
+        ...current,
+        photos: Array.isArray(raw.photos) ? raw.photos : [],
+        secondaryPhotos: Array.isArray(listingData?.secondaryPhotos)
+          ? listingData.secondaryPhotos
+          : [],
+        editedPhoto: raw.editedPhoto,
+        cardIntel: listingData?.cardIntel,
+        apparelIntel: listingData?.apparelIntel,
+      };
 
-      let photoDataUrl = null;
-      try {
-        const first = listingData?.photos?.[0];
-        if (first?.file instanceof File) {
-          photoDataUrl = await fileToDataUrl(first.file);
-        } else if (first?.url?.startsWith("data:image")) {
-          photoDataUrl = first.url;
-        } else if (listingData?.editedPhoto?.startsWith("data:image")) {
-          photoDataUrl = listingData.editedPhoto;
-        }
-      } catch (err) {
-        console.error("❌ Failed to build dataURL:", err);
+      const draft = await generateMagicDraft(draftInput, {
+        glowMode: true,
+        cardMode: category === "Sports Cards",
+        apparelMode: isBabyApparel,
+        onCardIntel: (intel) => {
+          if (intel) {
+            setListingField("cardIntel", intel);
+            const attrs = buildCardAttributesFromIntel(intel);
+            if (attrs) {
+              setListingField("cardAttributes", attrs);
+            }
+            const cornerAssets = extractCornerPhotoEntries(intel);
+            setListingField("cornerPhotos", cornerAssets);
+          }
+        },
+        onApparelIntel: (intel) => {
+          if (intel) {
+            setListingField("apparelIntel", intel);
+            const attrs = buildApparelAttributesFromIntel(intel);
+            if (attrs) {
+              setListingField("apparelAttributes", attrs);
+            }
+          }
+        },
+      });
+      if (!draft) {
+        setMagicError("Magic Fill failed — please try again.");
+        setMagicLoading(false);
+        return;
       }
-
-      const listingPayload = {
-        brand: current.brand || raw.brand || "",
-        category: current.category || raw.category || "",
-        size: current.size || raw.size || "",
-        condition: current.condition || raw.condition || "",
-        userTitle: current.title || raw.title || "",
-        userDescription: current.description || raw.description || "",
-        userTags: Array.isArray(raw.tags) ? raw.tags : [],
-        previousAiChoices: raw.previousAiChoices || {},
-      };
-
-      const requestPayload = {
-        listing: listingPayload,
-        userCategory: current.category || raw.category || "",
-        photoContext: raw.photos?.[0]?.altText || "",
-        photoDataUrl,
-      };
-
-      console.log("🔥 Payload photoContext image attached:", Boolean(photoDataUrl));
-      const ai = await runMagicFill(requestPayload);
-      const parsed = parseMagicFillOutput(ai);
+      const { parsed, ai } = draft;
       if (!parsed.title.after && !parsed.description.after && parsed.tags.after.length === 0) {
         setMagicError("Magic Fill failed — please try again.");
         setMagicLoading(false);
@@ -736,6 +874,10 @@ useEffect(() => {
 
       // Store raw card attributes on the listing
       setListingField("cardAttributes", result);
+      const manualCornerAssets = extractCornerPhotoEntries(result);
+      if (manualCornerAssets.length) {
+        setListingField("cornerPhotos", manualCornerAssets);
+      }
 
       // If we can build a strong sports-card title, apply it
       const cardTitle = buildCardTitle(result);
@@ -1031,38 +1173,174 @@ useEffect(() => {
               Detected Attributes
             </div>
             <div className="space-y-1 text-sm opacity-85">
-              <div>
-                <span className="opacity-60">Player:</span>{" "}
+              <div className="flex items-center gap-2">
+                <span className="opacity-60">Player:</span>
+                {renderCardConfidence("player")}
+              </div>
+              <div className="pl-4">
                 {cardAttributes?.player || <span className="opacity-40">—</span>}
               </div>
-              <div>
-                <span className="opacity-60">Team:</span>{" "}
+              <div className="flex items-center gap-2">
+                <span className="opacity-60">Team:</span>
+                {renderCardConfidence("team")}
+              </div>
+              <div className="pl-4">
                 {cardAttributes?.team || <span className="opacity-40">—</span>}
               </div>
-              <div>
-                <span className="opacity-60">Year:</span>{" "}
+              <div className="flex items-center gap-2">
+                <span className="opacity-60">Year:</span>
+                {renderCardConfidence("year")}
+              </div>
+              <div className="pl-4">
                 {cardAttributes?.year || <span className="opacity-40">—</span>}
               </div>
-              <div>
-                <span className="opacity-60">Set:</span>{" "}
+              <div className="flex items-center gap-2">
+                <span className="opacity-60">Set:</span>
+                {renderCardConfidence("setName")}
+              </div>
+              <div className="pl-4">
                 {cardAttributes?.set || cardAttributes?.setName || (
                   <span className="opacity-40">—</span>
                 )}
               </div>
-              <div>
-                <span className="opacity-60">Parallel:</span>{" "}
+              <div className="flex items-center gap-2">
+                <span className="opacity-60">Parallel:</span>
+                {renderCardConfidence("parallel")}
+              </div>
+              <div className="pl-4">
                 {cardAttributes?.parallel || (
                   <span className="opacity-40">—</span>
                 )}
               </div>
-              <div>
-                <span className="opacity-60">Card #:</span>{" "}
+              <div className="flex items-center gap-2">
+                <span className="opacity-60">Card #:</span>
+                {renderCardConfidence("cardNumber")}
+              </div>
+              <div className="pl-4">
                 {cardAttributes?.cardNumber || (
                   <span className="opacity-40">—</span>
                 )}
               </div>
             </div>
           </div>
+
+          {cardAttributes?.corners && (
+            <div className="lux-card mb-8">
+              <div className="text-xs uppercase opacity-70 tracking-wide mb-3">
+                Corner Inspection
+              </div>
+              <div className="space-y-4">
+                {["front", "back"].map((side) => {
+                  const cornerSet = cardAttributes.corners?.[side];
+                  if (!cornerSet) return null;
+                  const condition = cardAttributes.cornerCondition?.[side];
+                  const prettySide = side === "front" ? "Front" : "Back";
+                  return (
+                    <div key={side}>
+                      <div className="flex items-center gap-2 text-xs uppercase tracking-[0.35em] opacity-70">
+                        {prettySide} Corners
+                        {renderCornerBadge(condition?.confidence)}
+                      </div>
+                      {condition?.description && (
+                        <div className="text-xs opacity-60 mt-1">
+                          Looks {condition.description}.
+                        </div>
+                      )}
+                      <div className="grid grid-cols-2 gap-3 mt-3">
+                        {Object.entries(CORNER_LABELS).map(([key, label]) => {
+                          const entry = cornerSet[key];
+                          return (
+                            <div key={`${side}-${key}`} className="text-center text-[11px] uppercase tracking-[0.25em]">
+                              <div className="mb-2 rounded-2xl border border-white/10 bg-black/30 overflow-hidden">
+                                {entry?.image ? (
+                                  <img
+                                    src={entry.image}
+                                    alt={`${prettySide} ${label}`}
+                                    className="w-full h-24 object-cover"
+                                  />
+                                ) : (
+                                  <div className="h-24 flex items-center justify-center text-[10px] opacity-40">
+                                    No data
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex items-center justify-center gap-2 text-[10px] tracking-[0.3em]">
+                                {label}
+                                {renderCornerBadge(entry?.confidence)}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {cornerPhotos.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleSaveCornerImages}
+                  className="mt-4 w-full text-center border border-white/20 rounded-2xl py-2 text-[11px] uppercase tracking-[0.35em] text-white/80 hover:bg-white/5 transition"
+                >
+                  Save Corner Images
+                </button>
+              )}
+            </div>
+          )}
+
+          {(cardAttributes?.corners || GRADING_PATHS.featured) && (
+            <div className="lux-card mb-8">
+              <div className="text-xs uppercase opacity-70 tracking-wide mb-3">
+                Grading Paths
+              </div>
+
+              {GRADING_PATHS.featured && (
+                <div className="mb-4 border border-dashed border-[#E8DCC0]/40 rounded-xl p-3 text-xs uppercase tracking-[0.35em] text-[#E8DCC0]/70 text-center">
+                  Featured Partner Slot
+                </div>
+              )}
+
+              <div className="text-sm opacity-80 mb-3">
+                Decide if grading supports your selling plan — these services open in new tabs.
+              </div>
+
+              <div className="space-y-3">
+                {GRADING_PATHS.primary.map((path) => (
+                  <button
+                    key={path.label}
+                    type="button"
+                    onClick={() => window.open(path.url, "_blank", "noopener")}
+                    className="w-full text-left border border-white/15 rounded-2xl px-4 py-3 bg-black/30 hover:bg-black/40 transition"
+                  >
+                    <div className="flex items-center justify-between text-xs uppercase tracking-[0.35em] text-[#E8DCC0]">
+                      {path.label}
+                      <span className="text-[10px] opacity-70">Neutral</span>
+                    </div>
+                    <div className="text-sm opacity-80 mt-1">{path.description}</div>
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-5 text-xs uppercase tracking-[0.35em] opacity-60">
+                Alternative Options
+              </div>
+              <div className="space-y-2 mt-2">
+                {GRADING_PATHS.alternatives.map((path) => (
+                  <button
+                    key={path.label}
+                    type="button"
+                    onClick={() => window.open(path.url, "_blank", "noopener")}
+                    className="w-full text-left border border-white/10 rounded-2xl px-4 py-2.5 bg-black/20 hover:bg-black/35 transition"
+                  >
+                    <div className="text-[11px] uppercase tracking-[0.35em] text-white/70">
+                      {path.label}
+                    </div>
+                    <div className="text-xs opacity-65 mt-0.5">{path.description}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* CARD GRADING ASSIST — Sports Card Mode Only */}
           {cardAttributes?.grading && (
@@ -1193,6 +1471,70 @@ useEffect(() => {
       ) : (
         <>
           <HeaderBar label="Details" large />
+
+          {hasApparelSignals && (
+            <div className="lux-card mb-8">
+              <div className="text-xs uppercase opacity-70 tracking-wide mb-3">
+                Apparel Signals
+              </div>
+
+              <div className="space-y-3 text-sm opacity-85">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="opacity-60">Item Type:</span>
+                    {renderApparelConfidence("itemType")}
+                  </div>
+                  <div className="pl-4">
+                    {apparelAttributes?.itemType || (
+                      <span className="opacity-40">—</span>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="opacity-60">Brand:</span>
+                    {renderApparelConfidence("brand")}
+                  </div>
+                  <div className="pl-4">
+                    {apparelAttributes?.brand || (
+                      <span className="opacity-40">—</span>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="opacity-60">Size:</span>
+                    {renderApparelConfidence("size")}
+                  </div>
+                  <div className="pl-4">
+                    {apparelAttributes?.size || (
+                      <span className="opacity-40">—</span>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="opacity-60">Condition:</span>
+                    {renderApparelConfidence("condition")}
+                  </div>
+                  <div className="pl-4">
+                    {apparelAttributes?.condition || (
+                      <span className="opacity-40">—</span>
+                    )}
+                  </div>
+                </div>
+
+                {apparelIntel?.notes && (
+                  <div className="text-xs opacity-70 pl-1">
+                    Note: {apparelIntel.notes}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* MAGIC FILL CTA */}
           <div className="mt-4 mb-8">
@@ -1479,14 +1821,14 @@ useEffect(() => {
             />
           </div>
 
-          {tagOptionsForCategory.length > 0 && (
+          {tagChipOptions.length > 0 && (
             <>
               <div className={`mb-6 ${chipFlash.tags ? "chip-flash" : ""}`}>
                 <div className="text-sm uppercase opacity-70 tracking-wide mb-2">
                   Tags
                 </div>
                 <LuxeChipGroup
-                  options={tagOptionsForCategory}
+                  options={tagChipOptions}
                   value={tags}
                   multiple
                   onChange={(val) => setListingField("tags", val)}

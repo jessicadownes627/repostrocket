@@ -23,6 +23,8 @@ Using the structured input, output ONLY JSON in this format:
 }
 
 Bias: when unsure, classify as Clothing. Do not invent brands or materials.
+If card_intel is provided, respect the player/year/set/card_number it contains unless the user overrides it.
+If apparel_intel is provided, treat itemType/brand/size/condition as authoritative hints.
 `;
 
 const VISION_PROMPT = `
@@ -59,12 +61,6 @@ export async function handler(event) {
       photoDataUrl = null,
     } = JSON.parse(event.body || "{}");
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-    const sanitizeField = (value, limit = 200) => {
-      if (!value && value !== 0) return "";
-      const str = String(value);
-      return str.length > limit ? `${str.slice(0, limit)}…` : str;
-    };
 
     const normalizedImageUrl = (() => {
       if (!photoDataUrl) return null;
@@ -128,6 +124,8 @@ export async function handler(event) {
       tags: Array.isArray(listing.userTags || listing.tags)
         ? (listing.userTags || listing.tags).slice(0, 8).map((tag) => sanitizeField(tag, 40))
         : [],
+      card_intel: normalizeCardIntel(listing.cardIntel),
+      apparel_intel: normalizeApparelIntel(listing.apparelIntel),
     };
 
     const mainInput = `
@@ -192,11 +190,41 @@ function parseJsonSafe(str) {
   }
 }
 
+function normalizeCardIntel(intel) {
+  if (!intel || typeof intel !== "object") return null;
+  return {
+    player: sanitizeField(intel.player || "", 80),
+    team: sanitizeField(intel.team || "", 80),
+    sport: sanitizeField(intel.sport || "", 40),
+    year: sanitizeField(intel.year || "", 12),
+    set: sanitizeField(intel.setName || intel.set || "", 120),
+    card_number: sanitizeField(intel.cardNumber || "", 24),
+    brand: sanitizeField(intel.brand || "", 80),
+  };
+}
+
+function normalizeApparelIntel(intel) {
+  if (!intel || typeof intel !== "object") return null;
+  return {
+    item_type: sanitizeField(intel.itemType || "", 80),
+    brand: sanitizeField(intel.brand || "", 80),
+    size: sanitizeField(intel.size || "", 40),
+    condition: sanitizeField(intel.condition || "", 80),
+    notes: sanitizeField(intel.notes || "", 120),
+  };
+}
+
 function stripCodeFences(str = "") {
   return str
     .replace(/```json/gi, "")
     .replace(/```/g, "")
     .trim();
+}
+
+function sanitizeField(value, limit = 200) {
+  if (!value && value !== 0) return "";
+  const str = String(value);
+  return str.length > limit ? `${str.slice(0, limit)}…` : str;
 }
 function applyApparelBias(visionAlt = "") {
   const fabricSignals = [

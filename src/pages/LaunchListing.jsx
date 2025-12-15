@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useListingStore } from "../store/useListingStore";
 import { buildCardTitle } from "../utils/buildCardTitle";
+import { downloadImageFile } from "../utils/magicPhotoTools";
 
 export default function LaunchListing() {
   const { listingData } = useListingStore();
@@ -10,6 +11,7 @@ export default function LaunchListing() {
     description = "",
     price: rawPrice = "",
     cardAttributes = null,
+    cornerPhotos = [],
   } = listingData || {};
 
   const pricing = cardAttributes?.pricing || null;
@@ -196,6 +198,40 @@ export default function LaunchListing() {
             </div>
           </div>
 
+          {cornerPhotos.length > 0 && (
+            <div>
+              <div className="text-xs uppercase tracking-[0.18em] opacity-70 mb-1">
+                Corner Detail Photos
+              </div>
+              <div className="opacity-50 text-xs mt-1 mb-2">
+                Optional detail shots you can upload to any marketplace.
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {cornerPhotos.map((entry, idx) => (
+                  <div
+                    key={`${entry.label}-${idx}`}
+                    className="rounded-xl border border-[rgba(255,255,255,0.12)] overflow-hidden bg-black/30"
+                  >
+                    <img
+                      src={entry.url}
+                      alt={entry.altText || entry.label}
+                      className="w-full h-24 object-cover"
+                    />
+                    <div className="text-[10px] uppercase tracking-[0.25em] text-center py-1 opacity-70">
+                      {entry.label || `Corner ${idx + 1}`}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button
+                className="lux-small-btn mt-3"
+                onClick={handleDownloadCorners}
+              >
+                Download Corner Images
+              </button>
+            </div>
+          )}
+
           {/* Copy All */}
           <div className="pt-2 border-t border-[rgba(255,255,255,0.12)] mt-2 flex justify-between items-center">
             <div className="text-xs opacity-70">
@@ -253,3 +289,12 @@ export default function LaunchListing() {
     </div>
   );
 }
+  const handleDownloadCorners = () => {
+    if (!cornerPhotos.length) return;
+    cornerPhotos.forEach((entry, idx) => {
+      if (!entry?.url) return;
+      const name =
+        entry.label?.toLowerCase().replace(/\s+/g, "-") || `corner-${idx + 1}`;
+      downloadImageFile(entry.url, `${name}.jpg`);
+    });
+  };

@@ -3,6 +3,36 @@
 
 import { fetchRSSFeeds } from "./fetchRSSFeeds";
 
+export const HEADLINE_RECENCY_LIMIT_DAYS = 21;
+const CATALYST_KEYWORDS = [
+  "spike",
+  "surge",
+  "drop",
+  "dip",
+  "soar",
+  "launch",
+  "release",
+  "restock",
+  "shortage",
+  "sellout",
+  "sold out",
+  "rumor",
+  "trade",
+  "delay",
+  "breakout",
+  "viral",
+  "record",
+  "frenzy",
+  "buzz",
+  "shock",
+  "halt",
+  "listing",
+  "auction",
+  "bid",
+  "demand",
+  "supply",
+];
+
 export async function getTrendEventsForItem(item = {}) {
   const {
     title = "",
@@ -66,36 +96,173 @@ export async function getTrendEventsForItem(item = {}) {
     if (score > 0) {
       matches.push({
         headline: entry.title,
+        description: entry.description || "",
         source: entry.source,
         publishedAt: entry.publishedAt,
+        link: entry.link,
         score,
         termsHit,
       });
     }
   });
 
-  if (matches.length === 0) {
+  const sortedMatches = matches.sort((a, b) => b.score - a.score);
+  if (sortedMatches.length === 0) {
     return {
       eventLinked: false,
       eventImpactScore: 0,
       eventReasons: [],
       eventHeadline: null,
       eventTimestamp: null,
+      eventHeadlines: [],
+      trendGuidance: buildTrendGuidance(null, item, []),
     };
   }
 
-  // 3. Pick the strongest match (highest score; if tie, whichever appears first after sort)
-  const best = matches.sort((a, b) => b.score - a.score)[0];
+  const mappedMatches = sortedMatches.map((entry) => {
+    const daysSince = daysSinceDate(entry.publishedAt);
+    const isRecent =
+      daysSince != null ? daysSince <= HEADLINE_RECENCY_LIMIT_DAYS : false;
+    const hasCatalyst = hasCatalystSignal(entry.headline, entry.description);
+    return {
+      ...entry,
+      formattedSource: formatSource(entry.source),
+      daysSince,
+      isRecent,
+      hasCatalyst,
+    };
+  });
+  const topHeadlines = mappedMatches.slice(0, 3).map((entry) => ({
+    title: entry.headline,
+    source: entry.formattedSource,
+    publishedAt: entry.publishedAt || null,
+    link: entry.link || entry.source || "",
+    isHistorical: !entry.isRecent || !entry.hasCatalyst,
+  }));
+  const recentMatches = mappedMatches.filter(
+    (entry) => entry.isRecent && entry.hasCatalyst
+  );
+  const bestRecent = recentMatches[0] || null;
+
+  if (!bestRecent) {
+    return {
+      eventLinked: false,
+      eventImpactScore: 0,
+      eventReasons: [],
+      eventHeadline: null,
+      eventTimestamp: null,
+      eventHeadlines: topHeadlines.map((h) => ({ ...h, isHistorical: true })),
+      trendGuidance: buildTrendGuidance(null, item, topHeadlines),
+    };
+  }
 
   return {
     eventLinked: true,
-    eventImpactScore: best.score,
+    eventImpactScore: bestRecent.score,
     eventReasons: [
-      `Matched terms: ${best.termsHit.join(", ")}`,
-      `Recent news: ${best.headline}`,
+      `Matched terms: ${bestRecent.termsHit.join(", ")}`,
+      `Recent news: ${bestRecent.headline}`,
     ],
-    eventHeadline: best.headline,
-    eventTimestamp: best.publishedAt,
+    eventHeadline: bestRecent.headline,
+    eventTimestamp: bestRecent.publishedAt,
+    eventHeadlines: topHeadlines,
+    trendGuidance: buildTrendGuidance(bestRecent, item, topHeadlines),
   };
 }
 
+function buildTrendGuidance(bestMatch, item, headlines = []) {
+  const recentHeadlines = Array.isArray(headlines)
+    ? headlines.filter((h) => !h.isHistorical)
+    : [];
+  const count = recentHeadlines.length;
+  const latestDate = recentHeadlines[0]?.publishedAt || null;
+  const daysSince = latestDate ? daysSinceDate(latestDate) : null;
+  const fallbackDate = headlines[0]?.publishedAt || null;
+  const fallbackDays = fallbackDate ? daysSinceDate(fallbackDate) : null;
+  if (!bestMatch) {
+    return {
+      action: "Hold",
+      reason:
+        daysSince != null
+          ? `No relevant headlines in the last ${daysSince} days — pricing usually stays steady.`
+          : fallbackDays != null
+          ? `Only historical headlines found (last relevant was ${fallbackDays} days ago).`
+          : "No major headlines tied to this listing — pricing usually stays steady.",
+      headlineCount: 0,
+      daysSinceHeadline: daysSince ?? fallbackDays,
+    };
+  }
+  const score = bestMatch.score || 0;
+  let action = "Hold";
+  if (score >= 24) {
+    action = "Increase";
+  } else if (score >= 12) {
+    action = "Watch";
+  }
+
+  const sourceLabel = formatSource(bestMatch.source);
+  const term = formatPrimaryTerm(bestMatch, item);
+  const actionPhrase =
+    action === "Increase"
+      ? "may support firmer pricing for a moment"
+      : action === "Watch"
+      ? "may shift demand soon — worth monitoring"
+      : "often keeps prices steady";
+  const baseReason = `${term} just appeared in ${sourceLabel}'s coverage, so demand ${actionPhrase}.`;
+  const detail =
+    count > 0
+      ? `Based on ${count} recent headline${count > 1 ? "s" : ""}.`
+      : daysSince != null
+      ? `No relevant headlines in the last ${daysSince} days.`
+      : "No recent headlines yet.";
+
+  return {
+    action,
+    reason: `${baseReason} ${detail}`,
+    headlineCount: count,
+    daysSinceHeadline: daysSince,
+  };
+}
+
+function formatSource(url) {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, "");
+    return hostname || "the news";
+  } catch {
+    return "the news";
+  }
+}
+
+function formatPrimaryTerm(match, item) {
+  if (match?.termsHit?.length) {
+    return titleCase(match.termsHit[0]);
+  }
+  return (
+    item?.athlete ||
+    item?.team ||
+    item?.brand ||
+    (item?.title ? item.title.split(" ")[0] : "This item")
+  );
+}
+
+function titleCase(str = "") {
+  return str
+    .toString()
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function daysSinceDate(dateStr) {
+  const parsed = Date.parse(dateStr);
+  if (Number.isNaN(parsed)) return null;
+  return Math.max(0, Math.round((Date.now() - parsed) / (1000 * 60 * 60 * 24)));
+}
+
+function hasCatalystSignal(...texts) {
+  return texts.some((text) => {
+    if (!text) return false;
+    const lower = text.toLowerCase();
+    return CATALYST_KEYWORDS.some((keyword) => lower.includes(keyword));
+  });
+}

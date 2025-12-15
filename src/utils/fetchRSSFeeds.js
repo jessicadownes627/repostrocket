@@ -13,9 +13,8 @@ export async function fetchRSSFeeds(urls = []) {
         ...items.map((entry) => ({
           title: entry.title || "",
           description: entry.description || "",
+          link: entry.link || "",
           source: url,
-          // The existing fetchRSSFeed helper does not expose pubDate yet,
-          // so we default this to null for now.
           publishedAt: entry.publishedAt || null,
         }))
       );
@@ -26,4 +25,3 @@ export async function fetchRSSFeeds(urls = []) {
 
   return results;
 }
-

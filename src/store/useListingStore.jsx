@@ -18,8 +18,10 @@ const defaultListing = {
   shipping: "buyer pays",
   batchItems: [],
   photos: [],
-   editedPhoto: null,
-   editHistory: [],
+  secondaryPhotos: [],
+  cornerPhotos: [],
+  editedPhoto: null,
+  editHistory: [],
   resizedPhotos: {
     poshmark: [],
     depop: [],
@@ -28,6 +30,10 @@ const defaultListing = {
     etsy: [],
   },
   tags: {},
+  cardIntel: null,
+  cardAttributes: null,
+  apparelIntel: null,
+  apparelAttributes: null,
 };
 
 export function ListingProvider({ children }) {
@@ -133,6 +139,10 @@ export function ListingProvider({ children }) {
             normalized = normalized.slice(0, 1);
           }
           nextValue = normalized;
+        } else if (key === "secondaryPhotos") {
+          nextValue = normalizePhotosArray(value, "secondary photo");
+        } else if (key === "cornerPhotos" && Array.isArray(value)) {
+          nextValue = value.filter(Boolean);
         }
         return { ...prev, [key]: nextValue };
       });

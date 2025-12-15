@@ -1,4 +1,11 @@
+import { cropToCardBounds } from "./cardCropper";
+
 export async function autoCropCard(base64) {
+  const cropped = await cropToCardBounds(base64);
+  if (cropped?.confidence >= 0.55 && cropped?.dataUrl) {
+    return cropped.dataUrl;
+  }
+
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
@@ -23,7 +30,7 @@ export async function autoCropCard(base64) {
 
       resolve(canvas.toDataURL("image/jpeg", 0.92));
     };
+    img.onerror = () => resolve(base64);
     img.src = base64;
   });
 }
-

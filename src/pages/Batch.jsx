@@ -90,12 +90,14 @@ function Batch() {
             `batch photo ${idx + 1}`,
         },
       ],   // LaunchDeckBatch-friendly shape
+      secondaryPhotos: [],
       title: "",
       description: "",
       tags: [],
       price: "",
       condition: "",
       notes: "",
+      category: "Sports Cards",
     }));
 
     setBatchItems(items);
@@ -120,15 +122,15 @@ function Batch() {
       </div>
       <div
         className="
-          border border-[#4cc790] border-dashed 
+          border border-[#E8DCC0]/70 border-dashed 
           rounded-2xl 
           p-10 
           text-center 
           max-w-3xl 
           mx-auto 
           cursor-pointer
-          shadow-[0_0_25px_rgba(76,199,144,0.25)]
-          hover:shadow-[0_0_35px_rgba(76,199,144,0.45)]
+          shadow-[0_0_30px_rgba(232,220,192,0.22)]
+          hover:shadow-[0_0_40px_rgba(232,220,192,0.35)]
           transition
         "
         onClick={() => document.getElementById("batchUpload").click()}

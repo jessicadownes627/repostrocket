@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import "../styles/launchdeck.css";
@@ -22,8 +22,6 @@ import { runAIReview } from "../utils/safeAI/runAIReview";
 import { runMagicFill } from "../utils/safeAI/runMagicFill";
 import { runAutoFill } from "../utils/safeAI/runAutoFill";
 import { mergeAITurboSignals } from "../utils/aiTurboMerge";
-import { parseMagicFillOutput } from "../engines/MagicFillEngine";
-import { runMagicFill as callMagicFillFunction } from "../utils/runMagicFill";
 import { autoCropCard } from "../utils/autoCropCard";
 import { autoEnhanceCard } from "../utils/autoEnhanceCard";
 import {
@@ -56,67 +54,16 @@ import {
 } from "../engines/visionHelpers";
 import { smartPriceSense } from "../engines/smartPriceSense";
 import CardDetailSidebar from "../components/CardDetailSidebar";
-import { fileToDataUrl, getPhotoUrl, mapPhotosToUrls } from "../utils/photoHelpers";
-
-async function ensureDataUrl(source) {
-  if (!source) return "";
-  if (source.startsWith("data:")) return source;
-  try {
-    const res = await fetch(source);
-    const blob = await res.blob();
-    const file = new File([blob], "batch-photo", {
-      type: blob.type || "image/jpeg",
-    });
-    return await fileToDataUrl(file);
-  } catch (err) {
-    console.error("ensureDataUrl failed:", err);
-    return "";
-  }
-}
-
-async function runMagicFillEngine(item) {
-  try {
-    const firstPhotoEntry = Array.isArray(item?.photos) ? item.photos[0] : null;
-    const primaryPhoto =
-      item?.editedPhoto ||
-      (firstPhotoEntry && (getPhotoUrl(firstPhotoEntry) || "")) ||
-      "";
-    const photoDataUrl = await ensureDataUrl(primaryPhoto);
-    const listingPayload = {
-      brand: item?.brand || "",
-      category: item?.category || "",
-      size: item?.size || "",
-      condition: item?.condition || "",
-      userTitle: item?.title || "",
-      userDescription: item?.description || "",
-      userTags: Array.isArray(item?.tags) ? item.tags : [],
-      previousAiChoices: item?.previousAiChoices || {},
-    };
-
-    const ai = await callMagicFillFunction({
-      listing: listingPayload,
-      userCategory: item?.category || "",
-      photoDataUrl,
-      photoContext: firstPhotoEntry?.altText || "",
-      glowMode: false,
-    });
-    if (!ai) return null;
-
-    const parsed = parseMagicFillOutput(ai);
-    return {
-      title: parsed.title.after || item.title || "",
-      description: parsed.description.after || item.description || "",
-      price: parsed.price.after || item.price || "",
-      tags:
-        Array.isArray(parsed.tags.after) && parsed.tags.after.length
-          ? parsed.tags.after
-          : item.tags || [],
-    };
-  } catch (err) {
-    console.error("runMagicFillEngine failed:", err);
-    return null;
-  }
-}
+import { deriveAltTextFromFilename, getPhotoUrl, mapPhotosToUrls } from "../utils/photoHelpers";
+import { downloadImageFile } from "../utils/magicPhotoTools";
+import { getPremiumStatus } from "../store/premiumStore";
+import { generateMagicDraft } from "../utils/generateMagicDraft";
+import {
+  buildCardAttributesFromIntel,
+  extractCornerPhotoEntries,
+} from "../utils/cardIntel";
+import { buildApparelAttributesFromIntel } from "../utils/apparelIntel";
+ 
 
 const platformFormatters = {
   ebay: formatEbay,
@@ -130,30 +77,123 @@ const platformFormatters = {
   kidizen: formatKidizen,
 };
 
+const CORNER_LABELS = {
+  topLeft: "Top Left",
+  topRight: "Top Right",
+  bottomLeft: "Bottom Left",
+  bottomRight: "Bottom Right",
+};
+const GRADING_PATHS = {
+  featured: null,
+  primary: [
+    {
+      label: "PSA",
+      description: "Industry-standard grading with broad buyer trust.",
+      url: "https://www.psacard.com/",
+    },
+  ],
+  alternatives: [
+    {
+      label: "SGC",
+      description: "Popular option for vintage and modern slabs.",
+      url: "https://gosgc.com/",
+    },
+    {
+      label: "BGS",
+      description: "Beckett grading with subgrades.",
+      url: "https://www.beckett.com/grading/",
+    },
+    {
+      label: "CGC",
+      description: "Trusted grading for sports + collectibles.",
+      url: "https://www.cgccards.com/",
+    },
+  ],
+};
+
+function normalizeBatchItems(payload = []) {
+  return payload.map((item, idx) => {
+    const basePhotos = Array.isArray(item?.photos) ? [...item.photos] : [];
+    const normalizedExtras = [];
+
+    if (Array.isArray(item?.secondaryPhotos)) {
+      item.secondaryPhotos.forEach((photo, extraIdx) => {
+        if (!photo) return;
+        if (typeof photo === "string") {
+          normalizedExtras.push({
+            url: photo,
+            altText: `secondary photo ${extraIdx + 1}`,
+          });
+        } else {
+          normalizedExtras.push(photo);
+        }
+      });
+    } else if (item?.secondaryPhoto) {
+      if (typeof item.secondaryPhoto === "string") {
+        normalizedExtras.push({
+          url: item.secondaryPhoto,
+          altText: item.secondaryPhotoAlt || `secondary photo ${idx + 1}`,
+        });
+      } else {
+        normalizedExtras.push(item.secondaryPhoto);
+      }
+    }
+
+    return {
+      ...item,
+      photos: normalizedExtras.length
+        ? [...basePhotos, ...normalizedExtras]
+        : basePhotos,
+    };
+  });
+}
+
+function isBabyApparelListing(item = {}) {
+  const category = (item.category || "").toLowerCase();
+  if (category.includes("baby") || category.includes("kids") || category.includes("toddler")) {
+    return true;
+  }
+  const text = `${item.title || ""} ${item.description || ""} ${
+    Array.isArray(item.tags) ? item.tags.join(" ") : ""
+  }`.toLowerCase();
+  return /\b(onesie|romper|bodysuit|infant|newborn|0-3m|3-6m|6-9m|12m|18m|24m|toddler|nb)\b/.test(
+    text
+  );
+}
+
 export default function LaunchDeckBatch() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const items = location.state?.items || [];
-
-  const [processing, setProcessing] = useState(true);
+  const fallbackItems = useMemo(() => [], []);
+  const rawItems = location.state?.items;
+  const items = Array.isArray(rawItems) ? rawItems : fallbackItems;
+  const normalizedItems = useMemo(() => normalizeBatchItems(items), [items]);
+  const [processing, setProcessing] = useState(!normalizedItems.length);
   const [progress, setProgress] = useState(0);
-  const [processedItems, setProcessedItems] = useState([]);
+  const [processedItems, setProcessedItems] = useState(normalizedItems);
   const [toolbarMode, setToolbarMode] = useState(null);
   const [toolbarValue, setToolbarValue] = useState("");
   const [platform, setPlatform] = useState("ebay");
   const [cardGroups, setCardGroups] = useState(null);
   const [activeGroupFilter, setActiveGroupFilter] = useState("all");
   const [activeDetailIndex, setActiveDetailIndex] = useState(null);
+  const isPremiumUser =
+    getPremiumStatus() ||
+    (typeof window !== "undefined" &&
+      window.localStorage.getItem("rr_dev_premium") === "true");
 
-  const updateItem = (i, updater) => {
-    setProcessedItems((prev) => {
-      if (!prev || !prev.length) return prev;
-      const copy = [...prev];
-      copy[i] = updater(copy[i]);
-      return copy;
-    });
-  };
+  const updateItem = useCallback(
+    (i, updater) => {
+      setProcessedItems((prev) => {
+        if (!prev || !prev.length || i < 0 || i >= prev.length) return prev;
+        const copy = [...prev];
+        copy[i] = updater(copy[i]);
+        return copy;
+      });
+    },
+    [setProcessedItems]
+  );
 
   const handleAutoCropAll = async () => {
     if (!processedItems || !processedItems.length) return;
@@ -203,127 +243,354 @@ export default function LaunchDeckBatch() {
     setProcessedItems(updated);
   };
 
+  const applyAutoFields = useCallback(
+    (
+      prev,
+      finalBase,
+      initialSnapshot,
+      parsedDraft,
+      autoCategory,
+      autoBrand,
+      seoKeywords,
+      cardMeta,
+      priceSenseData,
+      autoListing,
+      cardIntelDetails,
+      aiMetadata,
+      cardIntelAttributes,
+      apparelIntelDetails,
+      apparelAttributes,
+      cornerPhotos
+    ) => {
+      if (!prev) return prev;
+      const next = { ...prev };
+
+      const shouldApplyTitle =
+        isPremiumUser &&
+        parsedDraft &&
+        finalBase.title &&
+        (!prev.title || prev.title === initialSnapshot.title);
+      if (shouldApplyTitle) next.title = finalBase.title;
+
+      const shouldApplyDescription =
+        isPremiumUser &&
+        parsedDraft &&
+        finalBase.description &&
+        (!prev.description || prev.description === initialSnapshot.description);
+      if (shouldApplyDescription) next.description = finalBase.description;
+
+      const shouldApplyPrice =
+        isPremiumUser &&
+        parsedDraft &&
+        finalBase.price &&
+        (!prev.price || prev.price === initialSnapshot.price);
+      if (shouldApplyPrice) next.price = finalBase.price;
+
+      const prevTags = Array.isArray(prev.tags) ? prev.tags : [];
+      const prevTagsKey = prevTags.join("|");
+      const initialTagsKey = initialSnapshot.tags.join("|");
+      const finalTags = Array.isArray(finalBase.tags) ? finalBase.tags : [];
+      const shouldApplyTags =
+        isPremiumUser &&
+        parsedDraft &&
+        finalTags.length > 0 &&
+        (!prevTagsKey || prevTagsKey === initialTagsKey);
+      if (shouldApplyTags) next.tags = finalTags;
+
+      next.autoCategory = autoCategory;
+      next.autoBrand = autoBrand;
+      next.seoKeywords = seoKeywords;
+
+      if (priceSenseData) next.priceSense = priceSenseData;
+      if (autoListing) next.autoListing = autoListing;
+
+      if (cardMeta) {
+        Object.entries(cardMeta).forEach(([key, value]) => {
+          if (value) next[key] = value;
+        });
+      }
+
+      if (cardIntelAttributes) {
+        next.cardAttributes = {
+          ...(next.cardAttributes || {}),
+          ...cardIntelAttributes,
+        };
+      }
+
+      if (cardIntelDetails) {
+        next.cardIntel = cardIntelDetails;
+      }
+
+      if (apparelIntelDetails) {
+        next.apparelIntel = apparelIntelDetails;
+      }
+
+      if (apparelAttributes) {
+        next.apparelAttributes = {
+          ...(next.apparelAttributes || {}),
+          ...apparelAttributes,
+        };
+      }
+
+      if (cornerPhotos && cornerPhotos.length) {
+        next.cornerPhotos = cornerPhotos;
+      }
+
+      if (parsedDraft) next.magicDiffs = parsedDraft;
+      if (aiMetadata) next.magicMetadata = aiMetadata;
+
+      return next;
+    },
+    [isPremiumUser]
+  );
+
+  const processItem = useCallback(
+    async (seedItem, index, options = {}) => {
+      if (!seedItem) return;
+
+      const photoEntries = Array.isArray(seedItem?.photos) ? [...seedItem.photos] : [];
+      const secondaryEntries = Array.isArray(seedItem?.secondaryPhotos)
+        ? [...seedItem.secondaryPhotos]
+        : [];
+
+      const initialSnapshot = {
+        title: seedItem?.title || "",
+        description: seedItem?.description || "",
+        price: seedItem?.price || "",
+        tags: Array.isArray(seedItem?.tags) ? seedItem.tags : [],
+      };
+
+      let finalBase = {
+        ...seedItem,
+        photos: photoEntries,
+        secondaryPhotos: secondaryEntries,
+      };
+
+      let parsedDraft = null;
+      let aiMetadata = null;
+      let cardIntelResult = seedItem?.cardIntel || null;
+      let apparelIntelResult = seedItem?.apparelIntel || null;
+      const isCardCategory =
+        (finalBase?.category || "").toLowerCase().includes("card") ||
+        isSportsCardPhoto(mapPhotosToUrls(photoEntries));
+      const isApparelCategory = isBabyApparelListing(finalBase);
+
+      if (isPremiumUser) {
+        try {
+          const draft = await generateMagicDraft(finalBase, {
+            glowMode: true,
+            cardMode: isCardCategory,
+            cardIntel: cardIntelResult,
+            apparelMode: isApparelCategory,
+            apparelIntel: apparelIntelResult,
+          });
+          if (draft?.cardIntel && !cardIntelResult) {
+            cardIntelResult = draft.cardIntel;
+          }
+          if (draft?.apparelIntel) {
+            apparelIntelResult = draft.apparelIntel;
+          }
+          if (draft?.parsed) {
+            parsedDraft = draft.parsed;
+            aiMetadata = draft.ai || null;
+            const { parsed } = draft;
+            const tagsAfter =
+              Array.isArray(parsed.tags.after) && parsed.tags.after.length
+                ? parsed.tags.after
+                : Array.isArray(finalBase.tags)
+                ? finalBase.tags
+                : [];
+            finalBase = {
+              ...finalBase,
+              title: parsed.title.after || finalBase.title || "",
+              description: parsed.description.after || finalBase.description || "",
+              price: parsed.price.after || finalBase.price || "",
+              tags: tagsAfter,
+            };
+          }
+        } catch (err) {
+          console.error("Batch Magic Draft failed:", seedItem?.id || index, err);
+        }
+      }
+
+      const normalizedPhotos = mapPhotosToUrls(finalBase.photos || []);
+      const autoCategory = predictCategoryFromPhoto(normalizedPhotos);
+      const autoBrand = guessBrandFromPhoto(normalizedPhotos);
+      const seoKeywords = buildSeoKeywords({
+        title: finalBase.title || "",
+        description: finalBase.description || "",
+        tags: Array.isArray(finalBase.tags) ? finalBase.tags : [],
+      });
+
+      let cardMeta = null;
+      let priceSenseData = null;
+      let autoListing = null;
+      let cardIntelligence = null;
+
+      if (isSportsCardPhoto(normalizedPhotos) || isCardCategory) {
+        const combinedText = `
+          ${finalBase.title || ""}
+          ${finalBase.description || ""}
+          ${Array.isArray(finalBase.tags) ? finalBase.tags.join(" ") : ""}
+          ${getPhotoUrl(finalBase.photos?.[0]) || ""}
+        `.toLowerCase();
+
+        const cardYear = extractCardYear(combinedText);
+        const cardNumber = extractCardNumber(combinedText);
+        const cardSerial = extractCardSerial(combinedText);
+        const cardBrandExact = detectCardBrand(combinedText);
+        const cardPlayer = extractCardPlayer(combinedText);
+        const cardTeam = extractCardTeam(combinedText);
+        const cardParallel = detectCardParallel(combinedText);
+
+        cardMeta = {
+          cardYear,
+          cardNumber,
+          cardSerial,
+          cardBrandExact,
+          cardPlayer,
+          cardTeam,
+          cardParallel,
+        };
+
+        const enrichedForPriceSense = {
+          ...finalBase,
+          ...cardMeta,
+        };
+
+        priceSenseData = smartPriceSense(enrichedForPriceSense);
+
+        autoListing = {
+          title: autoSportsCardTitle(enrichedForPriceSense),
+          description: autoSportsCardDescription(enrichedForPriceSense),
+          specifics: autoSportsCardSpecifics(enrichedForPriceSense),
+        };
+
+        const combinedTextFull = combinedText;
+        const sport = detectSport(cardTeam);
+        const league = detectLeague(cardTeam);
+        const rookie = detectRookie(combinedTextFull);
+        const { graded, company, value } = detectGrading(combinedTextFull);
+        const slabbed = detectSlab(combinedTextFull);
+
+        const protection = recommendProtection({
+          slabbed,
+          graded,
+          serial: cardSerial,
+        });
+
+        cardIntelligence = {
+          sport,
+          league,
+          rookie,
+          graded,
+          gradingCompany: company,
+          gradeValue: value,
+          slabbed,
+          protection,
+        };
+      }
+
+      if (options.isCancelled?.()) return;
+
+      const cardIntelAttributes = cardIntelResult
+        ? buildCardAttributesFromIntel(cardIntelResult)
+        : null;
+      const apparelAttributes = apparelIntelResult
+        ? buildApparelAttributesFromIntel(apparelIntelResult)
+        : null;
+      const cornerAssets = cardIntelResult
+        ? extractCornerPhotoEntries(cardIntelResult)
+        : [];
+
+      updateItem(index, (prev) =>
+        applyAutoFields(
+          prev,
+          finalBase,
+          initialSnapshot,
+          parsedDraft,
+          autoCategory,
+          autoBrand,
+          seoKeywords,
+          cardMeta,
+          priceSenseData,
+          autoListing,
+          cardIntelResult
+            ? {
+                ...cardIntelResult,
+                confidence: cardIntelResult.confidence || {},
+              }
+            : null,
+          aiMetadata,
+          cardIntelAttributes,
+          apparelIntelResult
+            ? {
+                ...apparelIntelResult,
+                confidence: apparelIntelResult.confidence || {},
+              }
+            : null,
+          apparelAttributes,
+          cornerAssets
+        )
+      );
+
+      if (cardIntelligence) {
+        updateItem(index, (prev) =>
+          prev ? { ...prev, cardIntelligence } : prev
+        );
+      }
+
+      if (typeof options.onProgress === "function") {
+        options.onProgress();
+      }
+    },
+    [applyAutoFields, isPremiumUser, updateItem]
+  );
+
+  const refreshItem = useCallback(
+    (index, seedOverride = null) => {
+      const source =
+        seedOverride ||
+        (processedItems && processedItems[index]) ||
+        (normalizedItems && normalizedItems[index]);
+      if (!source) return;
+      processItem(source, index);
+    },
+    [processedItems, normalizedItems, processItem]
+  );
+
   useEffect(() => {
-    if (!items || items.length === 0) {
+    setProcessedItems(normalizedItems);
+    setProgress(0);
+  }, [normalizedItems]);
+
+  useEffect(() => {
+    if (!normalizedItems.length) {
       setProcessing(false);
       return;
     }
 
-    async function runBatchFill() {
-      const results = [];
+    let cancelled = false;
+    setProcessing(true);
+    setProgress(0);
 
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-
-        try {
-          // Use the same engine as SingleListing
-          const filled = await runMagicFillEngine(item);
-          const base = filled ? { ...item, ...filled } : { ...item };
-
-          const normalizedPhotos = mapPhotosToUrls(base.photos || []);
-          const autoCategory = predictCategoryFromPhoto(normalizedPhotos);
-          const autoBrand = guessBrandFromPhoto(normalizedPhotos);
-          const seoKeywords = buildSeoKeywords({
-            title: base.title || "",
-            description: base.description || "",
-            tags: base.tags || [],
-          });
-
-          let enriched = {
-            ...base,
-            autoCategory,
-            autoBrand,
-            seoKeywords,
-          };
-
-          if (isSportsCardPhoto(normalizedPhotos)) {
-            enriched = {
-              ...enriched,
-              cardPlayer: "",
-              cardTeam: "",
-              cardBrandExact: "",
-              cardYear: "",
-              cardParallel: "",
-              cardNumber: "",
-              cardSerial: "",
-            };
-
-            const combinedText = `
-              ${base.title || ""}
-              ${base.description || ""}
-              ${base.tags?.join(" ") || ""}
-              ${getPhotoUrl(base.photos?.[0]) || ""}
-            `.toLowerCase();
-
-            const cardYear = extractCardYear(combinedText);
-            const cardNumber = extractCardNumber(combinedText);
-            const cardSerial = extractCardSerial(combinedText);
-            const cardBrandExact = detectCardBrand(combinedText);
-            const cardPlayer = extractCardPlayer(combinedText);
-            const cardTeam = extractCardTeam(combinedText);
-            const cardParallel = detectCardParallel(combinedText);
-
-            enriched = {
-              ...enriched,
-              cardYear,
-              cardNumber,
-              cardSerial,
-              cardBrandExact,
-              cardPlayer,
-              cardTeam,
-              cardParallel,
-            };
-
-            enriched.priceSense = smartPriceSense(enriched);
-
-            enriched.autoListing = {
-              title: autoSportsCardTitle(enriched),
-              description: autoSportsCardDescription(enriched),
-              specifics: autoSportsCardSpecifics(enriched),
-            };
-
-            // Phase 8: Sport + League + Rookie + Grading + Slab
-            const combinedTextFull = combinedText;
-
-            const sport = detectSport(cardTeam);
-            const league = detectLeague(cardTeam);
-            const rookie = detectRookie(combinedTextFull);
-            const { graded, company, value } = detectGrading(combinedTextFull);
-            const slabbed = detectSlab(combinedTextFull);
-
-            const protection = recommendProtection({
-              slabbed,
-              graded,
-              serial: cardSerial,
-            });
-
-            enriched.cardIntelligence = {
-              sport,
-              league,
-              rookie,
-              graded,
-              gradingCompany: company,
-              gradeValue: value,
-              slabbed,
-              protection,
-            };
-          }
-
-          results.push(enriched);
-        } catch (err) {
-          console.error("Batch Magic Fill failed for item:", item.id, err);
-          results.push(item);
-        }
-
-        setProgress(Math.round(((i + 1) / items.length) * 100));
+    const run = async () => {
+      for (let i = 0; i < normalizedItems.length; i++) {
+        if (cancelled) break;
+        await processItem(normalizedItems[i], i, {
+          isCancelled: () => cancelled,
+          onProgress: () =>
+            setProgress(Math.round(((i + 1) / normalizedItems.length) * 100)),
+        });
       }
+      if (!cancelled) setProcessing(false);
+    };
 
-      setProcessedItems(results);
-      setProcessing(false);
-    }
-
-    runBatchFill();
-  }, [items]);
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [normalizedItems, processItem]);
 
   // Recompute groups when processed items change
   useEffect(() => {
@@ -369,10 +636,13 @@ export default function LaunchDeckBatch() {
   }
 
   if (processing) {
+    const processingHeadline = isPremiumUser
+      ? "Running Magic Fill…"
+      : "Preparing cards…";
     return (
       <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-10 text-center">
         <h1 className="text-3xl font-cinzel mb-6 tracking-wide">
-          Running Magic Fill…
+          {processingHeadline}
         </h1>
 
         <div className="w-full max-w-xl bg-white/10 h-4 rounded-full overflow-hidden">
@@ -545,6 +815,7 @@ export default function LaunchDeckBatch() {
               index={index}
               updateItem={updateItem}
               setActiveDetailIndex={setActiveDetailIndex}
+              onRefreshItem={refreshItem}
             />
           )
         )}
@@ -661,7 +932,7 @@ export default function LaunchDeckBatch() {
   );
 }
 
-function BatchCard({ item, index, updateItem, setActiveDetailIndex }) {
+function BatchCard({ item, index, updateItem, setActiveDetailIndex, onRefreshItem }) {
   const outputRef = useRef(null);
 
   const [activePlatform, setActivePlatform] = useState(null);
@@ -677,6 +948,7 @@ function BatchCard({ item, index, updateItem, setActiveDetailIndex }) {
 
   const [quickFixMode, setQuickFixMode] = useState(null);
   const [quickFixValue, setQuickFixValue] = useState("");
+  const backInputRef = useRef(null);
 
   const applyQuickFix = () => {
     if (!quickFixMode) return;
@@ -685,6 +957,80 @@ function BatchCard({ item, index, updateItem, setActiveDetailIndex }) {
       [quickFixMode]: quickFixValue.trim(),
     }));
     setQuickFixMode(null);
+  };
+
+  const confidenceTone = {
+    high: "text-emerald-300 border-emerald-300/40",
+    medium: "text-[#CBB78A] border-[#CBB78A]/40",
+    low: "text-white/60 border-white/20",
+  };
+
+  const renderConfidenceBadge = (field) => {
+    const level = item?.cardIntel?.confidence?.[field];
+    if (!level) return null;
+    const tone = confidenceTone[level] || confidenceTone.low;
+    return (
+      <span
+        className={`ml-2 text-[9px] uppercase tracking-[0.3em] px-2 py-0.5 rounded-full border ${tone}`}
+      >
+        {level}
+      </span>
+    );
+  };
+
+  const renderApparelConfidenceBadge = (field) => {
+    const level = item?.apparelIntel?.confidence?.[field];
+    if (!level) return null;
+    const tone = confidenceTone[level] || confidenceTone.low;
+    return (
+      <span
+        className={`ml-2 text-[9px] uppercase tracking-[0.3em] px-2 py-0.5 rounded-full border ${tone}`}
+      >
+        {level}
+      </span>
+    );
+  };
+
+  const cornerPhotos = item?.cornerPhotos || [];
+  const handleSaveCornerImages = () => {
+    if (!cornerPhotos.length) return;
+    cornerPhotos.forEach((entry, idx) => {
+      if (!entry?.url) return;
+      const name =
+        entry.label?.toLowerCase().replace(/\s+/g, "-") || `corner-${idx + 1}`;
+      downloadImageFile(entry.url, `${name}.jpg`);
+    });
+  };
+
+  const renderCornerBadge = (level) => {
+    if (!level) return null;
+    const tone = confidenceTone[level] || confidenceTone.low;
+    return (
+      <span
+        className={`ml-2 text-[9px] uppercase tracking-[0.3em] px-2 py-0.5 rounded-full border ${tone}`}
+      >
+        {level}
+      </span>
+    );
+  };
+
+  const handleBackUpload = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const entry = {
+      url: URL.createObjectURL(file),
+      altText: deriveAltTextFromFilename(file.name) || "card back photo",
+      file,
+    };
+    const nextSeed = {
+      ...item,
+      secondaryPhotos: [entry],
+      cardIntel: null,
+    };
+    updateItem(index, () => nextSeed);
+    if (onRefreshItem) {
+      onRefreshItem(index, nextSeed);
+    }
   };
 
   async function handlePlatformClick(key) {
@@ -765,6 +1111,14 @@ function BatchCard({ item, index, updateItem, setActiveDetailIndex }) {
     description:
       platformPreview.summaryDescription || item.description,
   });
+  const apparelAttrs = item?.apparelAttributes || {};
+  const hasApparelSignals =
+    !!item?.apparelIntel &&
+    (apparelAttrs.itemType ||
+      apparelAttrs.brand ||
+      apparelAttrs.size ||
+      apparelAttrs.condition ||
+      item.apparelIntel.notes);
 
   return (
     <div className="ld-card">
@@ -790,6 +1144,58 @@ function BatchCard({ item, index, updateItem, setActiveDetailIndex }) {
         ))}
       </div>
 
+      <div className="flex flex-col md:flex-row gap-4 mb-4">
+        <div className="flex-1">
+          <div className="text-[11px] uppercase tracking-[0.35em] text-white/60 mb-2">
+            Front Photo
+          </div>
+          {getPhotoUrl(item?.photos?.[0]) ? (
+            <img
+              src={getPhotoUrl(item.photos[0])}
+              alt="Front of card"
+              className="w-full rounded-xl border border-white/10 object-cover"
+            />
+          ) : (
+            <div className="rounded-xl border border-dashed border-white/15 p-6 text-center text-xs text-white/50">
+              No front photo
+            </div>
+          )}
+        </div>
+        <div className="flex-1">
+          <div className="text-[11px] uppercase tracking-[0.35em] text-white/60 mb-2 flex items-center justify-between">
+            <span>Back Photo</span>
+            <button
+              className="text-[10px] uppercase tracking-[0.35em] text-[#E8DCC0] hover:text-white transition"
+              onClick={() => backInputRef.current?.click()}
+              type="button"
+            >
+              {item?.secondaryPhotos?.length ? "Replace" : "Add"}
+            </button>
+          </div>
+          {item?.secondaryPhotos?.length ? (
+            <img
+              src={getPhotoUrl(item.secondaryPhotos[0])}
+              alt="Back of card"
+              className="w-full rounded-xl border border-white/10 object-cover"
+            />
+          ) : (
+            <div
+              className="rounded-xl border border-dashed border-white/15 p-6 text-center text-xs text-white/50 cursor-pointer hover:border-white/40 transition"
+              onClick={() => backInputRef.current?.click()}
+            >
+              Optional — add the back for higher confidence
+            </div>
+          )}
+          <input
+            type="file"
+            accept="image/*"
+            ref={backInputRef}
+            className="hidden"
+            onChange={handleBackUpload}
+          />
+        </div>
+      </div>
+
       {(item.autoCategory || item.autoBrand) && (
         <div className="ld-pills-row">
           {item.autoCategory && (
@@ -797,6 +1203,161 @@ function BatchCard({ item, index, updateItem, setActiveDetailIndex }) {
           )}
           {item.autoBrand && (
             <span className="ld-pill ld-pill-muted">{item.autoBrand}</span>
+          )}
+        </div>
+      )}
+
+      {hasApparelSignals && (
+        <div className="text-xs text-white/90 bg-black/30 border border-white/15 rounded-lg p-3 mb-4">
+          <div className="font-semibold text-[#E8DCC0] mb-2 tracking-wide uppercase text-[11px]">
+            Apparel Signals
+          </div>
+          <div className="space-y-2 text-sm">
+            <div>
+              <div className="flex items-center gap-2 opacity-70 text-[11px] uppercase tracking-[0.35em]">
+                Item Type {renderApparelConfidenceBadge("itemType")}
+              </div>
+              <div>{apparelAttrs.itemType || <span className="opacity-40">—</span>}</div>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 opacity-70 text-[11px] uppercase tracking-[0.35em]">
+                Brand {renderApparelConfidenceBadge("brand")}
+              </div>
+              <div>{apparelAttrs.brand || <span className="opacity-40">—</span>}</div>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 opacity-70 text-[11px] uppercase tracking-[0.35em]">
+                Size {renderApparelConfidenceBadge("size")}
+              </div>
+              <div>{apparelAttrs.size || <span className="opacity-40">—</span>}</div>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 opacity-70 text-[11px] uppercase tracking-[0.35em]">
+                Condition {renderApparelConfidenceBadge("condition")}
+              </div>
+              <div>{apparelAttrs.condition || <span className="opacity-40">—</span>}</div>
+            </div>
+            {item?.apparelIntel?.notes && (
+              <div className="opacity-70 text-[11px]">
+                Note: {item.apparelIntel.notes}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {item?.cardIntel?.corners && (
+        <div className="text-xs text-white/90 bg-black/30 border border-white/15 rounded-lg p-3 mb-4">
+          <div className="font-semibold text-[#E8DCC0] mb-2 tracking-wide uppercase text-[11px]">
+            Corner Inspection
+          </div>
+          {["front", "back"].map((side) => {
+            const cornerSet = item.cardIntel.corners?.[side];
+            if (!cornerSet) return null;
+            const condition = item.cardIntel.cornerCondition?.[side];
+            const prettySide = side === "front" ? "Front" : "Back";
+            return (
+              <div key={`${item.id || index}-${side}`} className="mb-4 last:mb-0">
+                <div className="flex items-center gap-2 opacity-70 text-[11px] uppercase tracking-[0.35em]">
+                  {prettySide} Corners
+                  {renderCornerBadge(condition?.confidence)}
+                </div>
+                {condition?.description && (
+                  <div className="opacity-60 text-[11px] mt-1">
+                    Looks {condition.description}.
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-3 mt-3">
+                  {Object.entries(CORNER_LABELS).map(([key, label]) => {
+                    const entry = cornerSet[key];
+                    return (
+                      <div key={`${side}-${key}`} className="text-center text-[10px] uppercase tracking-[0.3em]">
+                        <div className="mb-2 rounded-xl border border-white/10 bg-black/30 overflow-hidden">
+                          {entry?.image ? (
+                            <img
+                              src={entry.image}
+                              alt={`${prettySide} ${label}`}
+                              className="w-full h-20 object-cover"
+                            />
+                          ) : (
+                            <div className="h-20 flex items-center justify-center opacity-30">
+                              No data
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-center gap-1">
+                          {label}
+                          {renderCornerBadge(entry?.confidence)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {(item?.cardIntel?.corners || GRADING_PATHS.featured) && (
+        <div className="text-xs text-white/90 bg-black/30 border border-white/15 rounded-lg p-3 mb-4">
+          <div className="font-semibold text-[#E8DCC0] mb-2 tracking-wide uppercase text-[11px]">
+            Grading Paths
+          </div>
+          {GRADING_PATHS.featured && (
+            <div className="mb-3 border border-dashed border-white/30 rounded-xl p-2 text-center uppercase text-[10px] tracking-[0.35em] text-white/60">
+              Featured Partner Slot
+            </div>
+          )}
+          <div className="opacity-70 text-[11px] mb-2">
+            Explore grading services (opens new tab).
+          </div>
+          <div className="space-y-2">
+            {GRADING_PATHS.primary.map((path) => (
+              <button
+                key={path.label}
+                type="button"
+                onClick={() => window.open(path.url, "_blank", "noopener")}
+                className="w-full text-left border border-white/15 rounded-2xl px-3 py-2.5 bg-black/30 hover:bg-black/45 transition"
+              >
+                <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.35em]">
+                  <span>{path.label}</span>
+                  <span className="text-[9px] opacity-70">Neutral</span>
+                </div>
+                <div className="text-xs opacity-70 mt-1">
+                  {path.description}
+                </div>
+              </button>
+            ))}
+          </div>
+          <div className="mt-4 text-[10px] uppercase tracking-[0.35em] opacity-60">
+            Alternative Options
+          </div>
+          <div className="space-y-1.5 mt-2">
+            {GRADING_PATHS.alternatives.map((path) => (
+              <button
+                key={path.label}
+                type="button"
+                onClick={() => window.open(path.url, "_blank", "noopener")}
+                className="w-full text-left border border-white/10 rounded-2xl px-3 py-2 bg-black/20 hover:bg-black/35 transition"
+              >
+                <div className="text-[11px] uppercase tracking-[0.3em]">
+                  {path.label}
+                </div>
+                <div className="text-[11px] opacity-65 mt-0.5">
+                  {path.description}
+                </div>
+              </button>
+            ))}
+          </div>
+          {cornerPhotos.length > 0 && (
+            <button
+              type="button"
+              onClick={handleSaveCornerImages}
+              className="mt-3 w-full border border-white/20 rounded-2xl py-2 text-[10px] uppercase tracking-[0.35em] text-white/80 hover:bg-white/10 transition"
+            >
+              Save Corner Images
+            </button>
           )}
         </div>
       )}
@@ -941,6 +1502,52 @@ function BatchCard({ item, index, updateItem, setActiveDetailIndex }) {
         >
           Card Details →
         </button>
+      )}
+
+      {item?.cardIntel && (
+        <div className="text-xs text-white/90 bg-black/30 border border-white/15 rounded-lg p-3 mb-3">
+          <div className="font-semibold text-[#E8DCC0] mb-2 tracking-wide uppercase text-[11px]">
+            Card Identity
+          </div>
+          <div className="space-y-2 text-sm">
+            <div>
+              <div className="flex items-center gap-2 opacity-70 text-[11px] uppercase tracking-[0.35em]">
+                Player {renderConfidenceBadge("player")}
+              </div>
+              <div>{item.cardIntel.player || <span className="opacity-40">—</span>}</div>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 opacity-70 text-[11px] uppercase tracking-[0.35em]">
+                Team {renderConfidenceBadge("team")}
+              </div>
+              <div>{item.cardIntel.team || <span className="opacity-40">—</span>}</div>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 opacity-70 text-[11px] uppercase tracking-[0.35em]">
+                Year {renderConfidenceBadge("year")}
+              </div>
+              <div>{item.cardIntel.year || <span className="opacity-40">—</span>}</div>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 opacity-70 text-[11px] uppercase tracking-[0.35em]">
+                Set {renderConfidenceBadge("setName")}
+              </div>
+              <div>{item.cardIntel.setName || <span className="opacity-40">—</span>}</div>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 opacity-70 text-[11px] uppercase tracking-[0.35em]">
+                Card # {renderConfidenceBadge("cardNumber")}
+              </div>
+              <div>{item.cardIntel.cardNumber || <span className="opacity-40">—</span>}</div>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 opacity-70 text-[11px] uppercase tracking-[0.35em]">
+                Brand {renderConfidenceBadge("brand")}
+              </div>
+              <div>{item.cardIntel.brand || <span className="opacity-40">—</span>}</div>
+            </div>
+          </div>
+        </div>
       )}
 
       {item?.priceSense && (

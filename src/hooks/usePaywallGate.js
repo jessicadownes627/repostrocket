@@ -24,6 +24,20 @@ export default function usePaywallGate() {
     limit: 0
   });
 
+  const devOverrideFlag = import.meta?.env?.VITE_DEV_PREMIUM === "true";
+  const devOverride =
+    typeof window !== "undefined" &&
+    devOverrideFlag &&
+    window.location.hostname === "localhost";
+
+  if (
+    devOverride &&
+    typeof window !== "undefined" &&
+    window.localStorage.getItem("rr_dev_premium") !== "true"
+  ) {
+    window.localStorage.setItem("rr_dev_premium", "true");
+  }
+
   /**
    * gate()
    * @param {string} key - feature name ("launches", "smartFill", etc.)
@@ -31,6 +45,13 @@ export default function usePaywallGate() {
    */
   const gate = (key, action, options = {}) => {
     const { tryKey } = options;
+
+     if (devOverride) {
+      if (typeof action === "function") {
+        action();
+      }
+      return true;
+    }
 
     if (tryKey && tryOneFree(tryKey)) {
       if (typeof action === "function") {
