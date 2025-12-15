@@ -1922,7 +1922,7 @@ useEffect(() => {
                 Magic Fill Results
               </h2>
               <p className="text-sm opacity-70 mt-1">
-                Review AI suggestions before applying them to your listing.
+                Review the latest suggestions before applying them to your listing.
               </p>
               {magicDiffs.length === 0 && (
                 <p className="text-sm opacity-70 mt-2">

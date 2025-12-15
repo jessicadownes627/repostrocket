@@ -162,7 +162,7 @@ function Batch() {
         <div className="flex justify-center mt-6">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/15 bg-black/30 text-[11px] uppercase tracking-[0.3em] text-white/70">
             <span className="w-2 h-2 rounded-full bg-[#4cc790] animate-pulse" />
-            Batch ready · {photos.length} card{photos.length > 1 ? "s" : ""} queued
+            Batch ready · {photos.length} item{photos.length > 1 ? "s" : ""} queued
           </div>
         </div>
       )}
@@ -171,7 +171,7 @@ function Batch() {
       {hasPhotos && (
         <>
           <div className="text-xs uppercase tracking-[0.35em] text-center text-white/60 mt-10 mb-4">
-            Step 2 — Review Cards
+            Step 2 — Review Items
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 max-w-5xl mx-auto">
           {photos.map((p) => (
@@ -232,7 +232,7 @@ function Batch() {
       {hasPhotos && (
         <div className="text-center mt-10">
           <div className="text-xs uppercase tracking-[0.35em] text-white/60 mb-4">
-            Step 3 — Launch Batch
+            Step 3 — Launch Listings
           </div>
           <button
             onClick={handleBuildBatch}
@@ -249,7 +249,7 @@ function Batch() {
               transition
             "
           >
-            Continue to Batch Launch →
+            Continue to Launch →
           </button>
         </div>
       )}

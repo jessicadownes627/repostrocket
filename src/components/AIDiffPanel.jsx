@@ -9,7 +9,7 @@ export default function AIDiffPanel({ diff, onClose }) {
         <button className="diff-close" onClick={onClose}>
           ✕
         </button>
-        <h2 className="diff-title">AI Improvements</h2>
+        <h2 className="diff-title">Listing Improvements</h2>
         <p className="diff-sub">Here’s what Repost Rocket adjusted and why.</p>
 
         <div className="diff-list">

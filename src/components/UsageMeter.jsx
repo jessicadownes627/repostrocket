@@ -9,7 +9,7 @@ export default function UsageMeter() {
   const features = [
     { key: "smartFill", label: "Smart Fill" },
     { key: "autoFill", label: "Auto Fill" },
-    { key: "aiReview", label: "AI Review" },
+    { key: "aiReview", label: "Listing Review" },
     { key: "launches", label: "Launches" },
   ];
 

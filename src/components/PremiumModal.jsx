@@ -8,7 +8,7 @@ const featureCopy = {
     description:
       "Free users get 1 premium Magic listing per day. Magic listings auto-extract brand, color, size, and write beautiful descriptions for you.",
     free: ["1 Magic listing per day"],
-    premium: ["Unlimited Magic listings", "Full AI description suite", "Faster workflow"],
+    premium: ["Unlimited Magic listings", "Full description suite", "Faster workflow"],
   },
 
   batchMode: {
@@ -26,7 +26,7 @@ const featureCopy = {
     description:
       "Premium unlocks unlimited launches across all platforms — Poshmark, Mercari, eBay, Depop, Etsy, and more.",
     free: ["2 launches per day"],
-    premium: ["Unlimited launches", "AI-optimized price suggestions"],
+    premium: ["Unlimited launches", "Market-optimized price suggestions"],
   },
 
   // fallback for unknown keys
@@ -34,9 +34,9 @@ const featureCopy = {
     title: "Premium Feature",
     subtitle: "Unlock the full Repost Rocket experience.",
     description:
-      "Premium gives you unlimited access to all AI tools, Magic listings, Batch Mode, and more.",
+      "Premium gives you unlimited access to advanced tools, Magic listings, Batch Mode, and more.",
     free: ["Basic usage only"],
-    premium: ["Unlimited access", "All AI features", "Batch Mode", "Premium updates"],
+    premium: ["Unlimited access", "All premium features", "Batch Mode", "Premium updates"],
   },
 };
 
@@ -119,4 +119,3 @@ export default function PremiumModal({ open, reason, usage, limit, onClose }) {
     </AnimatePresence>
   );
 }
-

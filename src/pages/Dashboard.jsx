@@ -45,7 +45,7 @@ export default function Dashboard() {
           <span className="sparkly-header header-glitter">Repost Rocket</span>
         </h1>
         <p className="text-sm opacity-70 mt-1 tracking-wide">
-          Luxury AI selling-prep. Fast. Polished. Profitable.
+          Luxury listing prep. Fast. Polished. Profitable.
         </p>
         <div className="lux-divider lux-divider-hero"></div>
       </div>
@@ -55,7 +55,7 @@ export default function Dashboard() {
       <LuxeCard
         title="Create Single Listing"
         subtitle="Single Item"
-        description="Prep one item with AI. Photos → Details → Launch."
+        description="Prep one item with smart guidance. Photos → Details → Launch."
         onClick={() => navigate("/prep")}
       />
 

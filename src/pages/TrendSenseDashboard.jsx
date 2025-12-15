@@ -439,27 +439,29 @@ export default function TrendSenseDashboard() {
           </div>
         )}
 
-        {/* System Activity Strip */}
-        <div className="bg-[#060b0f] border border-white/10 rounded-2xl p-4 mb-2 grid gap-4 sm:grid-cols-2">
-          {systemActivityStats.map((stat) => (
-            <div key={stat.label}>
-              <div className="text-[11px] uppercase tracking-[0.3em] text-white/45">
-                {stat.label}
-              </div>
-              <div className="text-2xl font-semibold text-white mt-1">
-                {stat.value}
-              </div>
-              <div className="text-[11px] text-white/45">{stat.status}</div>
-            </div>
-          ))}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-[11px] text-white/45 mb-8">
-          <span>TrendSense evaluates your saved listings in real time.</span>
-          {savedListingCount === 0 && (
-            <span className="mt-2 sm:mt-0">
-              No saved listings yet — add one to begin live analysis.
-            </span>
-          )}
-        </div>
+       {/* System Activity Strip */}
+<div className="bg-[#060b0f] border border-white/10 rounded-2xl p-4 mb-2 grid gap-4 sm:grid-cols-2">
+  {systemActivityStats.map((stat) => (
+    <div key={stat.label}>
+      <div className="text-[11px] uppercase tracking-[0.3em] text-white/45">
+        {stat.label}
+      </div>
+      <div className="text-2xl font-semibold text-white mt-1">
+        {stat.value}
+      </div>
+      <div className="text-[11px] text-white/45">{stat.status}</div>
+    </div>
+  ))}
+</div> {/* ← THIS WAS MISSING */}
+
+<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-[11px] text-white/45 mb-8">
+  <span>TrendSense evaluates your saved listings in real time.</span>
+  {savedListingCount === 0 && (
+    <span className="mt-2 sm:mt-0">
+      No saved listings yet — add one to begin live analysis.
+    </span>
+  )}
+</div>
 
         {/* TrendSense Preview */}
         <div className="lux-bento-card bg-[#05090C] border border-[#1D252C] rounded-2xl p-6 mb-10 relative overflow-hidden">

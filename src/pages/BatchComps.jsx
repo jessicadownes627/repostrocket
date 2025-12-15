@@ -34,7 +34,7 @@ function BatchCompsInner() {
     "Use even lighting. Reduce shadows for clearer detail.",
     "Hold your phone steady for one second to avoid blur.",
     "Move closer. Sharp detail increases buyer confidence.",
-    "Keep the background simple so the AI can detect edges cleanly.",
+    "Keep the background simple so detection stays accurate.",
     "Wipe your camera lens to remove haze and improve clarity.",
     "Avoid overhead glare. Tilt slightly to reduce reflections.",
     "Place smaller items on a flat, solid surface for better detection.",
@@ -253,7 +253,7 @@ function BatchCompsInner() {
         </h1>
 
         <div className="magic-cta-bar mb-8 text-center">
-          Use AI to prep pricing for multiple sports cards at once.
+          Use smart pricing tools to prep multiple sports cards at once.
         </div>
 
         {/* LAUNCH DECK CTA */}

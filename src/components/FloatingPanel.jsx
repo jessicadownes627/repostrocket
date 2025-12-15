@@ -151,7 +151,7 @@ export default function FloatingPanel({
                 <div className="sf-left">
                   <h2>SmartFill Pro</h2>
                   <p className="sf-subtext">
-                    AI-powered listing fill. Titles, descriptions, tags, colors, and categories built for each platform.
+                    Advanced listing fill. Titles, descriptions, tags, colors, and categories built for each platform.
                   </p>
                 </div>
 

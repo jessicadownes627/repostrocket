@@ -16,7 +16,7 @@ export default function Welcome() {
 
         {/* SUBTITLE */}
         <p className="text-lg md:text-xl text-[#D9D0C0] opacity-80 mt-3 font-light tracking-wide">
-          Your AI-Powered Selling Prep Studio
+          Your Luxury Selling Prep Studio
         </p>
 
         {/* SHIMMER UNDERLINE */}

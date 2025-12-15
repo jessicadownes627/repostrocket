@@ -1640,12 +1640,12 @@ function BatchCard({ item, index, updateItem, setActiveDetailIndex, onRefreshIte
             onClick={() => setShowAI(!showAI)}
             className="ld-ai-toggle"
           >
-            {showAI ? "▼ AI Turbo Insights" : "▶ AI Turbo Insights"}
+            {showAI ? "▼ Turbo Insights" : "▶ Turbo Insights"}
           </button>
 
           {showAI && (
             <div className="ld-ai-inner">
-              <p><strong>AI Review:</strong> {aiReview?.summary || "—"}</p>
+              <p><strong>Listing Review:</strong> {aiReview?.summary || "—"}</p>
               <p><strong>Magic Fill:</strong> {aiMagic?.summary || "—"}</p>
               <p><strong>Auto Fill:</strong> {aiAuto?.summary || "—"}</p>
 

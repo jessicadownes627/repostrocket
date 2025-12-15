@@ -10,13 +10,13 @@ export default function PaywallModal({ open, onClose }) {
       <div className="paywall-card">
         <h2 className="paywall-title">Unlock Repost Rocket Premium</h2>
         <p className="paywall-sub">
-          Get unlimited Smart Fill, unlimited Launches, and AI Review access.
+          Get unlimited Smart Fill, unlimited Launches, and advanced review access.
         </p>
 
         <ul className="paywall-features">
           <li>Unlimited Launch Deck access</li>
           <li>Unlimited Smart Fill</li>
-          <li>AI Review &amp; scoring</li>
+          <li>Full listing review &amp; scoring</li>
           <li>Unlimited photo badges</li>
         </ul>
 
