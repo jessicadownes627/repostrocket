@@ -111,45 +111,50 @@ export async function blurBackground(imageUrl) {
     quantBytes: 2,
   });
 
-  // Load image
   const img = await loadImage(imageUrl);
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
   canvas.width = img.width;
   canvas.height = img.height;
 
-  // Get segmentation mask
   const segmentation = await net.segmentPerson(img, {
     internalResolution: "medium",
     segmentationThreshold: 0.7,
   });
 
-  // Create mask image
   const mask = bodyPix.toMask(
     segmentation,
-    {
-      r: 0,
-      g: 0,
-      b: 0,
-      a: 0,
-    }, // subject — transparent
-    {
-      r: 0,
-      g: 0,
-      b: 0,
-      a: 255,
-    } // background — opaque
+    { r: 0, g: 0, b: 0, a: 0 },
+    { r: 0, g: 0, b: 0, a: 255 }
   );
 
-  // Draw blurred background
   ctx.filter = "blur(14px)";
   ctx.drawImage(img, 0, 0);
   ctx.filter = "none";
 
-  // Draw sharp foreground using mask
   await bodyPix.drawMask(canvas, img, mask, 1.0, 7, false);
 
   return canvas.toDataURL("image/jpeg", 0.92);
+}
+
+export function cropPhoto(imageUrl, paddingRatio = 0.05) {
+  return applyCanvasFilter(imageUrl, (ctx, canvas) => {
+    const padX = Math.round(canvas.width * paddingRatio);
+    const padY = Math.round(canvas.height * paddingRatio);
+    const width = canvas.width - padX * 2;
+    const height = canvas.height - padY * 2;
+
+    const temp = document.createElement("canvas");
+    const tctx = temp.getContext("2d");
+    temp.width = width;
+    temp.height = height;
+
+    tctx.drawImage(canvas, padX, padY, width, height, 0, 0, width, height);
+
+    canvas.width = width;
+    canvas.height = height;
+    ctx.drawImage(temp, 0, 0);
+  });
 }
 
 // 🧵 Studio Mode — full pipeline: brighten, de-shadow, square, warm, clarity, subtle sharpen

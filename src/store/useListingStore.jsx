@@ -41,6 +41,7 @@ export function ListingProvider({ children }) {
   const [listingData, setListingData] = useState(defaultListing);
   const [savedDrafts, setSavedDrafts] = useState([]);
   const [premiumUsesRemaining, setPremiumUsesRemaining] = useState(1);
+  const [batchMode, setBatchMode] = useState("general");
 
   // Restore from localStorage on mount
   useEffect(() => {
@@ -57,6 +58,9 @@ export function ListingProvider({ children }) {
         const parsed = JSON.parse(raw);
         if (parsed.selectedPlatforms) {
           setSelectedPlatforms(parsed.selectedPlatforms);
+        }
+        if (parsed.batchMode) {
+          setBatchMode(parsed.batchMode);
         }
         if (parsed.listingData) {
           const normalizedPhotos = normalizePhotosArray(
@@ -101,12 +105,13 @@ export function ListingProvider({ children }) {
       const payload = JSON.stringify({
         selectedPlatforms,
         listingData,
+        batchMode,
       });
       localStorage.setItem(STORAGE_KEY, payload);
     } catch (err) {
       console.error("Failed to save draft", err);
     }
-  }, [selectedPlatforms, listingData]);
+  }, [selectedPlatforms, listingData, batchMode]);
 
   useEffect(() => {
     try {
@@ -191,6 +196,7 @@ export function ListingProvider({ children }) {
     const resetListing = () => {
       setSelectedPlatforms([]);
       setListingData(defaultListing);
+      setBatchMode("general");
       localStorage.removeItem(STORAGE_KEY);
     };
 
@@ -237,6 +243,7 @@ export function ListingProvider({ children }) {
       listingData,
       savedDrafts,
       premiumUsesRemaining,
+      batchMode,
       setSelectedPlatforms,
       setListingField,
       setBatchItems,
@@ -249,8 +256,9 @@ export function ListingProvider({ children }) {
       deleteDraft,
       loadDraft,
       consumeMagicUse,
+      setBatchMode,
     };
-  }, [selectedPlatforms, listingData, savedDrafts, premiumUsesRemaining]);
+  }, [selectedPlatforms, listingData, savedDrafts, premiumUsesRemaining, batchMode]);
 
   return <ListingContext.Provider value={value}>{children}</ListingContext.Provider>;
 }

@@ -4,11 +4,13 @@ import { getUsageCount, getLimit } from "../utils/usageTracker";
 import usePaywallGate from "../hooks/usePaywallGate";
 import PremiumModal from "../components/PremiumModal";
 import LuxeCard from "../components/LuxeCard";
+import { useListingStore } from "../store/useListingStore";
 import "../styles/dashboardLux.css";
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const { gate, paywallState, closePaywall } = usePaywallGate();
+  const { setBatchMode } = useListingStore();
 
   // Daily magic listing usage
   const [magicUsage, setMagicUsage] = useState(getUsageCount("magicFill"));
@@ -29,7 +31,10 @@ export default function Dashboard() {
   const handleTrendSense = () => navigate("/trendsense");
 
   const handleBatchMode = () => {
-    gate("batchMode", () => navigate("/batch"));
+    setBatchMode("general");
+    gate("batchMode", () =>
+      navigate("/batch", { state: { batchMode: "general" } })
+    );
   };
 
   return (

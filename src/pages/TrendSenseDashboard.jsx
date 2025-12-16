@@ -426,6 +426,13 @@ export default function TrendSenseDashboard() {
   return (
     <div className="min-h-screen bg-[#050807] text-[#E8E1D0] px-6 py-10">
       <div className="max-w-3xl mx-auto">
+        <button
+          type="button"
+          onClick={() => navigate("/dashboard")}
+          className="text-left text-xs uppercase tracking-[0.3em] text-[#E8DCC0] mb-4 hover:text-white transition"
+        >
+          ← Back
+        </button>
         <h1 className="sparkly-header header-glitter text-3xl mb-3">
           TrendSense
         </h1>

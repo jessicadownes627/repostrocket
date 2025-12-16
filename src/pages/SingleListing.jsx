@@ -22,19 +22,21 @@ import {
   brighten,
   warm,
   cool,
-  autoSquare,
   removeShadows,
-  blurBackground,
   studioMode,
-  whiteBackgroundPro,
-  downloadImageFile,
   autoFix,
+  cropPhoto,
 } from "../utils/magicPhotoTools";
 import { getPhotoWarnings } from "../utils/photoWarnings";
 import { getDynamicPrice } from "../utils/dynamicPricing";
 import { composeListing } from "../utils/listingComposer";
 import { buildListingExportLinks } from "../utils/exportListing";
 import { getCategoryFromText } from "../utils/textClassifiers";
+import {
+  saveListingToLibrary,
+  loadListingLibrary,
+} from "../utils/savedListings";
+import { shareImage, getImageSaveLabel } from "../utils/saveImage";
 import "../styles/overrides.css";
 
 // --- TAG FALLBACKS (must be defined first) ---
@@ -163,6 +165,8 @@ export default function SingleListing() {
   const [chipFlash, setChipFlash] = useState({});
   const chipFlashTimeouts = useRef({});
   const [customTag, setCustomTag] = useState("");
+  const [isTrackedForTrends, setIsTrackedForTrends] = useState(false);
+  const [trackFeedback, setTrackFeedback] = useState("");
   const photoPickerRef = useRef(null);
   const magicDiffs = Array.isArray(magicResults?.diffs)
     ? magicResults.diffs
@@ -171,6 +175,24 @@ export default function SingleListing() {
   const glowRecommendations = Array.isArray(glowScore?.recommendations)
     ? glowScore.recommendations
     : [];
+  const saveImageLabel = getImageSaveLabel();
+  const [photoProcessing, setPhotoProcessing] = useState(null);
+  const lastPolishedPhotoRef = useRef(null);
+
+  useEffect(() => {
+    const id = listingData?.libraryId;
+    if (!id) {
+      setIsTrackedForTrends(Boolean(listingData?.trackForTrends));
+      return;
+    }
+    const library = loadListingLibrary();
+    const entry = library.find((item) => item?.id === id);
+    if (entry) {
+      setIsTrackedForTrends(entry.trackForTrends === true);
+    } else {
+      setIsTrackedForTrends(Boolean(listingData?.trackForTrends));
+    }
+  }, [listingData?.libraryId, listingData?.trackForTrends]);
 
   const hasPhoto =
     Array.isArray(listingData?.photos) && listingData.photos.length > 0;
@@ -614,14 +636,21 @@ useEffect(() => {
     );
   }, []);
 
-  const handleSaveCornerImages = useCallback(() => {
+  const handleSaveCornerImages = useCallback(async () => {
     if (!cornerPhotos.length) return;
-    cornerPhotos.forEach((entry, idx) => {
-      if (!entry?.url) return;
-      const filename =
-        entry.label?.toLowerCase().replace(/\s+/g, "-") ||
-        `corner-${idx + 1}`;
-      downloadImageFile(entry.url, `${filename}.jpg`);
+    const payload = cornerPhotos
+      .filter((entry) => entry?.url)
+      .map((entry, idx) => ({
+        dataUrl: entry.url,
+        filename:
+          entry.label?.toLowerCase().replace(/\s+/g, "-") ||
+          `corner-${idx + 1}.jpg`,
+      }));
+    if (!payload.length) return;
+    await shareImage(payload, {
+      filename: "corner-photo.jpg",
+      title: "Corner inspection photos",
+      text: "Saved from Repost Rocket",
     });
   }, [cornerPhotos]);
 
@@ -895,20 +924,39 @@ useEffect(() => {
   // -------------------------------------------
   //  MAGIC PHOTO FIX (Single Listing)
   // -------------------------------------------
-  const handleFix = async (fn) => {
-    try {
-      const src = displayedPhoto;
-      if (!src) return;
-      const updated = await fn(src);
-      setListingField("editedPhoto", updated);
-      setListingField("editHistory", [
-        ...(listingData.editHistory || []),
-        updated,
-      ]);
-    } catch (err) {
-      console.error("Photo fix failed:", err);
-    }
-  };
+  const handleFix = useCallback(
+    async (fn, mode = null) => {
+      try {
+        const src = displayedPhoto;
+        if (!src) return;
+        if (mode) {
+          setPhotoProcessing(mode);
+        }
+        const updated = await fn(src);
+        setListingField("editedPhoto", updated);
+        setListingField("editHistory", [
+          ...(Array.isArray(listingData?.editHistory)
+            ? listingData.editHistory
+            : []),
+          updated,
+        ]);
+      } catch (err) {
+        console.error("Photo fix failed:", err);
+      } finally {
+        if (mode) {
+          setPhotoProcessing((prev) => (prev === mode ? null : prev));
+        }
+      }
+    },
+    [displayedPhoto, listingData?.editHistory, setListingField]
+  );
+
+  useEffect(() => {
+    if (!mainPhoto) return;
+    if (lastPolishedPhotoRef.current === mainPhoto) return;
+    lastPolishedPhotoRef.current = mainPhoto;
+    handleFix(autoFix, "autoFix");
+  }, [mainPhoto, handleFix]);
 
   const handleUndo = () => {
     const history = listingData?.editHistory || [];
@@ -929,6 +977,72 @@ useEffect(() => {
   const handleRevertOriginal = () => {
     setListingField("editedPhoto", null);
     setListingField("editHistory", []);
+  };
+
+  const handleSavePhotoAction = async () => {
+    if (!displayedPhoto) return;
+    await shareImage(displayedPhoto, {
+      filename: "repostrocket-photo.jpg",
+      title: localTitle || "Listing photo",
+      text: "Saved from Repost Rocket",
+    });
+  };
+
+  const upsertLibraryEntry = (id, fields = {}) => {
+    const library = loadListingLibrary();
+    const idx = library.findIndex((item) => item?.id === id);
+    const existing = idx >= 0 ? library[idx] : {};
+    const baseEntry = {
+      ...existing,
+      id,
+      title: localTitle || listingData?.title || "Untitled Listing",
+      description: localDescription || listingData?.description || "",
+      price: localPrice || listingData?.price || "",
+      category,
+      brand,
+      condition,
+      tags,
+      photos: normalizePhotosArray(listingData.photos || [], "item photo"),
+      ...fields,
+    };
+    saveListingToLibrary(baseEntry);
+  };
+
+  const handleToggleTrackForTrends = () => {
+    if (!isPremiumUser) {
+      setTrackFeedback("Tracking requires Premium.");
+      setTimeout(() => setTrackFeedback(""), 3500);
+      return;
+    }
+
+    const existingId = listingData?.libraryId;
+
+    if (isTrackedForTrends) {
+      if (existingId) {
+        upsertLibraryEntry(existingId, { trackForTrends: false });
+      }
+      setListingField("trackForTrends", false);
+      setIsTrackedForTrends(false);
+      setTrackFeedback("Tracking paused.");
+      setTimeout(() => setTrackFeedback(""), 2500);
+      return;
+    }
+
+    const newId =
+      existingId ||
+      listingData?.id ||
+      `trend-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    if (!existingId) {
+      setListingField("libraryId", newId);
+    }
+
+    upsertLibraryEntry(newId, { trackForTrends: true });
+
+    setListingField("trackForTrends", true);
+    setIsTrackedForTrends(true);
+    setTrackFeedback("TrendSense will track this listing.");
+    setTimeout(() => setTrackFeedback(""), 2500);
   };
 
   // --------------------------
@@ -1017,23 +1131,7 @@ useEffect(() => {
               )}
             </div>
             <div className="text-center text-xs opacity-70 mt-3 select-none">
-              Use the tools below to refine your photo.
-            </div>
-            <div className="flex flex-col md:flex-row gap-2 mt-4">
-              <button
-                type="button"
-                className="flex-1 py-2.5 rounded-[16px] border border-[rgba(255,235,200,0.5)] bg-black/40 text-[#E8DCC0] text-sm tracking-[0.2em] uppercase hover:bg-black/60 transition"
-                onClick={triggerPhotoPicker}
-              >
-                Replace Photo
-              </button>
-              <button
-                type="button"
-                className="flex-1 py-2.5 rounded-[16px] border border-[rgba(255,93,93,0.4)] bg-black/20 text-[#F7B3B3] text-sm tracking-[0.2em] uppercase hover:bg-black/40 transition"
-                onClick={handleRemoveMainPhoto}
-              >
-                Remove Photo
-              </button>
+              Luxe tools keep this photo launch-ready.
             </div>
             {!listingData?.editedPhoto && photoWarnings.length > 0 && (
               <div className="mt-3 space-y-1">
@@ -1061,89 +1159,112 @@ useEffect(() => {
                 {cardError}
               </div>
             )}
-            <div className="flex flex-wrap gap-2 mt-3">
+            <div className="mt-4 space-y-3">
+              <div className="text-[11px] uppercase tracking-[0.3em] text-white/45 mb-1">
+                Smart Polish
+              </div>
               <button
-                className="lux-small-btn"
-                onClick={() => handleFix(brighten)}
+                className={`w-full flex items-center justify-center gap-2 py-3 rounded-[22px] bg-[#E8D5A8] text-black text-sm font-semibold tracking-[0.2em] shadow-[0_15px_35px_rgba(0,0,0,0.55)] hover:shadow-[0_18px_45px_rgba(0,0,0,0.6)] transition ${photoProcessing ? "opacity-70 pointer-events-none" : ""}`}
+                disabled={Boolean(photoProcessing)}
+                onClick={() => handleFix(autoFix, "autoFix")}
               >
-                Brighten
+                {photoProcessing === "autoFix" ? "Polishing…" : "Auto-Fix"}
               </button>
               <button
-                className="lux-small-btn"
-                onClick={() => handleFix(warm)}
+                className={`w-full flex items-center justify-center gap-2 py-3 rounded-[20px] border border-[#E8D5A8]/50 bg-black/30 text-[#E8D5A8] text-sm tracking-[0.2em] hover:bg-black/55 transition ${photoProcessing ? "opacity-60 pointer-events-none" : ""}`}
+                disabled={Boolean(photoProcessing)}
+                onClick={() => handleFix(studioMode, "studioMode")}
               >
-                Warm
+                {photoProcessing === "studioMode" ? "Applying Studio…" : "Studio Mode"}
               </button>
               <button
-                className="lux-small-btn"
-                onClick={() => handleFix(cool)}
+                className="w-full py-3 mt-2 rounded-[18px] border border-[#4CC790]/60 bg-transparent text-[#80F5C2] text-sm tracking-[0.18em] shadow-[0_8px_24px_rgba(76,199,144,0.25)] hover:bg-[#4CC790]/10 transition"
+                onClick={handleSavePhotoAction}
               >
-                Cool
+                Save Image
               </button>
-              <button
-                className="lux-small-btn"
-                onClick={() => handleFix(autoSquare)}
-              >
-                Auto-Square
-              </button>
-              <button
-                className="lux-small-btn"
-                onClick={() => handleFix(removeShadows)}
-              >
-                Shadows
-              </button>
-              <button
-                className="lux-small-btn"
-                onClick={() => handleFix(blurBackground)}
-              >
-                Blur BG
-              </button>
-              <button
-                className="lux-small-btn"
-                onClick={() => handleFix(whiteBackgroundPro)}
-              >
-                White BG Pro
-              </button>
-              <button
-                className="lux-small-btn"
-                onClick={() => handleFix(studioMode)}
-              >
-                Studio Mode
-              </button>
-              <button
-                className="lux-small-btn bg-[#E8D5A8] text-black"
-                onClick={() => handleFix(autoFix)}
-              >
-                Auto-Fix
-              </button>
+              {photoProcessing && (
+                <div className="text-center text-xs text-white/60">
+                  {photoProcessing === "autoFix"
+                    ? "Auto-Fix is polishing your photo…"
+                    : "Studio Mode is giving this photo the luxe treatment…"}
+                </div>
+              )}
             </div>
-            <div className="mt-3 space-y-2">
-              <div className="flex flex-col md:flex-row gap-2">
+
+            <div className="mt-6">
+              <div className="text-[11px] uppercase tracking-[0.3em] text-white/45 mb-2">
+                Quick Adjustments
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button className="lux-small-btn" onClick={() => handleFix(brighten)}>
+                  Brighten
+                </button>
+                <button className="lux-small-btn" onClick={() => handleFix(warm)}>
+                  Warm
+                </button>
+                <button className="lux-small-btn" onClick={() => handleFix(cool)}>
+                  Cool
+                </button>
+                <button className="lux-small-btn" onClick={() => handleFix(removeShadows)}>
+                  Shadows
+                </button>
+                <button className="lux-small-btn" onClick={() => handleFix(cropPhoto)}>
+                  Crop
+                </button>
+              </div>
+            </div>
+            <div className="mt-6 pt-4 border-t border-white/10 space-y-2 text-[13px] text-white/70">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <button
-                  className="flex-1 py-2.5 rounded-[16px] border border-[rgba(255,235,200,0.5)] bg-black/60 text-[#E8DCC0] text-sm tracking-[0.2em] uppercase hover:bg-black/80 transition"
-                  onClick={handleUndo}
+                  type="button"
+                  className="flex-1 py-2 rounded-[12px] border border-white/12 bg-black/20 text-[11px] tracking-[0.2em] hover:bg-black/40 transition"
+                  onClick={triggerPhotoPicker}
                 >
-                  Undo
+                  Replace Photo
                 </button>
                 <button
-                  className="flex-1 py-2.5 rounded-[16px] border border-[rgba(255,235,200,0.5)] bg-black/60 text-[#E8DCC0] text-sm tracking-[0.2em] uppercase hover:bg-black/80 transition"
+                  type="button"
+                  className="flex-1 py-2 rounded-[12px] border border-[rgba(255,93,93,0.4)] bg-black/15 text-[#F7B3B3] text-[11px] tracking-[0.2em] hover:bg-black/30 transition"
+                  onClick={handleRemoveMainPhoto}
+                >
+                  Remove Photo
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2 text-[11px] tracking-[0.2em]">
+                {listingData?.editHistory?.length > 0 && (
+                  <button
+                    className="flex-1 min-w-[110px] py-2 rounded-[10px] border border-white/70 text-white tracking-[0.2em] bg-transparent hover:bg-white/10 transition"
+                    onClick={handleUndo}
+                  >
+                    Undo
+                  </button>
+                )}
+                <button
+                  className="flex-1 min-w-[110px] py-2 rounded-[10px] border border-white/8 bg-black/10 text-white/60 hover:bg-black/25 transition"
                   onClick={handleRevertOriginal}
                 >
                   Revert
                 </button>
               </div>
-              <button
-                className="w-full py-2.5 rounded-[16px] border border-[rgba(80,140,120,0.6)] bg-transparent text-[#CFE7DA] text-sm tracking-[0.2em] uppercase hover:bg-[rgba(80,140,120,0.12)] transition"
-                onClick={() =>
-                  downloadImageFile(
-                    displayedPhoto,
-                    "repostrocket-photo.jpg"
-                  )
-                }
-              >
-                Save Photo
-              </button>
             </div>
+            {glowScore && (
+              <div className="mt-6 rounded-2xl border border-[rgba(232,213,168,0.35)] bg-black/30 p-4">
+                <div className="text-xs uppercase tracking-[0.35em] text-white/60 mb-2">
+                  Photo Readiness
+                </div>
+                <p className="text-sm">Clarity: {glowScore.clarity}/5</p>
+                <p className="text-sm">Fit: {glowScore.fit}/5</p>
+                <p className="text-sm">Vibe: {glowScore.vibe}/5</p>
+                {glowRecommendations.length > 0 && (
+                  <ul className="mt-3 text-xs opacity-80 space-y-1">
+                    {glowRecommendations.map((rec, index) => (
+                      <li key={index}>• {rec}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
           </>
         ) : (
           <div>
@@ -1640,7 +1761,7 @@ useEffect(() => {
 
               <button
                 type="button"
-                className="mt-2 w-full bg-[#E8D5A8] text-black rounded-lg py-2 text-sm font-medium hover:opacity-90 transition"
+                className="mt-3 text-[11px] uppercase tracking-[0.3em] text-[#E8D5A8] underline-offset-4 hover:text-white/90 transition"
                 onClick={() => {
                   const composedResult = composeListing({
                     title,
@@ -1655,7 +1776,7 @@ useEffect(() => {
                   setComposed(composedResult);
                 }}
               >
-                Compose Listing
+                Generate Listing Copy
               </button>
             </>
           )}
@@ -1696,7 +1817,7 @@ useEffect(() => {
 
               <button
                 type="button"
-                className="mt-2 w-full bg-[#E8D5A8] text-black rounded-lg py-2 text-sm font-medium hover:opacity-90 transition"
+                className="mt-3 w-full border border-[#E8D5A8]/50 text-[#E8D5A8] rounded-lg py-2 text-xs uppercase tracking-[0.2em] hover:bg-[#E8D5A8]/10 transition"
                 onClick={() => {
                   const links = buildListingExportLinks({
                     title: composed.title,
@@ -1706,7 +1827,7 @@ useEffect(() => {
                   setExportLinks(links);
                 }}
               >
-                Generate Export Links
+                Export Listing Links
               </button>
 
               {exportLinks && (
@@ -1911,6 +2032,31 @@ useEffect(() => {
         </div>
       )}
 
+      <div className="mt-12 mb-8 rounded-2xl border border-white/10 bg-black/25 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <div className="text-sm font-medium text-white">
+            Track for TrendSense
+          </div>
+          <div className="text-xs text-white/60">
+            Keep an eye on demand or pricing shifts.
+          </div>
+          {trackFeedback && (
+            <div className="text-[11px] text-[#E8D5A8] mt-1">{trackFeedback}</div>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={handleToggleTrackForTrends}
+          className={`px-4 py-2 rounded-full text-xs tracking-[0.25em] border transition ${
+            isTrackedForTrends
+              ? "border-[#4cc790]/70 text-[#4cc790] bg-[#1a2a25]"
+              : "border-white/20 text-white/70 bg-transparent hover:border-white/35"
+          }`}
+        >
+          {isTrackedForTrends ? "Tracking" : "Track Item"}
+        </button>
+      </div>
+
       {/* ---------------------- */}
       {/*  MAGIC FILL DRAWER     */}
       {/* ---------------------- */}
@@ -1993,24 +2139,6 @@ useEffect(() => {
 
             <div className="gold-divider" />
 
-            {glowScore && (
-              <div className="mt-4 rounded-lg p-4 bg-black/30 border border-white/10">
-                <h3 className="text-sm font-semibold tracking-wider mb-2">
-                  Glow Score
-                </h3>
-                <p>Clarity: {glowScore.clarity}/5</p>
-                <p>Fit: {glowScore.fit}/5</p>
-                <p>Vibe: {glowScore.vibe}/5</p>
-                {glowRecommendations.length > 0 && (
-                  <ul className="mt-2 text-xs opacity-80">
-                    {glowRecommendations.map((rec, index) => (
-                      <li key={index}>• {rec}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-
             <div className="flex gap-3 pt-2">
               <button
                 className="flex-1 lux-quiet-btn"
@@ -2045,7 +2173,7 @@ useEffect(() => {
             }, 180);
           }}
         >
-          Preview Your Listing →
+          Preview Listing →
         </button>
 
         <button

@@ -3,16 +3,27 @@ import { useNavigate } from "react-router-dom";
 import { loadListingLibrary } from "../utils/savedListings";
 import usePaywallGate from "../hooks/usePaywallGate";
 import PremiumModal from "../components/PremiumModal";
+import { useListingStore } from "../store/useListingStore";
 
 export default function SportsCardSuite() {
   const navigate = useNavigate();
   const { gate, paywallState, closePaywall } = usePaywallGate();
+  const { setBatchMode } = useListingStore();
   const [hasCards, setHasCards] = useState(true);
+  const markBatchMode = (path) => {
+    if (path === "/batch" || path === "/multi-detect" || path === "/batch-comps") {
+      setBatchMode("sports_cards");
+    }
+  };
+
   const handleNavigate = (path, premiumKey = null) => {
+    markBatchMode(path);
+    const navOptions =
+      path === "/batch" ? { state: { batchMode: "sports_cards" } } : undefined;
     if (premiumKey) {
-      gate(premiumKey, () => navigate(path));
+      gate(premiumKey, () => navigate(path, navOptions));
     } else {
-      navigate(path);
+      navigate(path, navOptions);
     }
   };
 
@@ -69,6 +80,13 @@ export default function SportsCardSuite() {
   return (
     <div className="min-h-screen bg-black text-white px-6 py-12 font-inter">
       <div className="max-w-2xl mx-auto">
+        <button
+          type="button"
+          onClick={() => navigate("/dashboard")}
+          className="text-left text-xs uppercase tracking-[0.3em] text-[#E8DCC0] mb-6 hover:text-white transition"
+        >
+          ← Back
+        </button>
 
         {/* Header */}
         <h1 className="text-4xl font-cinzel tracking-wide mb-4">

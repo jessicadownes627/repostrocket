@@ -10,12 +10,13 @@ export default function MultiDetect() {
   const [count, setCount] = useState(0);
 
   const navigate = useNavigate();
-  const { setBatchItems } = useListingStore();
+  const { setBatchItems, setBatchMode } = useListingStore();
 
   async function handleUpload(e) {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setBatchMode("sports_cards");
     const base64 = await fileToBase64(file);
     setPreview(base64);
 

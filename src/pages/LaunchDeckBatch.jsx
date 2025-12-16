@@ -55,7 +55,6 @@ import {
 import { smartPriceSense } from "../engines/smartPriceSense";
 import CardDetailSidebar from "../components/CardDetailSidebar";
 import { deriveAltTextFromFilename, getPhotoUrl, mapPhotosToUrls } from "../utils/photoHelpers";
-import { downloadImageFile } from "../utils/magicPhotoTools";
 import { getPremiumStatus } from "../store/premiumStore";
 import { generateMagicDraft } from "../utils/generateMagicDraft";
 import {
@@ -63,6 +62,8 @@ import {
   extractCornerPhotoEntries,
 } from "../utils/cardIntel";
 import { buildApparelAttributesFromIntel } from "../utils/apparelIntel";
+import { useListingStore } from "../store/useListingStore";
+import { shareImage } from "../utils/saveImage";
  
 
 const platformFormatters = {
@@ -164,6 +165,8 @@ function isBabyApparelListing(item = {}) {
 export default function LaunchDeckBatch() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { batchMode } = useListingStore();
+  const isSportsBatch = batchMode === "sports_cards";
 
   const fallbackItems = useMemo(() => [], []);
   const rawItems = location.state?.items;
@@ -594,11 +597,13 @@ export default function LaunchDeckBatch() {
 
   // Recompute groups when processed items change
   useEffect(() => {
-    if (processedItems && processedItems.length) {
+    if (isSportsBatch && processedItems && processedItems.length) {
       const groups = groupSportsCards(processedItems);
       setCardGroups(groups);
+    } else {
+      setCardGroups(null);
     }
-  }, [processedItems]);
+  }, [isSportsBatch, processedItems]);
 
   // Re-apply transforms when platform changes
   useEffect(() => {
@@ -626,7 +631,7 @@ export default function LaunchDeckBatch() {
   // Apply Smart Group Filter
   let displayedItems = processedItems;
 
-  if (activeGroupFilter !== "all" && cardGroups) {
+  if (isSportsBatch && activeGroupFilter !== "all" && cardGroups) {
     displayedItems = cardGroups[activeGroupFilter] || [];
   }
 
@@ -638,7 +643,9 @@ export default function LaunchDeckBatch() {
   if (processing) {
     const processingHeadline = isPremiumUser
       ? "Running Magic Fill…"
-      : "Preparing cards…";
+      : isSportsBatch
+      ? "Preparing cards…"
+      : "Preparing items…";
     return (
       <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-10 text-center">
         <h1 className="text-3xl font-cinzel mb-6 tracking-wide">
@@ -658,10 +665,11 @@ export default function LaunchDeckBatch() {
   }
 
   return (
-    <div
-      className="ld-batch-wrapper"
-      style={{ maxWidth: "1100px", margin: "0 auto", padding: "1rem", color: "white" }}
-    >
+    <>
+      <div
+        className="ld-batch-wrapper"
+        style={{ maxWidth: "1100px", margin: "0 auto", padding: "1rem", color: "white" }}
+      >
       {/* Platform Toggle Toolbar */}
       <div className="flex items-center gap-3 mb-6 mt-2">
         {["ebay", "whatnot", "mercari"].map((p) => (
@@ -682,7 +690,7 @@ export default function LaunchDeckBatch() {
       </div>
 
       {/* SMART GROUPING PANEL — TAPPABLE FILTERS */}
-      {cardGroups && (
+      {isSportsBatch && cardGroups && (
         <div className="bg-black/50 border border-white/10 p-4 rounded-xl mb-6 text-white/90">
           <div className="text-lg font-cinzel mb-3 text-[#E8DCC0]">
             Smart Groups
@@ -732,20 +740,22 @@ export default function LaunchDeckBatch() {
       )}
 
       {/* Batch Image Tools */}
-      <div className="flex gap-3 mb-4">
-        <button
-          className="px-4 py-2 bg-black/40 border border-white/20 rounded-lg text-white text-sm hover:bg-black/60 transition"
-          onClick={handleAutoCropAll}
-        >
-          Auto Crop All
-        </button>
-        <button
-          className="px-4 py-2 bg-black/40 border border-white/20 rounded-lg text-white text-sm hover:bg-black/60 transition"
-          onClick={handleEnhanceAll}
-        >
-          Enhance All
-        </button>
-      </div>
+      {isSportsBatch && (
+        <div className="flex gap-3 mb-4">
+          <button
+            className="px-4 py-2 bg-black/40 border border-white/20 rounded-lg text-white text-sm hover:bg-black/60 transition"
+            onClick={handleAutoCropAll}
+          >
+            Auto Crop All
+          </button>
+          <button
+            className="px-4 py-2 bg-black/40 border border-white/20 rounded-lg text-white text-sm hover:bg-black/60 transition"
+            onClick={handleEnhanceAll}
+          >
+            Enhance All
+          </button>
+        </div>
+      )}
 
       {/* Floating Batch Toolbar */}
       <div className="ld-toolbar">
@@ -802,7 +812,9 @@ export default function LaunchDeckBatch() {
 
       {(displayedItems.length ? displayedItems : processedItems).length === 0 && (
         <div className="pt-4 text-sm text-[#d6c7a1]/70">
-          No sports cards selected for launch.
+          {isSportsBatch
+            ? "No sports cards selected for launch."
+            : "No items ready for launch."}
         </div>
       )}
 
@@ -814,14 +826,16 @@ export default function LaunchDeckBatch() {
               item={item}
               index={index}
               updateItem={updateItem}
-              setActiveDetailIndex={setActiveDetailIndex}
+              setActiveDetailIndex={
+                isSportsBatch ? setActiveDetailIndex : undefined
+              }
               onRefreshItem={refreshItem}
             />
           )
         )}
       </div>
 
-      {activeDetailIndex !== null && (
+      {isSportsBatch && activeDetailIndex !== null && (
         <CardDetailSidebar
           item={
             processedItems[activeDetailIndex] ??
@@ -928,7 +942,36 @@ export default function LaunchDeckBatch() {
           </div>
         </div>
       )}
-    </div>
+
+        <div className="mt-12 mb-6 text-center">
+          <button
+            onClick={() => navigate("/dashboard")}
+            className="inline-flex items-center gap-2 px-5 py-2 border border-white/20 rounded-full text-xs tracking-[0.3em] text-white/70 hover:bg-white/10 transition"
+          >
+            <span>←</span>
+            <span>Back to Home</span>
+          </button>
+        </div>
+      </div>
+      <button
+        onClick={() => navigate("/")}
+        style={{
+          position: "fixed",
+          bottom: "20px",
+          right: "20px",
+          zIndex: 9999,
+          padding: "14px 18px",
+          borderRadius: "999px",
+          background: "#000",
+          color: "#fff",
+          fontWeight: 600,
+          boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
+          border: "1px solid rgba(255,255,255,0.2)",
+        }}
+      >
+        ← Home
+      </button>
+    </>
   );
 }
 
@@ -992,13 +1035,21 @@ function BatchCard({ item, index, updateItem, setActiveDetailIndex, onRefreshIte
   };
 
   const cornerPhotos = item?.cornerPhotos || [];
-  const handleSaveCornerImages = () => {
+  const handleSaveCornerImages = async () => {
     if (!cornerPhotos.length) return;
-    cornerPhotos.forEach((entry, idx) => {
-      if (!entry?.url) return;
-      const name =
-        entry.label?.toLowerCase().replace(/\s+/g, "-") || `corner-${idx + 1}`;
-      downloadImageFile(entry.url, `${name}.jpg`);
+    const payload = cornerPhotos
+      .filter((entry) => entry?.url)
+      .map((entry, idx) => ({
+        dataUrl: entry.url,
+        filename:
+          entry.label?.toLowerCase().replace(/\s+/g, "-") ||
+          `corner-${idx + 1}.jpg`,
+      }));
+    if (!payload.length) return;
+    await shareImage(payload, {
+      filename: "corner-photo.jpg",
+      title: "Corner inspection photos",
+      text: "Saved from Repost Rocket",
     });
   };
 

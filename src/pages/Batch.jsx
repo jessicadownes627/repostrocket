@@ -1,7 +1,7 @@
 // src/pages/Batch.jsx
 
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useListingStore } from "../store/useListingStore";
 import { v4 as uuidv4 } from "uuid";
 import { convertHeicToJpeg } from "../utils/heicConverter";
@@ -9,11 +9,18 @@ import { deriveAltTextFromFilename } from "../utils/photoHelpers";
 
 function Batch() {
   const navigate = useNavigate();
-  const { setBatchItems } = useListingStore();
+  const location = useLocation();
+  const { setBatchItems, setBatchMode } = useListingStore();
 
   const [photos, setPhotos] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
   const hasPhotos = photos.length > 0;
+
+  const forcedMode = location.state?.batchMode;
+
+  useEffect(() => {
+    setBatchMode(forcedMode || "general");
+  }, [forcedMode, setBatchMode]);
 
   // ---------------------------------------
   // HANDLE FILE UPLOAD (HEIC SAFE + MOBILE SAFE)
@@ -97,7 +104,7 @@ function Batch() {
       price: "",
       condition: "",
       notes: "",
-      category: "Sports Cards",
+      category: "",
     }));
 
     setBatchItems(items);

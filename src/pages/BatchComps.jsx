@@ -12,10 +12,10 @@ import {
   blurBackground,
   studioMode,
   whiteBackgroundPro,
-  downloadImageFile,
   autoFix,
 } from "../utils/magicPhotoTools";
 import { BatchProvider, useBatchStore } from "../store/useBatchStore";
+import { shareImage, getImageSaveLabel } from "../utils/saveImage";
 import { getPhotoWarnings } from "../utils/photoWarnings";
 
 function BatchCompsInner() {
@@ -23,6 +23,7 @@ function BatchCompsInner() {
   const navigate = useNavigate();
   const { batchItems, setBatch, updateBatchItem } = useBatchStore();
   const { parseCard, loading: parsing } = useCardParser();
+  const saveImageLabel = getImageSaveLabel();
 
   // Progress UI for analyzing batches
   const [analyzeProgress, setAnalyzeProgress] = useState(0);
@@ -524,13 +525,14 @@ function BatchCompsInner() {
                   <button
                     className="lux-small-btn"
                     onClick={() =>
-                      downloadImageFile(
-                        item.editedPhoto || item.photo,
-                        `${item.title || "card"}.jpg`
-                      )
+                      shareImage(item.editedPhoto || item.photo, {
+                        filename: `${(item.title || "card").replace(/\s+/g, "-")}.jpg`,
+                        title: item.title || "Card photo",
+                        text: "Saved from Repost Rocket",
+                      })
                     }
                   >
-                    Save Photo
+                    {saveImageLabel}
                   </button>
                   <div className="flex gap-1 mt-2 w-full">
                     <button

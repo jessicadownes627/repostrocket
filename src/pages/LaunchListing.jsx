@@ -1,10 +1,38 @@
 import { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { useListingStore } from "../store/useListingStore";
 import { buildCardTitle } from "../utils/buildCardTitle";
-import { downloadImageFile } from "../utils/magicPhotoTools";
+import { shareImage, getImageSaveLabel } from "../utils/saveImage";
+
+function FloatingHomeButton() {
+  const navigate = useNavigate();
+
+  return (
+    <button
+      onClick={() => navigate("/")}
+      style={{
+        position: "fixed",
+        bottom: "20px",
+        right: "20px",
+        zIndex: 9999,
+        padding: "14px 18px",
+        borderRadius: "999px",
+        background: "#000",
+        color: "#fff",
+        fontWeight: "600",
+        boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
+        border: "1px solid rgba(255,255,255,0.2)",
+      }}
+    >
+      ← Home
+    </button>
+  );
+}
 
 export default function LaunchListing() {
   const { listingData } = useListingStore();
+  const saveImageLabel = getImageSaveLabel();
+  const navigate = useNavigate();
 
   const {
     title: rawTitle = "",
@@ -80,10 +108,28 @@ export default function LaunchListing() {
   };
 
   const encodedTitle = encodeURIComponent(baseTitle || "");
+  const handleDownloadCorners = async () => {
+    if (!cornerPhotos.length) return;
+    const payload = cornerPhotos
+      .filter((entry) => entry?.url)
+      .map((entry, idx) => ({
+        dataUrl: entry.url,
+        filename:
+          entry.label?.toLowerCase().replace(/\s+/g, "-") ||
+          `corner-${idx + 1}.jpg`,
+      }));
+    if (!payload.length) return;
+    await shareImage(payload, {
+      filename: "corner-photo.jpg",
+      title: baseTitle || "Corner inspection photos",
+      text: "Saved from Repost Rocket",
+    });
+  };
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-[var(--lux-text)] px-6 py-10">
-      <div className="max-w-3xl mx-auto">
+    <>
+      <div className="min-h-screen bg-[#0A0A0A] text-[var(--lux-text)] px-6 py-10">
+        <div className="max-w-3xl mx-auto">
         <h1 className="sparkly-header text-[28px] mb-2 text-center">
           Magic Listing Launcher
         </h1>
@@ -93,6 +139,16 @@ export default function LaunchListing() {
 
         <div className="magic-cta-bar mb-8">
           Launch this listing across marketplaces in seconds.
+        </div>
+
+        <div className="text-center mb-6">
+          <button
+            onClick={() => navigate("/dashboard")}
+            className="inline-flex items-center gap-2 px-5 py-2 border border-white/25 rounded-full text-xs tracking-[0.3em] text-white/80 hover:bg-white/10 transition"
+          >
+            <span>←</span>
+            <span>Back to Home</span>
+          </button>
         </div>
 
         <div className="lux-card space-y-5">
@@ -227,7 +283,7 @@ export default function LaunchListing() {
                 className="lux-small-btn mt-3"
                 onClick={handleDownloadCorners}
               >
-                Download Corner Images
+                {saveImageLabel}
               </button>
             </div>
           )}
@@ -284,17 +340,19 @@ export default function LaunchListing() {
               Open Poshmark Search
             </button>
           </div>
+
+          <div className="mt-8 text-center">
+            <button
+              onClick={() => navigate("/dashboard")}
+              className="lux-quiet-btn uppercase tracking-[0.35em] text-[11px] px-6 py-3 hover:opacity-100 opacity-80"
+            >
+              ← Back to Home
+            </button>
+          </div>
+        </div>
         </div>
       </div>
-    </div>
+      <FloatingHomeButton />
+    </>
   );
 }
-  const handleDownloadCorners = () => {
-    if (!cornerPhotos.length) return;
-    cornerPhotos.forEach((entry, idx) => {
-      if (!entry?.url) return;
-      const name =
-        entry.label?.toLowerCase().replace(/\s+/g, "-") || `corner-${idx + 1}`;
-      downloadImageFile(entry.url, `${name}.jpg`);
-    });
-  };
