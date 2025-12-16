@@ -185,6 +185,8 @@ export function buildCardAttributesFromIntel(intel) {
     sources: intel.sources || {},
     corners: intel.corners || null,
     cornerCondition: intel.cornerCondition || null,
+    grading: intel.grading || null,
+    pricing: intel.pricing || null,
   };
 }
 
@@ -209,6 +211,27 @@ export function extractCornerPhotoEntries(intel) {
     });
   });
   return entries;
+}
+
+export async function buildCornerPreviewFromEntries(frontEntry, backEntry) {
+  const frontImage = await dataUrlFromEntry(frontEntry);
+  const backImage = await dataUrlFromEntry(backEntry);
+  if (!frontImage && !backImage) return null;
+
+  const cornerFront = frontImage ? await maybeCropForCorners(frontImage) : { dataUrl: null };
+  const cornerBack = backImage ? await maybeCropForCorners(backImage) : { dataUrl: null };
+
+  const insights = await analyzeCornerPhotos({
+    frontImage: cornerFront.dataUrl,
+    backImage: cornerBack.dataUrl,
+  });
+  if (!insights?.corners) return null;
+
+  return {
+    corners: insights.corners,
+    condition: insights.condition,
+    entries: extractCornerPhotoEntries({ corners: insights.corners }),
+  };
 }
 
 async function maybeCropForCorners(dataUrl) {

@@ -249,6 +249,13 @@ function BatchCompsInner() {
   return (
     <div className="min-h-screen bg-black text-white px-6 py-10">
       <div className="max-w-5xl mx-auto">
+        <button
+          type="button"
+          onClick={() => navigate("/sports-cards")}
+          className="text-left text-xs uppercase tracking-[0.3em] text-[#E8DCC0] mb-4 hover:text-white transition"
+        >
+          ← Back
+        </button>
         <h1 className="sparkly-header text-3xl mb-2 text-center">
           Batch Market Assist
         </h1>

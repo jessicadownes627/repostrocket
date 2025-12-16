@@ -31,6 +31,7 @@ export default function SportsCardSuite() {
     {
       title: "Bulk Card Upload",
       description: "Import a stack of cards and auto-create listings in one run.",
+      bestFor: "Best for: Turning piles of cards into ready-to-edit drafts fast.",
       cta: "Start Bulk Run",
       path: "/batch",
       accent: "gold",
@@ -40,6 +41,7 @@ export default function SportsCardSuite() {
     {
       title: "Single Card Pro Editor",
       description: "Fine-tune one card at a time with full title + photo controls.",
+      bestFor: null,
       cta: "Open Pro Editor",
       path: "/card-prep",
       accent: "neutral",
@@ -47,7 +49,8 @@ export default function SportsCardSuite() {
     },
     {
       title: "Market Assist Workspace",
-      description: "Price check, comps, and keywords in a single panel.",
+      description: "Deep market signals for pricing, comps, and launch timing.",
+      bestFor: "Best for: Optimizing a card you already have listed or ready to sell.",
       cta: "Start Market Assist",
       path: "/batch-comps",
       accent: "neutral",
@@ -121,6 +124,11 @@ export default function SportsCardSuite() {
               <div className="text-base text-white/80 leading-relaxed mb-3">
                 {tool.description}
               </div>
+              {tool.bestFor && (
+                <div className="text-sm text-white/60 mb-2">
+                  {tool.bestFor}
+                </div>
+              )}
               <span className="text-xs tracking-[0.3em] uppercase">
                 {tool.cta}
               </span>

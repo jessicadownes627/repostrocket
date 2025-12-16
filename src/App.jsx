@@ -15,7 +15,6 @@ import MultiDetect from "./pages/MultiDetect";
 import BatchComps from "./pages/BatchComps";
 import LaunchListing from "./pages/LaunchListing";
 import TrendSenseDashboard from "./pages/TrendSenseDashboard";
-import FloatingHomeButton from "./components/FloatingHomeButton";
 
 function App() {
   return (
@@ -38,7 +37,6 @@ function App() {
           <Route path="/trendsense" element={<TrendSenseDashboard />} />
         </Routes>
       </div>
-      <FloatingHomeButton />
     </Router>
   );
 }

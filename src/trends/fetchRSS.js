@@ -1,25 +1,55 @@
-// src/trends/fetchRSS.js
+const RSS_PROXY_ENDPOINT = "/.netlify/functions/fetchRSS";
+
+async function requestFeeds(payload = {}) {
+  const response = await fetch(RSS_PROXY_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`RSS proxy returned ${response.status}`);
+  }
+
+  return response.json();
+}
+
 export async function fetchRSSFeed(url) {
+  if (!url) return [];
+
   try {
-    const res = await fetch(
-      `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`
-    );
-    const data = await res.json();
-    const xml = new window.DOMParser().parseFromString(
-      data.contents,
-      "text/xml"
-    );
-
-    const items = Array.from(xml.querySelectorAll("item")).slice(0, 8);
-
-    return items.map((item) => ({
-      title: item.querySelector("title")?.textContent || "",
-      description: item.querySelector("description")?.textContent || "",
-      link: item.querySelector("link")?.textContent || "",
-      publishedAt: item.querySelector("pubDate")?.textContent || "",
-    }));
+    const payload = await requestFeeds({ urls: [url] });
+    if (Array.isArray(payload?.errors) && payload.errors.length) {
+      payload.errors.forEach((error) => {
+        console.warn(
+          "RSS feed error:",
+          error?.url || url,
+          error?.error || "Unknown error"
+        );
+      });
+    }
+    const feed =
+      Array.isArray(payload?.data) &&
+      payload.data.find((entry) => entry.url === url);
+    return Array.isArray(feed?.items) ? feed.items : [];
   } catch (err) {
     console.warn("RSS error:", url, err);
     return [];
   }
+}
+
+export async function fetchRSSFeedsViaProxy(urls = []) {
+  const payload = await requestFeeds({ urls });
+  if (Array.isArray(payload?.errors) && payload.errors.length) {
+    payload.errors.forEach((error) => {
+      console.warn(
+        "RSS feed error:",
+        error?.url || "unknown",
+        error?.error || "Unknown error"
+      );
+    });
+  }
+  return Array.isArray(payload?.data) ? payload.data : [];
 }

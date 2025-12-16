@@ -3,31 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useListingStore } from "../store/useListingStore";
 import { buildCardTitle } from "../utils/buildCardTitle";
 import { shareImage, getImageSaveLabel } from "../utils/saveImage";
-
-function FloatingHomeButton() {
-  const navigate = useNavigate();
-
-  return (
-    <button
-      onClick={() => navigate("/")}
-      style={{
-        position: "fixed",
-        bottom: "20px",
-        right: "20px",
-        zIndex: 9999,
-        padding: "14px 18px",
-        borderRadius: "999px",
-        background: "#000",
-        color: "#fff",
-        fontWeight: "600",
-        boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
-        border: "1px solid rgba(255,255,255,0.2)",
-      }}
-    >
-      ← Home
-    </button>
-  );
-}
+import FloatingHomeButton from "../components/FloatingHomeButton";
 
 export default function LaunchListing() {
   const { listingData } = useListingStore();

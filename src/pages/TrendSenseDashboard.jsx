@@ -535,6 +535,9 @@ export default function TrendSenseDashboard() {
           <p className="text-xs opacity-60">
             Live guidance for every saved listing.
           </p>
+          <p className="text-[11px] text-white/45 mt-1">
+            To remove a listing, open it and toggle “Track for TrendSense” off in Single Listing.
+          </p>
           <p className="text-[11px] text-white/40 mb-4 hidden sm:block">
             {categoryExamples.length
               ? `Currently evaluating: ${categoryExamples.join(", ")}`
@@ -556,6 +559,7 @@ export default function TrendSenseDashboard() {
                     onToggle={() =>
                       setOpenListingId(openListingId === id ? null : id)
                     }
+                    navigate={navigate}
                   />
                 );
               })}
@@ -989,7 +993,7 @@ function EmptyStateCard({ title, helper, status }) {
   );
 }
 
-function ListingGuidanceItem({ report, isOpen, onToggle }) {
+function ListingGuidanceItem({ report, isOpen, onToggle, navigate }) {
   if (!report) return null;
   const item = report.item || {};
   const action = report.trendGuidance?.action || "Hold";
@@ -1103,6 +1107,20 @@ function ListingGuidanceItem({ report, isOpen, onToggle }) {
           ) : (
             <HelperChip>Hold — no catalyst detected</HelperChip>
           )}
+          <div className="flex flex-col gap-2 text-[11px] text-white/60">
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="px-3 py-1 rounded-full border border-white/20 bg-transparent hover:border-white/40 transition text-white/70"
+                onClick={() => navigate && item.id && navigate(`/inventory?open=${item.id}`)}
+              >
+                Manage Listing
+              </button>
+            </div>
+            <span className="opacity-60">
+              Need to stop tracking? Open the listing and toggle “Track for TrendSense” off.
+            </span>
+          </div>
         </div>
       )}
     </div>

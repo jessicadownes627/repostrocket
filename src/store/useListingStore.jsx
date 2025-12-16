@@ -193,10 +193,10 @@ export function ListingProvider({ children }) {
       }));
     };
 
-    const resetListing = () => {
+    const resetListing = (mode = "general") => {
       setSelectedPlatforms([]);
       setListingData(defaultListing);
-      setBatchMode("general");
+      setBatchMode(mode);
       localStorage.removeItem(STORAGE_KEY);
     };
 

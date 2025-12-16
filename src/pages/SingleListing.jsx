@@ -10,6 +10,7 @@ import {
 import { generateMagicDraft } from "../utils/generateMagicDraft";
 import { buildApparelAttributesFromIntel } from "../utils/apparelIntel";
 import {
+  analyzeCardImages,
   buildCardAttributesFromIntel,
   extractCornerPhotoEntries,
 } from "../utils/cardIntel";
@@ -124,6 +125,7 @@ export default function SingleListing() {
     premiumUsesRemaining,
     consumeMagicUse,
     removePhoto,
+    batchMode,
   } = useListingStore();
 
   const devPremiumOverride =
@@ -168,6 +170,7 @@ export default function SingleListing() {
   const [isTrackedForTrends, setIsTrackedForTrends] = useState(false);
   const [trackFeedback, setTrackFeedback] = useState("");
   const photoPickerRef = useRef(null);
+  const resultsRef = useRef(null);
   const magicDiffs = Array.isArray(magicResults?.diffs)
     ? magicResults.diffs
     : [];
@@ -178,6 +181,9 @@ export default function SingleListing() {
   const saveImageLabel = getImageSaveLabel();
   const [photoProcessing, setPhotoProcessing] = useState(null);
   const lastPolishedPhotoRef = useRef(null);
+  const [autoAnalysisTriggered, setAutoAnalysisTriggered] = useState(false);
+  const [autoScrollDone, setAutoScrollDone] = useState(false);
+  const [serverCardAnalyzing, setServerCardAnalyzing] = useState(false);
 
   useEffect(() => {
     const id = listingData?.libraryId;
@@ -216,6 +222,34 @@ export default function SingleListing() {
     Boolean(
       cardAttributes && typeof cardAttributes === "object" && Object.keys(cardAttributes).length
     );
+  const isSportsAnalysisMode = batchMode === "sports_cards" && isCardMode;
+  const sportsStatusMessage = useMemo(() => {
+    if (!isSportsAnalysisMode) return null;
+    if (cardError) {
+      return {
+        tone: "text-[#F6BDB2]",
+        text:
+          "We couldn’t finish analyzing this card. Retake photos in Sports Card Studio or continue with manual entry below.",
+      };
+    }
+    if (serverCardAnalyzing) {
+      return {
+        tone: "text-[#E8D5A8]",
+        text: "Analyzing your confirmed card photo. No extra action is required here.",
+      };
+    }
+    if (cardAttributes) {
+      return {
+        tone: "text-[#8FF0C5]",
+        text: "Analysis complete — review the detected details below.",
+      };
+    }
+    return {
+      tone: "text-white/70",
+      text: "Card queued for analysis. We’ll move you forward automatically.",
+    };
+  }, [isSportsAnalysisMode, cardError, serverCardAnalyzing, cardAttributes]);
+  const showPhotoTools = !isSportsAnalysisMode;
 
   const CATEGORY_OPTIONS = [
     "Tops",
@@ -421,6 +455,7 @@ useEffect(() => {
   ]);
 
   const triggerPhotoPicker = () => {
+    if (isSportsAnalysisMode) return;
     if (photoPickerRef.current) {
       photoPickerRef.current.value = "";
       photoPickerRef.current.click();
@@ -428,6 +463,7 @@ useEffect(() => {
   };
 
   const handlePhotoFileChange = (event) => {
+    if (isSportsAnalysisMode) return;
     const file = event.target?.files?.[0];
     if (!file) return;
 
@@ -445,6 +481,7 @@ useEffect(() => {
   };
 
   const handleRemoveMainPhoto = () => {
+    if (isSportsAnalysisMode) return;
     if (!hasPhoto) return;
     removePhoto(0);
     setListingField("editedPhoto", null);
@@ -893,22 +930,19 @@ useEffect(() => {
   // -------------------------------------------
   //  CARD ANALYSIS (Sports Card Suite)
   // -------------------------------------------
-  const handleAnalyzeCard = async () => {
-    setCardError("");
+  const handleAnalyzeCard = useCallback(async () => {
     if (!displayedPhoto) return;
-
+    setCardError("");
     try {
       const result = await parseCard(displayedPhoto);
       if (!result) return;
 
-      // Store raw card attributes on the listing
       setListingField("cardAttributes", result);
       const manualCornerAssets = extractCornerPhotoEntries(result);
       if (manualCornerAssets.length) {
         setListingField("cornerPhotos", manualCornerAssets);
       }
 
-      // If we can build a strong sports-card title, apply it
       const cardTitle = buildCardTitle(result);
       if (cardTitle) {
         setListingField("title", cardTitle);
@@ -919,7 +953,110 @@ useEffect(() => {
         "Unable to analyze card details right now. Please try again."
       );
     }
-  };
+  }, [displayedPhoto, parseCard, setListingField, setCardError]);
+
+  useEffect(() => {
+    if (isSportsAnalysisMode) return;
+    if (!displayedPhoto) return;
+    if (parsingCard) return;
+    if (cardAttributes) return;
+    if (autoAnalysisTriggered) return;
+    setAutoAnalysisTriggered(true);
+    handleAnalyzeCard();
+  }, [
+    isSportsAnalysisMode,
+    displayedPhoto,
+    parsingCard,
+    cardAttributes,
+    autoAnalysisTriggered,
+    handleAnalyzeCard,
+  ]);
+
+  useEffect(() => {
+    if (isSportsAnalysisMode) return;
+    setAutoAnalysisTriggered(false);
+  }, [displayedPhoto, isSportsAnalysisMode]);
+
+  useEffect(() => {
+    if (cardAttributes) return;
+    setAutoScrollDone(false);
+  }, [cardAttributes]);
+
+  useEffect(() => {
+    if (!isSportsAnalysisMode) return;
+    if (!cardAttributes) return;
+    if (autoScrollDone) return;
+    if (!resultsRef.current) return;
+    const timer = setTimeout(() => {
+      resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      setAutoScrollDone(true);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [isSportsAnalysisMode, cardAttributes, autoScrollDone]);
+
+  useEffect(() => {
+    if (!isSportsAnalysisMode) return;
+    if (serverCardAnalyzing) return;
+    if (listingData?.cardIntel) return;
+    const front = Array.isArray(listingData?.photos) ? listingData.photos : [];
+    const back = Array.isArray(listingData?.secondaryPhotos)
+      ? listingData.secondaryPhotos
+      : [];
+    if (!front.length || !back.length) return;
+
+    let cancelled = false;
+    const payload = {
+      ...listingData,
+      category: "Sports Cards",
+      photos: front,
+      secondaryPhotos: back,
+    };
+    const photoBundle = [...front, ...back];
+
+    const runAnalysis = async () => {
+      setServerCardAnalyzing(true);
+      setCardError("");
+      try {
+        const intel = await analyzeCardImages(payload, { photos: photoBundle });
+        if (cancelled) return;
+        if (intel) {
+          setListingField("cardIntel", intel);
+          const attrs = buildCardAttributesFromIntel(intel);
+          if (attrs) {
+            setListingField("cardAttributes", attrs);
+          }
+          const cornerAssets = extractCornerPhotoEntries(intel);
+          if (cornerAssets.length) {
+            setListingField("cornerPhotos", cornerAssets);
+          }
+        } else {
+          setCardError("Unable to analyze card details right now. Please retake the photos.");
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error("Sports card analysis failed:", err);
+          setCardError("Unable to analyze card details right now. Please retake the photos.");
+        }
+      } finally {
+        if (!cancelled) {
+          setServerCardAnalyzing(false);
+        }
+      }
+    };
+
+    runAnalysis();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isSportsAnalysisMode,
+    serverCardAnalyzing,
+    listingData,
+    listingData?.cardIntel,
+    listingData?.photos,
+    listingData?.secondaryPhotos,
+    setListingField,
+  ]);
 
   // -------------------------------------------
   //  MAGIC PHOTO FIX (Single Listing)
@@ -1098,6 +1235,22 @@ useEffect(() => {
       </p>
       <div className="lux-divider w-2/3 mx-auto mb-10"></div>
 
+      {isSportsAnalysisMode && sportsStatusMessage && (
+        <div className="bg-black/40 border border-white/10 rounded-2xl p-4 mb-8 text-sm text-white/80">
+          <div className="text-[11px] uppercase tracking-[0.35em] text-white/50 mb-2">
+            Sports Card Studio Handoff
+          </div>
+          <p>
+            We’re analyzing the front/back photos you already confirmed — no additional uploads
+            or edits are needed here.
+          </p>
+          <div className={`mt-3 text-xs flex items-center gap-2 ${sportsStatusMessage.tone}`}>
+            <span className={`inline-flex h-2 w-2 rounded-full ${parsingCard ? "bg-[#E8D5A8] animate-pulse" : cardAttributes ? "bg-emerald-400" : "bg-white/50"}`}></span>
+            {sportsStatusMessage.text}
+          </div>
+        </div>
+      )}
+
       {/* ---------------------- */}
       {/*  MAIN PHOTO CARD       */}
       {/* ---------------------- */}
@@ -1113,6 +1266,7 @@ useEffect(() => {
           accept="image/*"
           ref={photoPickerRef}
           className="hidden"
+          disabled={isSportsAnalysisMode}
           onChange={handlePhotoFileChange}
         />
 
@@ -1131,7 +1285,9 @@ useEffect(() => {
               )}
             </div>
             <div className="text-center text-xs opacity-70 mt-3 select-none">
-              Luxe tools keep this photo launch-ready.
+              {isSportsAnalysisMode
+                ? "Photos stay locked once confirmed in Sports Card Studio."
+                : "Luxe tools keep this photo launch-ready."}
             </div>
             {!listingData?.editedPhoto && photoWarnings.length > 0 && (
               <div className="mt-3 space-y-1">
@@ -1145,7 +1301,7 @@ useEffect(() => {
                 ))}
               </div>
             )}
-            {isCardMode && (
+            {isCardMode && !isSportsAnalysisMode && (
               <button
                 onClick={handleAnalyzeCard}
                 disabled={parsingCard}
@@ -1154,100 +1310,117 @@ useEffect(() => {
                 {parsingCard ? "Analyzing Card…" : "Analyze Card Details"}
               </button>
             )}
+            {isSportsAnalysisMode && (
+              <div className="mt-4 text-xs text-white/60">
+                {serverCardAnalyzing
+                  ? "Analyzing card details now…"
+                  : cardAttributes
+                  ? "Analysis finished — review the detected details below."
+                  : "Queued for analysis — we’ll move forward automatically."}
+              </div>
+            )}
             {cardError && (
               <div className="text-xs opacity-60 mt-2">
                 {cardError}
               </div>
             )}
-            <div className="mt-4 space-y-3">
-              <div className="text-[11px] uppercase tracking-[0.3em] text-white/45 mb-1">
-                Smart Polish
-              </div>
-              <button
-                className={`w-full flex items-center justify-center gap-2 py-3 rounded-[22px] bg-[#E8D5A8] text-black text-sm font-semibold tracking-[0.2em] shadow-[0_15px_35px_rgba(0,0,0,0.55)] hover:shadow-[0_18px_45px_rgba(0,0,0,0.6)] transition ${photoProcessing ? "opacity-70 pointer-events-none" : ""}`}
-                disabled={Boolean(photoProcessing)}
-                onClick={() => handleFix(autoFix, "autoFix")}
-              >
-                {photoProcessing === "autoFix" ? "Polishing…" : "Auto-Fix"}
-              </button>
-              <button
-                className={`w-full flex items-center justify-center gap-2 py-3 rounded-[20px] border border-[#E8D5A8]/50 bg-black/30 text-[#E8D5A8] text-sm tracking-[0.2em] hover:bg-black/55 transition ${photoProcessing ? "opacity-60 pointer-events-none" : ""}`}
-                disabled={Boolean(photoProcessing)}
-                onClick={() => handleFix(studioMode, "studioMode")}
-              >
-                {photoProcessing === "studioMode" ? "Applying Studio…" : "Studio Mode"}
-              </button>
-              <button
-                className="w-full py-3 mt-2 rounded-[18px] border border-[#4CC790]/60 bg-transparent text-[#80F5C2] text-sm tracking-[0.18em] shadow-[0_8px_24px_rgba(76,199,144,0.25)] hover:bg-[#4CC790]/10 transition"
-                onClick={handleSavePhotoAction}
-              >
-                Save Image
-              </button>
-              {photoProcessing && (
-                <div className="text-center text-xs text-white/60">
-                  {photoProcessing === "autoFix"
-                    ? "Auto-Fix is polishing your photo…"
-                    : "Studio Mode is giving this photo the luxe treatment…"}
-                </div>
-              )}
-            </div>
-
-            <div className="mt-6">
-              <div className="text-[11px] uppercase tracking-[0.3em] text-white/45 mb-2">
-                Quick Adjustments
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button className="lux-small-btn" onClick={() => handleFix(brighten)}>
-                  Brighten
-                </button>
-                <button className="lux-small-btn" onClick={() => handleFix(warm)}>
-                  Warm
-                </button>
-                <button className="lux-small-btn" onClick={() => handleFix(cool)}>
-                  Cool
-                </button>
-                <button className="lux-small-btn" onClick={() => handleFix(removeShadows)}>
-                  Shadows
-                </button>
-                <button className="lux-small-btn" onClick={() => handleFix(cropPhoto)}>
-                  Crop
-                </button>
-              </div>
-            </div>
-            <div className="mt-6 pt-4 border-t border-white/10 space-y-2 text-[13px] text-white/70">
-              <div className="flex flex-col sm:flex-row gap-2">
-                <button
-                  type="button"
-                  className="flex-1 py-2 rounded-[12px] border border-white/12 bg-black/20 text-[11px] tracking-[0.2em] hover:bg-black/40 transition"
-                  onClick={triggerPhotoPicker}
-                >
-                  Replace Photo
-                </button>
-                <button
-                  type="button"
-                  className="flex-1 py-2 rounded-[12px] border border-[rgba(255,93,93,0.4)] bg-black/15 text-[#F7B3B3] text-[11px] tracking-[0.2em] hover:bg-black/30 transition"
-                  onClick={handleRemoveMainPhoto}
-                >
-                  Remove Photo
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-2 text-[11px] tracking-[0.2em]">
-                {listingData?.editHistory?.length > 0 && (
+            {showPhotoTools ? (
+              <>
+                <div className="mt-4 space-y-3">
+                  <div className="text-[11px] uppercase tracking-[0.3em] text-white/45 mb-1">
+                    Smart Polish
+                  </div>
                   <button
-                    className="flex-1 min-w-[110px] py-2 rounded-[10px] border border-white/70 text-white tracking-[0.2em] bg-transparent hover:bg-white/10 transition"
-                    onClick={handleUndo}
+                    className={`w-full flex items-center justify-center gap-2 py-3 rounded-[22px] bg-[#E8D5A8] text-black text-sm font-semibold tracking-[0.2em] shadow-[0_15px_35px_rgba(0,0,0,0.55)] hover:shadow-[0_18px_45px_rgba(0,0,0,0.6)] transition ${photoProcessing ? "opacity-70 pointer-events-none" : ""}`}
+                    disabled={Boolean(photoProcessing)}
+                    onClick={() => handleFix(autoFix, "autoFix")}
                   >
-                    Undo
+                    {photoProcessing === "autoFix" ? "Polishing…" : "Auto-Fix"}
                   </button>
-                )}
-                <button
-                  className="flex-1 min-w-[110px] py-2 rounded-[10px] border border-white/8 bg-black/10 text-white/60 hover:bg-black/25 transition"
-                  onClick={handleRevertOriginal}
-                >
-                  Revert
-                </button>
+                  <button
+                    className={`w-full flex items-center justify-center gap-2 py-3 rounded-[20px] border border-[#E8D5A8]/50 bg-black/30 text-[#E8D5A8] text-sm tracking-[0.2em] hover:bg-black/55 transition ${photoProcessing ? "opacity-60 pointer-events-none" : ""}`}
+                    disabled={Boolean(photoProcessing)}
+                    onClick={() => handleFix(studioMode, "studioMode")}
+                  >
+                    {photoProcessing === "studioMode" ? "Applying Studio…" : "Studio Mode"}
+                  </button>
+                  <button
+                    className="w-full py-3 mt-2 rounded-[18px] border border-[#4CC790]/60 bg-transparent text-[#80F5C2] text-sm tracking-[0.18em] shadow-[0_8px_24px_rgba(76,199,144,0.25)] hover:bg-[#4CC790]/10 transition"
+                    onClick={handleSavePhotoAction}
+                  >
+                    Save Image
+                  </button>
+                  {photoProcessing && (
+                    <div className="text-center text-xs text-white/60">
+                      {photoProcessing === "autoFix"
+                        ? "Auto-Fix is polishing your photo…"
+                        : "Studio Mode is giving this photo the luxe treatment…"}
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-6">
+                  <div className="text-[11px] uppercase tracking-[0.3em] text-white/45 mb-2">
+                    Quick Adjustments
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button className="lux-small-btn" onClick={() => handleFix(brighten)}>
+                      Brighten
+                    </button>
+                    <button className="lux-small-btn" onClick={() => handleFix(warm)}>
+                      Warm
+                    </button>
+                    <button className="lux-small-btn" onClick={() => handleFix(cool)}>
+                      Cool
+                    </button>
+                    <button className="lux-small-btn" onClick={() => handleFix(removeShadows)}>
+                      Shadows
+                    </button>
+                    <button className="lux-small-btn" onClick={() => handleFix(cropPhoto)}>
+                      Crop
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-6 pt-4 border-t border-white/10 space-y-2 text-[13px] text-white/70">
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <button
+                      type="button"
+                      className="flex-1 py-2 rounded-[12px] border border-white/12 bg-black/20 text-[11px] tracking-[0.2em] hover:bg-black/40 transition"
+                      onClick={triggerPhotoPicker}
+                    >
+                      Replace Photo
+                    </button>
+                    <button
+                      type="button"
+                      className="flex-1 py-2 rounded-[12px] border border-[rgba(255,93,93,0.4)] bg-black/15 text-[#F7B3B3] text-[11px] tracking-[0.2em] hover:bg-black/30 transition"
+                      onClick={handleRemoveMainPhoto}
+                    >
+                      Remove Photo
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-[11px] tracking-[0.2em]">
+                    {listingData?.editHistory?.length > 0 && (
+                      <button
+                        className="flex-1 min-w-[110px] py-2 rounded-[10px] border border-white/70 text-white tracking-[0.2em] bg-transparent hover:bg-white/10 transition"
+                        onClick={handleUndo}
+                      >
+                        Undo
+                      </button>
+                    )}
+                    <button
+                      className="flex-1 min-w-[110px] py-2 rounded-[10px] border border-white/8 bg-black/10 text-white/60 hover:bg-black/25 transition"
+                      onClick={handleRevertOriginal}
+                    >
+                      Revert
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="mt-4 text-xs text-white/50">
+                Photo edits are locked from Sports Card Studio. Head below to see the detected card details.
               </div>
-            </div>
+            )}
             {glowScore && (
               <div className="mt-6 rounded-2xl border border-[rgba(232,213,168,0.35)] bg-black/30 p-4">
                 <div className="text-xs uppercase tracking-[0.35em] text-white/60 mb-2">
@@ -1269,23 +1442,30 @@ useEffect(() => {
         ) : (
           <div>
             <div className="opacity-60 text-sm mb-4">No photo found</div>
-            <button
-              type="button"
-              className="w-full py-2.5 rounded-[16px] border border-[rgba(255,235,200,0.5)] bg-black/60 text-[#E8DCC0] text-sm tracking-[0.2em] uppercase hover:bg-black/80 transition"
-              onClick={triggerPhotoPicker}
-            >
-              Upload Photo
-            </button>
+            {isSportsAnalysisMode ? (
+              <p className="text-xs text-[#F7B3B3]">
+                Head back to Sports Card Studio to capture the card photo before returning here.
+              </p>
+            ) : (
+              <button
+                type="button"
+                className="w-full py-2.5 rounded-[16px] border border-[rgba(255,235,200,0.5)] bg-black/60 text-[#E8DCC0] text-sm tracking-[0.2em] uppercase hover:bg-black/80 transition"
+                onClick={triggerPhotoPicker}
+              >
+                Upload Photo
+              </button>
+            )}
           </div>
         )}
       </div>
 
       <div className="lux-divider w-2/3 mx-auto my-12"></div>
 
-      {/* ---------------------- */}
-      {/*  MODE-SPECIFIC FIELDS  */}
-      {/* ---------------------- */}
-      {isCardMode ? (
+      <div ref={resultsRef}>
+        {/* ---------------------- */}
+        {/*  MODE-SPECIFIC FIELDS  */}
+        {/* ---------------------- */}
+        {isCardMode ? (
         <>
           <HeaderBar label="Card Details" />
 
@@ -1464,12 +1644,12 @@ useEffect(() => {
           )}
 
           {/* CARD GRADING ASSIST — Sports Card Mode Only */}
-          {cardAttributes?.grading && (
-            <div className="lux-card mb-8">
-              <div className="text-xs uppercase opacity-70 tracking-wide mb-3">
-                Grading Assist
-              </div>
+          <div className="lux-card mb-8">
+            <div className="text-xs uppercase opacity-70 tracking-wide mb-3">
+              Grading Assist
+            </div>
 
+            {cardAttributes?.grading ? (
               <div className="space-y-1 text-sm opacity-85">
                 <div>
                   <span className="opacity-60">Centering:</span>{" "}
@@ -1488,8 +1668,14 @@ useEffect(() => {
                   {cardAttributes.grading.surface || "—"}
                 </div>
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="text-sm text-white/55">
+                {serverCardAnalyzing
+                  ? "Grading insights will appear after analysis completes."
+                  : "No grading data available for this card."}
+              </div>
+            )}
+          </div>
 
           {/* MARKET VALUE ASSIST — Sports Card Mode Only */}
           {cardAttributes?.pricing && (
@@ -1983,6 +2169,7 @@ useEffect(() => {
           )}
         </>
       )}
+      </div>
 
       {showShippingTips && (
         <div className="lux-card mt-16">
@@ -2210,4 +2397,5 @@ useEffect(() => {
       )}
     </div>
   );
+
 }

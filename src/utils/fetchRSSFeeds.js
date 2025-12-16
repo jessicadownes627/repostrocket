@@ -1,27 +1,34 @@
-// Aggregate multiple RSS feeds into a single flat list of entries.
-// Relies on the browser-friendly fetch helper in src/trends/fetchRSS.js.
+// Aggregate multiple RSS feeds into a single flat list of entries via the Netlify RSS proxy.
 
-import { fetchRSSFeed } from "../trends/fetchRSS";
+import { fetchRSSFeedsViaProxy } from "../trends/fetchRSS";
+
+const isValidUrl = (url) =>
+  typeof url === "string" && /^https?:\/\//i.test(url.trim());
 
 export async function fetchRSSFeeds(urls = []) {
-  const results = [];
+  const targets = Array.isArray(urls) ? urls.filter(isValidUrl) : [];
+  if (!targets.length) return [];
 
-  for (const url of urls) {
-    try {
-      const items = await fetchRSSFeed(url);
-      results.push(
-        ...items.map((entry) => ({
-          title: entry.title || "",
-          description: entry.description || "",
-          link: entry.link || "",
-          source: url,
-          publishedAt: entry.publishedAt || null,
-        }))
-      );
-    } catch (err) {
-      console.warn("fetchRSSFeeds error:", url, err);
-    }
+  try {
+    const feeds = await fetchRSSFeedsViaProxy(targets);
+    const results = [];
+
+    feeds.forEach((feed) => {
+      if (!Array.isArray(feed?.items)) return;
+      feed.items.forEach((entry) => {
+        results.push({
+          title: entry?.title || "",
+          description: entry?.description || "",
+          link: entry?.link || "",
+          source: feed.url || "",
+          publishedAt: entry?.publishedAt || null,
+        });
+      });
+    });
+
+    return results;
+  } catch (err) {
+    console.error("fetchRSSFeeds failed:", err);
+    return [];
   }
-
-  return results;
 }

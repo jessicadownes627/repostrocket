@@ -330,12 +330,6 @@ export default function Inventory() {
         )}
       </div>
 
-      {library.filter((i) => i.category === "Sports Cards").length === 0 && (
-        <div className="mt-4 text-sm text-[#d6c7a1]/70">
-          No sports cards found. Add your first card above.
-        </div>
-      )}
-
       {/* Sold Items */}
       <div className="inventory-sold-section">
         <h2 className="inventory-sold-title">Sold Items</h2>
