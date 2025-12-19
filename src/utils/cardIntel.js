@@ -22,6 +22,7 @@ const CORNER_NAME_MAP = {
   bottomRight: "Bottom Right",
 };
 const CORNER_SIZE_RATIO = 0.22;
+const CORNER_PADDING_RATIO = 0.12;
 
 async function ensureDataUrlFromSource(source) {
   if (!source) return "";
@@ -278,14 +279,16 @@ async function extractCornersFromImage(dataUrl) {
         return;
       }
       const canvas = document.createElement("canvas");
-      canvas.width = size;
-      canvas.height = size;
+      const padding = Math.round(size * CORNER_PADDING_RATIO);
+      const paddedSize = size + padding * 2;
+      canvas.width = paddedSize;
+      canvas.height = paddedSize;
       const ctx = canvas.getContext("2d");
       const crops = {
-        topLeft: cropCorner(ctx, img, 0, 0, size),
-        topRight: cropCorner(ctx, img, img.width - size, 0, size),
-        bottomLeft: cropCorner(ctx, img, 0, img.height - size, size),
-        bottomRight: cropCorner(ctx, img, img.width - size, img.height - size, size),
+        topLeft: cropCorner(ctx, img, -padding, -padding, paddedSize),
+        topRight: cropCorner(ctx, img, img.width - size - padding, -padding, paddedSize),
+        bottomLeft: cropCorner(ctx, img, -padding, img.height - size - padding, paddedSize),
+        bottomRight: cropCorner(ctx, img, img.width - size - padding, img.height - size - padding, paddedSize),
       };
       resolve(crops);
     };
@@ -295,9 +298,10 @@ async function extractCornersFromImage(dataUrl) {
 }
 
 function cropCorner(ctx, img, sx, sy, size) {
-  if (sx < 0 || sy < 0) return null;
+  const clampedX = Math.max(0, Math.min(img.width - size, sx));
+  const clampedY = Math.max(0, Math.min(img.height - size, sy));
   ctx.clearRect(0, 0, size, size);
-  ctx.drawImage(img, sx, sy, size, size, 0, 0, size, size);
+  ctx.drawImage(img, clampedX, clampedY, size, size, 0, 0, size, size);
   const imageData = ctx.getImageData(0, 0, size, size);
   const score = computeCornerScore(imageData);
   return {

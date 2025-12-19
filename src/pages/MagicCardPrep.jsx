@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useListingStore } from "../store/useListingStore";
 import { convertHeicIfNeeded } from "../utils/imageTools";
 import { deriveAltTextFromFilename } from "../utils/photoHelpers";
 import { buildCornerPreviewFromEntries } from "../utils/cardIntel";
 import "../styles/createListing.css";
+import CornerAdjustModal from "../components/CornerAdjustModal";
 
 const CORNER_POSITIONS = [
   { key: "topLeft", label: "Top Left" },
@@ -13,7 +14,7 @@ const CORNER_POSITIONS = [
   { key: "bottomRight", label: "Bottom Right" },
 ];
 
-export default function MagicCardPrep() {
+export default function MagicCardPrep({ analysisActive = false }) {
   const navigate = useNavigate();
   const frontInputRef = useRef(null);
   const backInputRef = useRef(null);
@@ -32,8 +33,27 @@ export default function MagicCardPrep() {
   const [cornerEntries, setCornerEntries] = useState(
     Array.isArray(listingData?.cornerPhotos) ? listingData.cornerPhotos : []
   );
+  const [cornerAdjustTarget, setCornerAdjustTarget] = useState(null);
   const [cornerLoading, setCornerLoading] = useState(false);
   const [cornerError, setCornerError] = useState("");
+  const hasExistingCardDraft = useMemo(
+    () =>
+      Boolean(
+        (frontPhoto && frontPhoto.url) ||
+          (backPhoto && backPhoto.url) ||
+          (Array.isArray(listingData?.cornerPhotos) &&
+            listingData.cornerPhotos.length > 0)
+      ),
+    [frontPhoto, backPhoto, listingData?.cornerPhotos]
+  );
+  const [showResumeBanner, setShowResumeBanner] = useState(
+    () => hasExistingCardDraft
+  );
+  useEffect(() => {
+    if (!hasExistingCardDraft) {
+      setShowResumeBanner(false);
+    }
+  }, [hasExistingCardDraft]);
 
   const prepareEntry = useCallback(async (file, label) => {
     const converted = await convertHeicIfNeeded(file);
@@ -137,6 +157,11 @@ export default function MagicCardPrep() {
   };
 
   const handleRetakeAll = () => {
+    try {
+      console.log("[QA] handleRetakeAll triggered", { timestamp: Date.now() });
+    } catch (err) {
+      // ignore logging failures
+    }
     resetListing("sports_cards");
     resetCardIntel();
     setListingField("cornerPhotos", []);
@@ -144,6 +169,8 @@ export default function MagicCardPrep() {
     setBackPhoto(null);
     clearCorners();
     setPrepError("");
+    setShowResumeBanner(false);
+    frontInputRef.current?.click();
   };
 
   const handleRemovePhoto = useCallback(
@@ -164,7 +191,12 @@ export default function MagicCardPrep() {
   useEffect(() => {
     let cancelled = false;
     if (!frontPhoto || !backPhoto) {
-      clearCorners();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (cornerEntries.length > 0) {
       return () => {
         cancelled = true;
       };
@@ -197,7 +229,7 @@ export default function MagicCardPrep() {
     return () => {
       cancelled = true;
     };
-  }, [frontPhoto, backPhoto, clearCorners, setListingField]);
+  }, [frontPhoto, backPhoto, cornerEntries.length, setListingField]);
 
   const renderUploadSlot = (position, label, photo, inputRef) => (
     <div>
@@ -207,7 +239,7 @@ export default function MagicCardPrep() {
       <div
         className={`lux-upload-zone relative flex items-center justify-center min-h-[180px] cursor-pointer ${
           dragging[position] ? "lux-upload-hover" : ""
-        }`}
+        } analysis-scan-wrapper ${analysisActive && photo ? "analysis-scan-active" : ""}`}
         onDragOver={(e) => handleDragOver(position, e)}
         onDragLeave={() => handleDragLeave(position)}
         onDrop={(e) => handleDrop(position, e)}
@@ -263,6 +295,23 @@ export default function MagicCardPrep() {
     return cornerEntries.find((entry) => entry.cornerKey === key);
   };
 
+  const handleCornerOverride = useCallback(
+    (target, url) => {
+      if (!target || !url) return;
+      setCornerEntries((prev) => {
+        const next = prev.map((entry) =>
+          entry.side === target.side && entry.cornerKey === target.cornerKey
+            ? { ...entry, url, manualOverride: true }
+            : entry
+        );
+        setListingField("cornerPhotos", next);
+        return next;
+      });
+      setCornerAdjustTarget(null);
+    },
+    [setListingField]
+  );
+
   return (
     <div className="app-wrapper min-h-screen px-6 py-10 flex flex-col relative">
       <div className="rr-deep-emerald"></div>
@@ -283,6 +332,32 @@ export default function MagicCardPrep() {
       <p className="text-center opacity-65 text-sm mb-4">
         Confirm coverage for the card you just captured. These exact photos move into analysis next.
       </p>
+      {showResumeBanner && (
+        <div className="bg-black/40 border border-white/10 rounded-2xl p-4 mb-6 text-sm text-white/80">
+          <div className="text-[11px] uppercase tracking-[0.35em] text-white/60 mb-1">
+            Resuming your last card
+          </div>
+          <p className="text-white/70">
+            We saved your previous front/back photos. Retake them if you’d like to start over.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 mt-3">
+            <button
+              type="button"
+              className="flex-1 py-2 rounded-2xl border border-white/20 text-[11px] uppercase tracking-[0.3em] text-white/80 hover:border-white/40 transition"
+              onClick={() => setShowResumeBanner(false)}
+            >
+              Keep These Photos
+            </button>
+            <button
+              type="button"
+              className="flex-1 py-2 rounded-2xl border border-[#F27B81]/50 bg-[#F27B81]/10 text-[#F9B8BC] text-[11px] uppercase tracking-[0.3em] hover:bg-[#F27B81]/20 transition"
+              onClick={handleRetakeAll}
+            >
+              Retake / Start Fresh
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-6 md:grid-cols-2 relative z-20">
         {renderUploadSlot("front", "Front of card", frontPhoto, frontInputRef)}
@@ -329,7 +404,7 @@ export default function MagicCardPrep() {
                       <img
                         src={entry.url}
                         alt={entry.altText}
-                        className="w-full h-24 object-cover"
+                        className={`w-full h-24 object-cover ${entry.manualOverride ? "ring-1 ring-[#E8D5A8]" : ""}`}
                       />
                     ) : (
                       <div className="h-24 flex items-center justify-center text-[10px] opacity-40">
@@ -338,6 +413,22 @@ export default function MagicCardPrep() {
                     )}
                   </div>
                   <div className="text-white/70">{corner.label}</div>
+                  {entry && (
+                    <button
+                      type="button"
+                      className="mt-2 text-[10px] tracking-[0.25em] text-[#E8D5A8]"
+                      onClick={() =>
+                        setCornerAdjustTarget({
+                          ...entry,
+                          side: entry.side || "Front",
+                          cornerKey: entry.cornerKey || corner.key,
+                          label: `${entry.side || "Front"} ${corner.label}`,
+                        })
+                      }
+                    >
+                      Adjust
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -349,7 +440,7 @@ export default function MagicCardPrep() {
         )}
 
         <p className="mt-5 text-xs text-white/55">
-          Corners are locked after this step and power the condition scoring you’ll see next.
+          Corners are auto-generated for analysis. You can still adjust them if needed.
         </p>
       </div>
 
@@ -370,6 +461,27 @@ export default function MagicCardPrep() {
           Retake Photos
         </button>
       </div>
+      <CornerAdjustModal
+        target={
+          cornerAdjustTarget
+            ? {
+                url: cornerAdjustTarget.url,
+                label: cornerAdjustTarget.label,
+              }
+            : null
+        }
+        onClose={() => setCornerAdjustTarget(null)}
+        onSave={(dataUrl) => {
+          if (!cornerAdjustTarget) return;
+          handleCornerOverride(
+            {
+              side: cornerAdjustTarget.side,
+              cornerKey: cornerAdjustTarget.cornerKey,
+            },
+            dataUrl
+          );
+        }}
+      />
     </div>
   );
 }

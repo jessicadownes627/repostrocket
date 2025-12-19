@@ -9,6 +9,8 @@ import {
   extractCornerPhotoEntries,
 } from "../utils/cardIntel";
 import { buildCardTitle } from "../utils/buildCardTitle";
+import CornerAdjustModal from "../components/CornerAdjustModal";
+import AnalysisProgress from "../components/AnalysisProgress";
 
 const CORNER_LABELS = {
   topLeft: "Top Left",
@@ -37,6 +39,7 @@ export default function BatchCardPrep() {
   const [analysisError, setAnalysisError] = useState("");
   const [approving, setApproving] = useState(false);
   const [launching, setLaunching] = useState(false);
+  const [cornerAdjustTarget, setCornerAdjustTarget] = useState(null);
 
   const hasCards = batchItems.length > 0;
 
@@ -247,6 +250,16 @@ export default function BatchCardPrep() {
     setApproving(true);
     setAnalysisError("");
     try {
+      try {
+        console.log("[QA] analyzeCardImages invoked", {
+          cardId: currentCard.id,
+          photos: photos.length,
+          secondaryPhotos: secondary.length,
+          timestamp: Date.now(),
+        });
+      } catch (err) {
+        // swallow logging errors
+      }
       const payload = {
         category: "Sports Cards",
         photos,
@@ -303,6 +316,43 @@ export default function BatchCardPrep() {
     }
   };
 
+  const handleCornerAdjustSave = useCallback(
+    (target, dataUrl) => {
+      if (!target || !dataUrl) return;
+      const sideLabel = target.sideLabel?.toLowerCase() || "";
+      const updatedPhotos = (listingData.cornerPhotos || []).map((entry) =>
+        entry &&
+        entry.cornerKey === target.cornerKey &&
+        (entry.side || "").toLowerCase() === sideLabel
+          ? { ...entry, url: dataUrl, manualOverride: true }
+          : entry
+      );
+      setListingField("cornerPhotos", updatedPhotos);
+
+      const existingCorners = listingData.cardAttributes?.corners || {};
+      const sideKey = target.sideKey;
+      const sideSet = existingCorners?.[sideKey] || {};
+      const updatedSide = {
+        ...sideSet,
+        [target.cornerKey]: {
+          ...(sideSet?.[target.cornerKey] || {}),
+          image: dataUrl,
+          manualOverride: true,
+        },
+      };
+
+      setListingField("cardAttributes", {
+        ...(listingData.cardAttributes || {}),
+        corners: {
+          ...existingCorners,
+          [sideKey]: updatedSide,
+        },
+      });
+      setCornerAdjustTarget(null);
+    },
+    [listingData.cornerPhotos, listingData.cardAttributes, setListingField]
+  );
+
   const handleSendToLaunchDeck = () => {
     if (!showAnalysisResults || launching) return;
     setLaunching(true);
@@ -322,6 +372,18 @@ export default function BatchCardPrep() {
         photos: activePhotos || [],
         secondaryPhotos: activeSecondaryPhotos || [],
       };
+      try {
+        console.log("[QA] Launch Deck payload", {
+          cardId: payloadItem.id,
+          photos: payloadItem.photos?.length || 0,
+          secondaryPhotos: payloadItem.secondaryPhotos?.length || 0,
+          title: payloadItem.title,
+          price: payloadItem.price,
+          timestamp: Date.now(),
+        });
+      } catch (err) {
+        // ignore logging failures
+      }
       setBatchItems([payloadItem]);
       navigate("/batch-launch", { state: { items: [payloadItem] } });
     } finally {
@@ -331,7 +393,7 @@ export default function BatchCardPrep() {
 
   return (
     <>
-      <MagicCardPrep />
+      <MagicCardPrep analysisActive={approving} />
       {showAnalysisResults && (
         <div className="max-w-4xl mx-auto w-full px-6 mt-10 pb-6">
           <HeaderBar label="Card Details" />
@@ -435,7 +497,7 @@ export default function BatchCardPrep() {
                                   <img
                                     src={entry.image}
                                     alt={`${prettySide} ${label}`}
-                                    className="w-full h-24 object-cover"
+                                    className={`w-full h-24 object-cover ${entry.manualOverride ? "ring-1 ring-[#E8D5A8]" : ""}`}
                                   />
                                 ) : (
                                   <div className="h-24 flex items-center justify-center text-[10px] opacity-40">
@@ -447,6 +509,23 @@ export default function BatchCardPrep() {
                                 {label}
                                 {renderCornerBadge(entry?.confidence)}
                               </div>
+                              {entry?.image && (
+                                <button
+                                  type="button"
+                                  className="mt-2 text-[10px] tracking-[0.25em] text-[#E8D5A8]"
+                                  onClick={() =>
+                                    setCornerAdjustTarget({
+                                      url: entry.image,
+                                      label: `${prettySide} ${label}`,
+                                      sideKey: side,
+                                      sideLabel: prettySide,
+                                      cornerKey: key,
+                                    })
+                                  }
+                                >
+                                  Adjust
+                                </button>
+                              )}
                             </div>
                           );
                         })}
@@ -615,6 +694,7 @@ export default function BatchCardPrep() {
           <p className="text-sm text-white/80 mb-3">
             Confirm the photos look good, then manually approve this card for AI analysis.
           </p>
+          {approving && <AnalysisProgress active={approving} />}
           <button
             type="button"
             className={`w-full py-3 text-center text-base font-semibold rounded-xl lux-continue-btn ${
@@ -635,6 +715,28 @@ export default function BatchCardPrep() {
           )}
         </div>
       </div>
+      <CornerAdjustModal
+        target={
+          cornerAdjustTarget
+            ? {
+                url: cornerAdjustTarget.url,
+                label: cornerAdjustTarget.label,
+              }
+            : null
+        }
+        onClose={() => setCornerAdjustTarget(null)}
+        onSave={(dataUrl) => {
+          if (!cornerAdjustTarget) return;
+          handleCornerAdjustSave(
+            {
+              sideLabel: cornerAdjustTarget.sideLabel,
+              sideKey: cornerAdjustTarget.sideKey,
+              cornerKey: cornerAdjustTarget.cornerKey,
+            },
+            dataUrl
+          );
+        }}
+      />
     </>
   );
 }

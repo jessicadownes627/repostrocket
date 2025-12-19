@@ -142,3 +142,231 @@ textarea {
     filter: brightness(1);
   }
 }
+
+.corner-adjust-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 5, 5, 0.65);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1.5rem;
+}
+
+.corner-adjust-card {
+  width: 100%;
+  max-width: 420px;
+  background: #050807;
+  border: 1px solid rgba(232, 213, 168, 0.25);
+  border-radius: 24px;
+  padding: 1.5rem;
+  color: #fff;
+  box-shadow: 0 20px 70px rgba(0, 0, 0, 0.55);
+}
+
+.corner-adjust-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.corner-adjust-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.35em;
+  opacity: 0.6;
+}
+
+.corner-adjust-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-top: 0.25rem;
+}
+
+.corner-adjust-close {
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.corner-adjust-viewport {
+  position: relative;
+  border-radius: 1rem;
+  overflow: hidden;
+  background: #0d0f13;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 1.25rem;
+  touch-action: none;
+}
+
+.corner-adjust-viewport img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: auto;
+  height: auto;
+  max-width: none;
+  transform-origin: center;
+  user-select: none;
+  pointer-events: none;
+}
+
+.corner-adjust-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  color: #e8d5a8;
+  background: rgba(5, 5, 5, 0.35);
+}
+
+.corner-adjust-frame {
+  position: absolute;
+  inset: 0;
+  border: 1px dashed rgba(255, 255, 255, 0.35);
+  border-radius: 1rem;
+  pointer-events: none;
+}
+
+.corner-adjust-controls {
+  margin-bottom: 1.25rem;
+}
+
+.corner-adjust-zoom-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  opacity: 0.6;
+}
+
+.corner-adjust-controls input[type="range"] {
+  width: 100%;
+  margin-top: 0.35rem;
+}
+
+.corner-adjust-zoom-values {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  opacity: 0.6;
+  margin-top: 0.25rem;
+}
+
+.corner-adjust-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.corner-adjust-secondary,
+.corner-adjust-primary {
+  flex: 1;
+  border-radius: 999px;
+  padding: 0.65rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+
+.corner-adjust-secondary {
+  background: transparent;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.corner-adjust-primary {
+  background: linear-gradient(120deg, #f1debe, #caa76a);
+  color: #1b1208;
+  border: none;
+}
+
+.analysis-progress {
+  padding: 0.75rem 1rem;
+  border-radius: 16px;
+  background: rgba(7, 10, 14, 0.75);
+  border: 1px solid rgba(232, 213, 168, 0.2);
+  color: #fff;
+  font-size: 0.85rem;
+  margin-top: 0.75rem;
+}
+
+.analysis-progress ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.analysis-progress li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+}
+
+.analysis-progress li::before {
+  content: "⟳";
+  font-size: 0.75rem;
+  opacity: 0.6;
+}
+
+.analysis-progress li.done::before {
+  content: "✓";
+  opacity: 1;
+}
+
+.analysis-progress li.current::before {
+  animation: analysisPulse 1s infinite;
+}
+
+@keyframes analysisPulse {
+  0% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.3;
+  }
+}
+
+.analysis-scan-wrapper {
+  position: relative;
+}
+
+.analysis-scan-active::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 18px;
+  background: linear-gradient(
+    120deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.35) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: translateX(-100%);
+  animation: sweep 1.8s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}

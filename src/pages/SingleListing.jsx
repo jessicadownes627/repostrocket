@@ -39,6 +39,8 @@ import {
 } from "../utils/savedListings";
 import { shareImage, getImageSaveLabel } from "../utils/saveImage";
 import "../styles/overrides.css";
+import CornerAdjustModal from "../components/CornerAdjustModal";
+import AnalysisProgress from "../components/AnalysisProgress";
 
 // --- TAG FALLBACKS (must be defined first) ---
 const FALLBACK_TAG_OPTIONS = [
@@ -80,6 +82,32 @@ const GRADING_PATHS = {
       url: "https://www.cgccards.com/",
     },
   ],
+};
+
+const hasListingDraftData = (data) => {
+  if (!data || typeof data !== "object") return false;
+  const textFields = ["title", "description", "price", "category", "brand"].some(
+    (field) => {
+      const raw = data[field];
+      if (raw === null || raw === undefined) return false;
+      return String(raw).trim().length > 0;
+    }
+  );
+  const hasPhotos = Array.isArray(data.photos) && data.photos.length > 0;
+  const hasSecondary =
+    Array.isArray(data.secondaryPhotos) && data.secondaryPhotos.length > 0;
+  const hasCorners =
+    Array.isArray(data.cornerPhotos) && data.cornerPhotos.length > 0;
+  const hasTags = Array.isArray(data.tags) && data.tags.length > 0;
+  const hasIntel = Boolean(data.cardAttributes || data.apparelAttributes);
+  return (
+    hasPhotos ||
+    hasSecondary ||
+    hasCorners ||
+    textFields ||
+    hasTags ||
+    hasIntel
+  );
 };
 
 const CLOTHING_CATEGORY_LIST = [
@@ -155,6 +183,7 @@ export default function SingleListing() {
   const [composed, setComposed] = useState(null);
   const [exportLinks, setExportLinks] = useState(null);
   const [magicAccepted, setMagicAccepted] = useState({});
+  const [cornerAdjustTarget, setCornerAdjustTarget] = useState(null);
   const [magicError, setMagicError] = useState("");
   const [dynamicError, setDynamicError] = useState("");
   const [cardError, setCardError] = useState("");
@@ -250,6 +279,25 @@ export default function SingleListing() {
     };
   }, [isSportsAnalysisMode, cardError, serverCardAnalyzing, cardAttributes]);
   const showPhotoTools = !isSportsAnalysisMode;
+  const analysisActive = isSportsAnalysisMode && serverCardAnalyzing;
+  const hasResumableDraft = useMemo(
+    () => hasListingDraftData(listingData),
+    [listingData]
+  );
+  const [showResumeNotice, setShowResumeNotice] = useState(() => hasResumableDraft);
+  useEffect(() => {
+    if (!hasResumableDraft) {
+      setShowResumeNotice(false);
+    }
+  }, [hasResumableDraft]);
+  const handleStartFreshDraft = useCallback(() => {
+    const nextMode = batchMode === "sports_cards" ? "sports_cards" : "general";
+    resetListing(nextMode);
+    setShowResumeNotice(false);
+    if (nextMode === "sports_cards") {
+      navigate("/card-prep");
+    }
+  }, [batchMode, resetListing, navigate]);
 
   const CATEGORY_OPTIONS = [
     "Tops",
@@ -691,6 +739,43 @@ useEffect(() => {
     });
   }, [cornerPhotos]);
 
+  const handleCornerAdjustSave = useCallback(
+    (target, dataUrl) => {
+      if (!target || !dataUrl) return;
+      const sideLabel = target.sideLabel?.toLowerCase() || "";
+      const updatedPhotos = (listingData.cornerPhotos || []).map((entry) =>
+        entry &&
+        entry.cornerKey === target.cornerKey &&
+        (entry.side || "").toLowerCase() === sideLabel
+          ? { ...entry, url: dataUrl, manualOverride: true }
+          : entry
+      );
+      setListingField("cornerPhotos", updatedPhotos);
+
+      const existingCorners = listingData.cardAttributes?.corners || {};
+      const sideKey = target.sideKey;
+      const sideSet = existingCorners?.[sideKey] || {};
+      const updatedSide = {
+        ...sideSet,
+        [target.cornerKey]: {
+          ...(sideSet?.[target.cornerKey] || {}),
+          image: dataUrl,
+          manualOverride: true,
+        },
+      };
+
+      setListingField("cardAttributes", {
+        ...(listingData.cardAttributes || {}),
+        corners: {
+          ...existingCorners,
+          [sideKey]: updatedSide,
+        },
+      });
+      setCornerAdjustTarget(null);
+    },
+    [listingData.cornerPhotos, listingData.cardAttributes, setListingField]
+  );
+
   useEffect(() => {
     if (magicAccepted?.title || parsingCard) {
       setLocalTitle(title);
@@ -1069,6 +1154,15 @@ useEffect(() => {
         if (mode) {
           setPhotoProcessing(mode);
         }
+        try {
+          console.log("[QA] handleFix invoked", {
+            action: fn?.name || mode || "unknown",
+            mode,
+            timestamp: Date.now(),
+          });
+        } catch (err) {
+          // logging failure should never block UI
+        }
         const updated = await fn(src);
         setListingField("editedPhoto", updated);
         setListingField("editHistory", [
@@ -1233,6 +1327,32 @@ useEffect(() => {
       <p className="text-center lux-soft-text text-sm mb-8">
         Make your listing shine
       </p>
+      {showResumeNotice && (
+        <div className="bg-black/40 border border-white/15 rounded-2xl p-4 mb-6 text-sm text-white/80">
+          <div className="text-[11px] uppercase tracking-[0.35em] text-white/60 mb-1">
+            Resuming your last listing
+          </div>
+          <p className="text-white/70 text-sm">
+            Your previous draft is still active. Continue editing or start fresh to clear it.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 mt-3">
+            <button
+              type="button"
+              className="flex-1 py-2 rounded-2xl border border-white/25 text-[11px] uppercase tracking-[0.3em] text-white/80 hover:border-white/50 transition"
+              onClick={() => setShowResumeNotice(false)}
+            >
+              Keep Editing
+            </button>
+            <button
+              type="button"
+              className="flex-1 py-2 rounded-2xl border border-[#F27B81]/50 bg-[#F27B81]/10 text-[#F9B8BC] text-[11px] uppercase tracking-[0.3em] hover:bg-[#F27B81]/20 transition"
+              onClick={handleStartFreshDraft}
+            >
+              Start Fresh
+            </button>
+          </div>
+        </div>
+      )}
       <div className="lux-divider w-2/3 mx-auto mb-10"></div>
 
       {isSportsAnalysisMode && sportsStatusMessage && (
@@ -1272,7 +1392,11 @@ useEffect(() => {
 
         {displayedPhoto ? (
           <>
-            <div className="relative">
+            <div
+              className={`relative analysis-scan-wrapper ${
+                analysisActive ? "analysis-scan-active" : ""
+              }`}
+            >
               <img
                 src={displayedPhoto}
                 alt="Main Photo"
@@ -1317,6 +1441,7 @@ useEffect(() => {
                   : cardAttributes
                   ? "Analysis finished — review the detected details below."
                   : "Queued for analysis — we’ll move forward automatically."}
+                <AnalysisProgress active={analysisActive} />
               </div>
             )}
             {cardError && (
@@ -1557,7 +1682,7 @@ useEffect(() => {
                                   <img
                                     src={entry.image}
                                     alt={`${prettySide} ${label}`}
-                                    className="w-full h-24 object-cover"
+                                    className={`w-full h-24 object-cover ${entry.manualOverride ? "ring-1 ring-[#E8D5A8]" : ""}`}
                                   />
                                 ) : (
                                   <div className="h-24 flex items-center justify-center text-[10px] opacity-40">
@@ -1569,6 +1694,23 @@ useEffect(() => {
                                 {label}
                                 {renderCornerBadge(entry?.confidence)}
                               </div>
+                              {entry?.image && (
+                                <button
+                                  type="button"
+                                  className="mt-2 text-[10px] tracking-[0.25em] text-[#E8D5A8]"
+                                  onClick={() =>
+                                    setCornerAdjustTarget({
+                                      url: entry.image,
+                                      label: `${prettySide} ${label}`,
+                                      sideKey: side,
+                                      sideLabel: prettySide,
+                                      cornerKey: key,
+                                    })
+                                  }
+                                >
+                                  Adjust
+                                </button>
+                              )}
                             </div>
                           );
                         })}
@@ -2395,7 +2537,28 @@ useEffect(() => {
           </div>
         </div>
       )}
+      <CornerAdjustModal
+        target={
+          cornerAdjustTarget
+            ? {
+                url: cornerAdjustTarget.url,
+                label: cornerAdjustTarget.label,
+              }
+            : null
+        }
+        onClose={() => setCornerAdjustTarget(null)}
+        onSave={(dataUrl) => {
+          if (!cornerAdjustTarget) return;
+          handleCornerAdjustSave(
+            {
+              sideLabel: cornerAdjustTarget.sideLabel,
+              sideKey: cornerAdjustTarget.sideKey,
+              cornerKey: cornerAdjustTarget.cornerKey,
+            },
+            dataUrl
+          );
+        }}
+      />
     </div>
   );
-
 }
