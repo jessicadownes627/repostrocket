@@ -10,6 +10,23 @@ import {
 } from "../utils/cardIntel";
 import { buildCardTitle } from "../utils/buildCardTitle";
 
+const CORNER_LABELS = {
+  topLeft: "Top Left",
+  topRight: "Top Right",
+  bottomLeft: "Bottom Left",
+  bottomRight: "Bottom Right",
+};
+
+const HeaderBar = ({ label }) => (
+  <div className="w-full mt-8 mb-6">
+    <div className="h-[1px] w-full bg-[var(--lux-border)] opacity-50"></div>
+    <div className="text-center text-[13px] uppercase tracking-[0.28em] py-3 opacity-70 text-[var(--lux-text)]">
+      {label}
+    </div>
+    <div className="h-[1px] w-full bg-[var(--lux-border)] opacity-50"></div>
+  </div>
+);
+
 export default function BatchCardPrep() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -42,6 +59,27 @@ export default function BatchCardPrep() {
     currentIndex >= 0 && currentIndex < batchItems.length - 1
       ? batchItems[currentIndex + 1]?.id
       : null;
+
+  const listingMatchesCard =
+    Boolean(currentCard) && listingData.batchCardId === currentCard.id;
+
+  const activeCardAttributes = listingMatchesCard
+    ? listingData.cardAttributes || currentCard?.cardAttributes || null
+    : currentCard?.cardAttributes || null;
+  const activeCardIntel = listingMatchesCard
+    ? listingData.cardIntel || currentCard?.cardIntel || null
+    : currentCard?.cardIntel || null;
+  const activePricing = listingMatchesCard
+    ? listingData.pricing ||
+      activeCardIntel?.pricing ||
+      currentCard?.pricing ||
+      null
+    : currentCard?.pricing || activeCardIntel?.pricing || null;
+  const activeCornerData = activeCardAttributes?.corners || null;
+  const activeGrading = activeCardAttributes?.grading || null;
+  const listingTitle = listingMatchesCard
+    ? listingData.title || currentCard?.title || ""
+    : currentCard?.title || "";
 
   useEffect(() => {
     if (!hasCards || !requestedId) {
@@ -146,6 +184,46 @@ export default function BatchCardPrep() {
 
   const approveDisabled = !listingHasFullPrep || approving;
 
+  const renderCardConfidence = (field) => {
+    const level = activeCardIntel?.confidence?.[field];
+    if (!level) return null;
+    const tone =
+      level === "high"
+        ? "text-emerald-300 border-emerald-300/40"
+        : level === "medium"
+        ? "text-[#CBB78A] border-[#CBB78A]/50"
+        : "text-white/60 border-white/20";
+    return (
+      <span
+        className={`ml-2 text-[9px] uppercase tracking-[0.3em] px-2 py-0.5 rounded-full border ${tone}`}
+      >
+        {level}
+      </span>
+    );
+  };
+
+  const renderCornerBadge = (level) => {
+    if (!level) return null;
+    const tone =
+      level === "high"
+        ? "text-emerald-300 border-emerald-300/40"
+        : level === "medium"
+        ? "text-[#CBB78A] border-[#CBB78A]/50"
+        : "text-white/60 border-white/20";
+    return (
+      <span
+        className={`ml-2 text-[9px] uppercase tracking-[0.3em] px-2 py-0.5 rounded-full border ${tone}`}
+      >
+        {level}
+      </span>
+    );
+  };
+
+  const showAnalysisResults = Boolean(
+    currentCard.approvedForAnalysis &&
+      (activeCardAttributes || activeCardIntel || activePricing)
+  );
+
   const handleApproveForAnalysis = async () => {
     if (!currentCard || approveDisabled) return;
     const photos = Array.isArray(listingData.photos) ? listingData.photos : [];
@@ -218,6 +296,238 @@ export default function BatchCardPrep() {
   return (
     <>
       <MagicCardPrep />
+      {showAnalysisResults && (
+        <div className="max-w-4xl mx-auto w-full px-6 mt-10 pb-6">
+          <HeaderBar label="Card Details" />
+
+          <div className="lux-card mb-8">
+            <div className="text-xs uppercase opacity-70 tracking-wide mb-3">
+              Detected Attributes
+            </div>
+            <div className="space-y-1 text-sm opacity-85">
+              <div className="flex items-center gap-2">
+                <span className="opacity-60">Player:</span>
+                {renderCardConfidence("player")}
+              </div>
+              <div className="pl-4">
+                {activeCardAttributes?.player || (
+                  <span className="opacity-40">—</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="opacity-60">Team:</span>
+                {renderCardConfidence("team")}
+              </div>
+              <div className="pl-4">
+                {activeCardAttributes?.team || (
+                  <span className="opacity-40">—</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="opacity-60">Year:</span>
+                {renderCardConfidence("year")}
+              </div>
+              <div className="pl-4">
+                {activeCardAttributes?.year || (
+                  <span className="opacity-40">—</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="opacity-60">Set:</span>
+                {renderCardConfidence("setName")}
+              </div>
+              <div className="pl-4">
+                {activeCardAttributes?.set ||
+                  activeCardAttributes?.setName || (
+                    <span className="opacity-40">—</span>
+                  )}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="opacity-60">Parallel:</span>
+                {renderCardConfidence("parallel")}
+              </div>
+              <div className="pl-4">
+                {activeCardAttributes?.parallel || (
+                  <span className="opacity-40">—</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="opacity-60">Card #:</span>
+                {renderCardConfidence("cardNumber")}
+              </div>
+              <div className="pl-4">
+                {activeCardAttributes?.cardNumber || (
+                  <span className="opacity-40">—</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {activeCornerData && (
+            <div className="lux-card mb-8">
+              <div className="text-xs uppercase opacity-70 tracking-wide mb-3">
+                Corner Inspection
+              </div>
+              <div className="space-y-4">
+                {["front", "back"].map((side) => {
+                  const cornerSet = activeCornerData?.[side];
+                  if (!cornerSet) return null;
+                  const condition =
+                    activeCardAttributes?.cornerCondition?.[side];
+                  const prettySide = side === "front" ? "Front" : "Back";
+                  return (
+                    <div key={side}>
+                      <div className="flex items-center gap-2 text-xs uppercase tracking-[0.35em] opacity-70">
+                        {prettySide} Corners
+                        {renderCornerBadge(condition?.confidence)}
+                      </div>
+                      {condition?.description && (
+                        <div className="text-xs opacity-60 mt-1">
+                          Looks {condition.description}.
+                        </div>
+                      )}
+                      <div className="grid grid-cols-2 gap-3 mt-3">
+                        {Object.entries(CORNER_LABELS).map(([key, label]) => {
+                          const entry = cornerSet[key];
+                          return (
+                            <div
+                              key={`${side}-${key}`}
+                              className="text-center text-[11px] uppercase tracking-[0.25em]"
+                            >
+                              <div className="mb-2 rounded-2xl border border-white/10 bg-black/30 overflow-hidden">
+                                {entry?.image ? (
+                                  <img
+                                    src={entry.image}
+                                    alt={`${prettySide} ${label}`}
+                                    className="w-full h-24 object-cover"
+                                  />
+                                ) : (
+                                  <div className="h-24 flex items-center justify-center text-[10px] opacity-40">
+                                    No data
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex items-center justify-center gap-2 text-[10px] tracking-[0.3em]">
+                                {label}
+                                {renderCornerBadge(entry?.confidence)}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="lux-card mb-8">
+            <div className="text-xs uppercase opacity-70 tracking-wide mb-3">
+              Grading Assist
+            </div>
+            {activeGrading ? (
+              <div className="space-y-1 text-sm opacity-85">
+                <div>
+                  <span className="opacity-60">Centering:</span>{" "}
+                  {activeGrading.centering || "—"}
+                </div>
+                <div>
+                  <span className="opacity-60">Corners:</span>{" "}
+                  {activeGrading.corners || "—"}
+                </div>
+                <div>
+                  <span className="opacity-60">Edges:</span>{" "}
+                  {activeGrading.edges || "—"}
+                </div>
+                <div>
+                  <span className="opacity-60">Surface:</span>{" "}
+                  {activeGrading.surface || "—"}
+                </div>
+              </div>
+            ) : (
+              <div className="text-sm text-white/55">
+                No grading data available for this card yet.
+              </div>
+            )}
+          </div>
+
+          {activePricing && (
+            <div className="lux-card mb-8">
+              <div className="text-xs uppercase opacity-70 tracking-wide mb-3">
+                Market Value Assist
+              </div>
+
+              <div className="space-y-1 text-sm opacity-85">
+                <div>
+                  <span className="opacity-60">Recent Low:</span>{" "}
+                  {activePricing.low ? `$${activePricing.low}` : "—"}
+                </div>
+                <div>
+                  <span className="opacity-60">Recent Mid:</span>{" "}
+                  {activePricing.mid ? `$${activePricing.mid}` : "—"}
+                </div>
+                <div>
+                  <span className="opacity-60">Recent High:</span>{" "}
+                  {activePricing.high ? `$${activePricing.high}` : "—"}
+                </div>
+                <div className="mt-2">
+                  <span className="opacity-60">Suggested List Price:</span>{" "}
+                  {activePricing.suggestedListPrice
+                    ? `$${activePricing.suggestedListPrice}`
+                    : "—"}
+                </div>
+                <div>
+                  <span className="opacity-60">Confidence:</span>{" "}
+                  {activePricing.confidence || "—"}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 mt-4">
+                <button
+                  onClick={() => {
+                    const encoded = encodeURIComponent(listingTitle || "");
+                    if (!encoded) return;
+                    window.open(
+                      `https://www.ebay.com/sch/i.html?_nkw=${encoded}`,
+                      "_blank",
+                      "noopener"
+                    );
+                  }}
+                  className="lux-small-btn"
+                >
+                  Open eBay
+                </button>
+
+                <button
+                  onClick={() => {
+                    const encoded = encodeURIComponent(listingTitle || "");
+                    if (!encoded) return;
+                    window.open(
+                      `https://www.mercari.com/search/?keyword=${encoded}`,
+                      "_blank",
+                      "noopener"
+                    );
+                  }}
+                  className="lux-small-btn"
+                >
+                  Open Mercari
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (!listingTitle) return;
+                    navigator?.clipboard?.writeText?.(listingTitle);
+                  }}
+                  className="lux-small-btn"
+                >
+                  Copy Title
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       <div className="fixed top-4 right-4 z-50 flex flex-col items-end gap-2">
         <div className="text-xs uppercase tracking-[0.35em] text-white/70">
           Card {currentIndex + 1} / {batchItems.length}
