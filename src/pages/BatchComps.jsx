@@ -9,7 +9,7 @@ function BatchCompsInner() {
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
   const { batchItems, setBatch } = useBatchStore();
-  const { setBatchMode, resetListing, setListing } = useListingStore();
+  const { setBatchMode } = useListingStore();
 
   useEffect(() => {
     setBatchMode("sports_cards");
@@ -69,19 +69,8 @@ function BatchCompsInner() {
   };
 
   const handlePrepCard = (item) => {
-    if (!item) return;
-    resetListing("sports_cards");
-    setListing({
-      category: "Sports Cards",
-      photos: item.photos || [],
-      secondaryPhotos: item.secondaryPhotos || [],
-      cornerPhotos: item.cornerPhotos || [],
-      cardIntel: item.cardIntel || null,
-      cardAttributes: item.cardAttributes || null,
-      pricing: item.pricing || null,
-      title: item.title || "",
-    });
-    navigate("/card-prep");
+    if (!item?.id) return;
+    navigate(`/batch-card-prep?cardId=${item.id}`);
   };
 
   const renderCard = (item) => {
