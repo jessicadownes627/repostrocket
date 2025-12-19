@@ -32,10 +32,11 @@ export default function BatchCardPrep() {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedId = searchParams.get("cardId");
   const { batchItems, updateBatchItem } = useBatchStore();
-  const { listingData, setListing, setListingField } = useListingStore();
+  const { listingData, setListing, setListingField, setBatchItems } = useListingStore();
   const loadedCardIdRef = useRef(null);
   const [analysisError, setAnalysisError] = useState("");
   const [approving, setApproving] = useState(false);
+  const [launching, setLaunching] = useState(false);
 
   const hasCards = batchItems.length > 0;
 
@@ -77,6 +78,15 @@ export default function BatchCardPrep() {
     : currentCard?.pricing || activeCardIntel?.pricing || null;
   const activeCornerData = activeCardAttributes?.corners || null;
   const activeGrading = activeCardAttributes?.grading || null;
+  const activePhotos = listingMatchesCard
+    ? listingData.photos || currentCard?.photos || []
+    : currentCard?.photos || [];
+  const activeSecondaryPhotos = listingMatchesCard
+    ? listingData.secondaryPhotos || currentCard?.secondaryPhotos || []
+    : currentCard?.secondaryPhotos || [];
+  const activeCornerPhotos = listingMatchesCard
+    ? listingData.cornerPhotos || currentCard?.cornerPhotos || []
+    : currentCard?.cornerPhotos || [];
   const listingTitle = listingMatchesCard
     ? listingData.title || currentCard?.title || ""
     : currentCard?.title || "";
@@ -290,6 +300,32 @@ export default function BatchCardPrep() {
       });
     } finally {
       setApproving(false);
+    }
+  };
+
+  const handleSendToLaunchDeck = () => {
+    if (!showAnalysisResults || launching) return;
+    setLaunching(true);
+    try {
+      const payloadItem = {
+        id: currentCard.id,
+        title: listingTitle || "",
+        description: "",
+        price: activePricing?.suggestedListPrice
+          ? String(activePricing.suggestedListPrice)
+          : "",
+        category: "Sports Cards",
+        cardAttributes: activeCardAttributes || null,
+        cardIntel: activeCardIntel || null,
+        pricing: activePricing || null,
+        cornerPhotos: activeCornerPhotos || [],
+        photos: activePhotos || [],
+        secondaryPhotos: activeSecondaryPhotos || [],
+      };
+      setBatchItems([payloadItem]);
+      navigate("/batch-launch", { state: { items: [payloadItem] } });
+    } finally {
+      setLaunching(false);
     }
   };
 
@@ -526,6 +562,19 @@ export default function BatchCardPrep() {
               </div>
             </div>
           )}
+
+          <div className="mt-8">
+            <button
+              type="button"
+              className={`w-full py-4 text-lg font-semibold rounded-2xl lux-continue-btn ${
+                launching ? "opacity-60 cursor-not-allowed" : ""
+              }`}
+              onClick={handleSendToLaunchDeck}
+              disabled={launching}
+            >
+              {launching ? "Sending…" : "Send to Launch Deck →"}
+            </button>
+          </div>
         </div>
       )}
       <div className="fixed top-4 right-4 z-50 flex flex-col items-end gap-2">
