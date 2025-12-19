@@ -23,6 +23,7 @@ const CORNER_NAME_MAP = {
 };
 const CORNER_SIZE_RATIO = 0.22;
 const CORNER_PADDING_RATIO = 0.12;
+export const MAX_CORNER_NUDGE_RATIO = 0.08;
 
 async function ensureDataUrlFromSource(source) {
   if (!source) return "";
@@ -208,6 +209,12 @@ export function extractCornerPhotoEntries(intel) {
         side: sideLabel,
         cornerKey: key,
         confidence: data.confidence || "low",
+        manualOverride: Boolean(data.manualOverride),
+        offsetRatioX: data.offsetRatioX || 0,
+        offsetRatioY: data.offsetRatioY || 0,
+        sourceX: data.sourceX ?? null,
+        sourceY: data.sourceY ?? null,
+        sourceSize: data.sourceSize ?? null,
       });
     });
   });
@@ -285,10 +292,26 @@ async function extractCornersFromImage(dataUrl) {
       canvas.height = paddedSize;
       const ctx = canvas.getContext("2d");
       const crops = {
-        topLeft: cropCorner(ctx, img, -padding, -padding, paddedSize),
-        topRight: cropCorner(ctx, img, img.width - size - padding, -padding, paddedSize),
-        bottomLeft: cropCorner(ctx, img, -padding, img.height - size - padding, paddedSize),
-        bottomRight: cropCorner(ctx, img, img.width - size - padding, img.height - size - padding, paddedSize),
+        topLeft: {
+          ...cropCorner(ctx, img, -padding, -padding, paddedSize),
+          offsetRatioX: 0,
+          offsetRatioY: 0,
+        },
+        topRight: {
+          ...cropCorner(ctx, img, img.width - size - padding, -padding, paddedSize),
+          offsetRatioX: 0,
+          offsetRatioY: 0,
+        },
+        bottomLeft: {
+          ...cropCorner(ctx, img, -padding, img.height - size - padding, paddedSize),
+          offsetRatioX: 0,
+          offsetRatioY: 0,
+        },
+        bottomRight: {
+          ...cropCorner(ctx, img, img.width - size - padding, img.height - size - padding, paddedSize),
+          offsetRatioX: 0,
+          offsetRatioY: 0,
+        },
       };
       resolve(crops);
     };
@@ -308,6 +331,9 @@ function cropCorner(ctx, img, sx, sy, size) {
     image: canvasToDataUrl(ctx.canvas),
     score,
     confidence: mapScoreToConfidence(score),
+    sourceX: clampedX,
+    sourceY: clampedY,
+    sourceSize: size,
   };
 }
 
@@ -321,29 +347,95 @@ function canvasToDataUrl(canvas) {
 
 function computeCornerScore(imageData) {
   if (!imageData) return 0;
-  const { data } = imageData;
+  const { data, width, height } = imageData;
+  if (!width || !height) return 0;
+  const total = width * height;
+  if (!total) return 0;
+
+  const brightness = new Array(total);
   let sum = 0;
   let sumSq = 0;
-  const total = data.length / 4;
-  if (!total) return 0;
-  for (let i = 0; i < data.length; i += 4) {
-    const r = data[i];
-    const g = data[i + 1];
-    const b = data[i + 2];
-    const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
-    sum += brightness;
-    sumSq += brightness * brightness;
+  for (let idx = 0, pixel = 0; idx < data.length; idx += 4, pixel += 1) {
+    const r = data[idx];
+    const g = data[idx + 1];
+    const b = data[idx + 2];
+    const value = 0.299 * r + 0.587 * g + 0.114 * b;
+    brightness[pixel] = value;
+    sum += value;
+    sumSq += value * value;
   }
   const mean = sum / total;
   const variance = sumSq / total - mean * mean;
-  const stdDev = Math.sqrt(Math.max(variance, 0));
-  return Math.round(stdDev);
+  const textureScore = Math.sqrt(Math.max(variance, 0));
+
+  let gradientSum = 0;
+  let strongEdgePixels = 0;
+  let centeredEdgePixels = 0;
+  const edgeThreshold = 12;
+  const marginX = Math.max(1, Math.round(width * 0.1));
+  const marginY = Math.max(1, Math.round(height * 0.1));
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = y * width + x;
+      const current = brightness[index];
+      let gradX = 0;
+      let gradY = 0;
+      if (x < width - 1) {
+        gradX = Math.abs(current - brightness[index + 1]);
+      }
+      if (y < height - 1) {
+        gradY = Math.abs(current - brightness[index + width]);
+      }
+      const gradient = gradX + gradY;
+      gradientSum += gradient;
+      if (gradient > edgeThreshold) {
+        strongEdgePixels += 1;
+        if (
+          x > marginX &&
+          x < width - marginX &&
+          y > marginY &&
+          y < height - marginY
+        ) {
+          centeredEdgePixels += 1;
+        }
+      }
+    }
+  }
+
+  const clarityScore = (gradientSum / total) * 1.2;
+  const framingScore =
+    strongEdgePixels > 0
+      ? (centeredEdgePixels / strongEdgePixels) * 60
+      : 0;
+
+  const combined =
+    textureScore * 0.35 + clarityScore * 0.45 + framingScore * 0.2;
+
+  return Math.round(Math.min(combined, 60));
 }
 
 function mapScoreToConfidence(score) {
-  if (score >= 40) return "high";
-  if (score >= 22) return "medium";
+  if (score >= 38) return "high";
+  if (score >= 24) return "medium";
   return "low";
+}
+
+function getCornerBasePosition(cornerKey, imgWidth, imgHeight, size, padding) {
+  switch (cornerKey) {
+    case "topRight":
+      return { x: imgWidth - size - padding, y: -padding };
+    case "bottomLeft":
+      return { x: -padding, y: imgHeight - size - padding };
+    case "bottomRight":
+      return {
+        x: imgWidth - size - padding,
+        y: imgHeight - size - padding,
+      };
+    case "topLeft":
+    default:
+      return { x: -padding, y: -padding };
+  }
 }
 
 function buildCornerConditionSummary(corners = {}) {
@@ -377,4 +469,76 @@ function summarizeSide(sideCorners) {
     confidence,
     description,
   };
+}
+
+export async function regenerateCornerImage(
+  sourceImageUrl,
+  cornerKey,
+  offsetRatioX = 0,
+  offsetRatioY = 0,
+  previousMeta = {}
+) {
+  if (!sourceImageUrl || !cornerKey) return null;
+  const trimmed = await cropToCardBounds(sourceImageUrl);
+  const usableSrc = trimmed?.dataUrl || sourceImageUrl;
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const baseCrop = Math.round(Math.min(img.width, img.height) * CORNER_SIZE_RATIO);
+      const basePadding = Math.round(baseCrop * CORNER_PADDING_RATIO);
+      const fallbackSize = baseCrop + basePadding * 2;
+      const paddedSize = previousMeta?.sourceSize || fallbackSize;
+      if (!paddedSize || paddedSize < 8) {
+        resolve(null);
+        return;
+      }
+      const defaultBase = getCornerBasePosition(
+        cornerKey,
+        img.width,
+        img.height,
+        baseCrop,
+        basePadding
+      );
+      const maxX = Math.max(0, img.width - paddedSize);
+      const maxY = Math.max(0, img.height - paddedSize);
+      const inferredBaseX =
+        typeof previousMeta?.sourceX === "number" ? previousMeta.sourceX : defaultBase.x;
+      const inferredBaseY =
+        typeof previousMeta?.sourceY === "number" ? previousMeta.sourceY : defaultBase.y;
+      const baseX = Math.max(0, Math.min(maxX, inferredBaseX));
+      const baseY = Math.max(0, Math.min(maxY, inferredBaseY));
+      const clampedX =
+        Math.max(-MAX_CORNER_NUDGE_RATIO, Math.min(MAX_CORNER_NUDGE_RATIO, offsetRatioX || 0));
+      const clampedY =
+        Math.max(-MAX_CORNER_NUDGE_RATIO, Math.min(MAX_CORNER_NUDGE_RATIO, offsetRatioY || 0));
+      const offsetPixels = paddedSize;
+      const candidateX = baseX + clampedX * offsetPixels;
+      const candidateY = baseY + clampedY * offsetPixels;
+      const nextX = Math.max(0, Math.min(maxX, candidateX));
+      const nextY = Math.max(0, Math.min(maxY, candidateY));
+      const canvas = document.createElement("canvas");
+      canvas.width = paddedSize;
+      canvas.height = paddedSize;
+      const result = cropCorner(
+        canvas.getContext("2d"),
+        img,
+        nextX,
+        nextY,
+        paddedSize
+      );
+      resolve({
+        dataUrl: result.image,
+        confidence: result.confidence,
+        offsetRatioX: clampedX,
+        offsetRatioY: clampedY,
+        sourceX: nextX,
+        sourceY: nextY,
+        sourceSize: paddedSize,
+      });
+    };
+    img.onerror = () => resolve(null);
+    img.src = usableSrc;
+  });
 }

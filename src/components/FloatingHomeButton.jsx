@@ -9,8 +9,8 @@ export default function FloatingHomeButton() {
       onClick={() => navigate("/")}
       style={{
         position: "fixed",
-        bottom: "20px",
-        right: "20px",
+        bottom: "max(env(safe-area-inset-bottom, 16px), 20px)",
+        right: "max(env(safe-area-inset-right, 16px), 20px)",
         zIndex: 2147483647,
         padding: "14px 18px",
         borderRadius: "999px",

@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 
 const STEPS = [
-  "Images uploaded",
-  "Corners extracted",
+  "Upload confirmed",
   "Reading card details",
-  "Evaluating condition",
-  "Estimating market value",
+  "Inspecting corners",
+  "Estimating condition",
+  "Building listing",
 ];
 
 export default function AnalysisProgress({ active }) {
@@ -17,15 +17,15 @@ export default function AnalysisProgress({ active }) {
       return;
     }
 
-    setStage(1);
+    setStage(2);
     const timers = [];
-    const increments = [600, 1200, 1200, 900];
+    const increments = [750, 750, 750, 750];
     let accumulated = 0;
-    increments.forEach((duration, idx) => {
+    increments.forEach((duration) => {
       accumulated += duration;
       timers.push(
         setTimeout(() => {
-          setStage(Math.min(STEPS.length, idx + 2));
+          setStage((prev) => Math.min(STEPS.length + 1, prev + 1));
         }, accumulated)
       );
     });

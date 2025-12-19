@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { useListingStore } from "../store/useListingStore";
 import { buildCardTitle } from "../utils/buildCardTitle";
 import { shareImage, getImageSaveLabel } from "../utils/saveImage";
-import FloatingHomeButton from "../components/FloatingHomeButton";
 
 export default function LaunchListing() {
   const { listingData } = useListingStore();
@@ -328,7 +327,6 @@ export default function LaunchListing() {
         </div>
         </div>
       </div>
-      <FloatingHomeButton />
     </>
   );
 }

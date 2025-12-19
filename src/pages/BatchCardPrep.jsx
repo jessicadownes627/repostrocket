@@ -9,7 +9,6 @@ import {
   extractCornerPhotoEntries,
 } from "../utils/cardIntel";
 import { buildCardTitle } from "../utils/buildCardTitle";
-import CornerAdjustModal from "../components/CornerAdjustModal";
 import AnalysisProgress from "../components/AnalysisProgress";
 
 const CORNER_LABELS = {
@@ -39,7 +38,8 @@ export default function BatchCardPrep() {
   const [analysisError, setAnalysisError] = useState("");
   const [approving, setApproving] = useState(false);
   const [launching, setLaunching] = useState(false);
-  const [cornerAdjustTarget, setCornerAdjustTarget] = useState(null);
+  const [analysisVisible, setAnalysisVisible] = useState(false);
+  const [analysisInitialized, setAnalysisInitialized] = useState(false);
 
   const hasCards = batchItems.length > 0;
 
@@ -126,7 +126,7 @@ export default function BatchCardPrep() {
     const prepComplete =
       Boolean(listingData.photos?.length) &&
       Boolean(listingData.secondaryPhotos?.length) &&
-      (listingData.cornerPhotos?.length || 0) >= 4;
+      (listingData.cornerPhotos?.length || 0) >= 8;
     updateBatchItem(currentCard.id, {
       photos: listingData.photos || [],
       secondaryPhotos: listingData.secondaryPhotos || [],
@@ -193,7 +193,7 @@ export default function BatchCardPrep() {
     Array.isArray(listingData.secondaryPhotos) &&
     listingData.secondaryPhotos.length > 0 &&
     Array.isArray(listingData.cornerPhotos) &&
-    listingData.cornerPhotos.length >= 4;
+    listingData.cornerPhotos.length >= 8;
 
   const approveDisabled = !listingHasFullPrep || approving;
 
@@ -215,6 +215,14 @@ export default function BatchCardPrep() {
     );
   };
 
+  const getConfidenceDescription = (level) => {
+    if (!level) return "";
+    if (level === "high") return "High confidence: corner image is crisp and well-framed.";
+    if (level === "medium")
+      return "Medium confidence: corner is visible but slightly cropped, angled, or soft.";
+    return "Low confidence: image lacks clarity — consider retaking if the corner matters.";
+  };
+
   const renderCornerBadge = (level) => {
     if (!level) return null;
     const tone =
@@ -226,6 +234,7 @@ export default function BatchCardPrep() {
     return (
       <span
         className={`ml-2 text-[9px] uppercase tracking-[0.3em] px-2 py-0.5 rounded-full border ${tone}`}
+        title={getConfidenceDescription(level)}
       >
         {level}
       </span>
@@ -236,6 +245,19 @@ export default function BatchCardPrep() {
     currentCard.approvedForAnalysis &&
       (activeCardAttributes || activeCardIntel || activePricing)
   );
+  const canShowAnalysisView = approving || showAnalysisResults;
+
+  useEffect(() => {
+    if (!canShowAnalysisView) {
+      setAnalysisVisible(false);
+      setAnalysisInitialized(false);
+      return;
+    }
+    if (!analysisInitialized) {
+      setAnalysisVisible(true);
+      setAnalysisInitialized(true);
+    }
+  }, [canShowAnalysisView, analysisInitialized]);
 
   const handleApproveForAnalysis = async () => {
     if (!currentCard || approveDisabled) return;
@@ -247,8 +269,9 @@ export default function BatchCardPrep() {
       setAnalysisError("Need front & back photos before analysis.");
       return;
     }
-    setApproving(true);
     setAnalysisError("");
+    setAnalysisVisible(true);
+    setApproving(true);
     try {
       try {
         console.log("[QA] analyzeCardImages invoked", {
@@ -316,43 +339,6 @@ export default function BatchCardPrep() {
     }
   };
 
-  const handleCornerAdjustSave = useCallback(
-    (target, dataUrl) => {
-      if (!target || !dataUrl) return;
-      const sideLabel = target.sideLabel?.toLowerCase() || "";
-      const updatedPhotos = (listingData.cornerPhotos || []).map((entry) =>
-        entry &&
-        entry.cornerKey === target.cornerKey &&
-        (entry.side || "").toLowerCase() === sideLabel
-          ? { ...entry, url: dataUrl, manualOverride: true }
-          : entry
-      );
-      setListingField("cornerPhotos", updatedPhotos);
-
-      const existingCorners = listingData.cardAttributes?.corners || {};
-      const sideKey = target.sideKey;
-      const sideSet = existingCorners?.[sideKey] || {};
-      const updatedSide = {
-        ...sideSet,
-        [target.cornerKey]: {
-          ...(sideSet?.[target.cornerKey] || {}),
-          image: dataUrl,
-          manualOverride: true,
-        },
-      };
-
-      setListingField("cardAttributes", {
-        ...(listingData.cardAttributes || {}),
-        corners: {
-          ...existingCorners,
-          [sideKey]: updatedSide,
-        },
-      });
-      setCornerAdjustTarget(null);
-    },
-    [listingData.cornerPhotos, listingData.cardAttributes, setListingField]
-  );
-
   const handleSendToLaunchDeck = () => {
     if (!showAnalysisResults || launching) return;
     setLaunching(true);
@@ -391,11 +377,26 @@ export default function BatchCardPrep() {
     }
   };
 
-  return (
-    <>
-      <MagicCardPrep analysisActive={approving} />
-      {showAnalysisResults && (
-        <div className="max-w-4xl mx-auto w-full px-6 mt-10 pb-6">
+  const renderAnalysisView = () => {
+    if (!canShowAnalysisView) {
+      return null;
+    }
+    if (!showAnalysisResults) {
+      return (
+        <div className="app-wrapper min-h-screen px-6 py-10 flex flex-col bg-black text-white">
+          <div className="flex-1 flex flex-col items-center justify-center text-center gap-4 px-4">
+            <p className="text-lg text-white/70">Analyzing this card…</p>
+            <AnalysisProgress active={approving} />
+            {analysisError && (
+              <p className="text-sm text-[#F6BDB2]">{analysisError}</p>
+            )}
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div className="app-wrapper min-h-screen px-6 py-10 flex flex-col bg-black text-white">
+        <div className="max-w-4xl mx-auto w-full px-6 mt-4 pb-6">
           <HeaderBar label="Card Details" />
 
           <div className="lux-card mb-8">
@@ -463,9 +464,12 @@ export default function BatchCardPrep() {
 
           {activeCornerData && (
             <div className="lux-card mb-8">
-              <div className="text-xs uppercase opacity-70 tracking-wide mb-3">
+              <div className="flex items-center gap-2 text-xs uppercase opacity-70 tracking-wide mb-2">
                 Corner Inspection
               </div>
+              <p className="text-xs text-white/55 mb-4">
+                Confidence only reflects image clarity (High = clearly framed, Medium = visible but a bit angled). It does not judge card condition.
+              </p>
               <div className="space-y-4">
                 {["front", "back"].map((side) => {
                   const cornerSet = activeCornerData?.[side];
@@ -497,7 +501,9 @@ export default function BatchCardPrep() {
                                   <img
                                     src={entry.image}
                                     alt={`${prettySide} ${label}`}
-                                    className={`w-full h-24 object-cover ${entry.manualOverride ? "ring-1 ring-[#E8D5A8]" : ""}`}
+                                    className={`w-full h-24 object-cover ${
+                                      entry?.manualOverride ? "ring-1 ring-[#E8D5A8]" : ""
+                                    }`}
                                   />
                                 ) : (
                                   <div className="h-24 flex items-center justify-center text-[10px] opacity-40">
@@ -509,23 +515,6 @@ export default function BatchCardPrep() {
                                 {label}
                                 {renderCornerBadge(entry?.confidence)}
                               </div>
-                              {entry?.image && (
-                                <button
-                                  type="button"
-                                  className="mt-2 text-[10px] tracking-[0.25em] text-[#E8D5A8]"
-                                  onClick={() =>
-                                    setCornerAdjustTarget({
-                                      url: entry.image,
-                                      label: `${prettySide} ${label}`,
-                                      sideKey: side,
-                                      sideLabel: prettySide,
-                                      cornerKey: key,
-                                    })
-                                  }
-                                >
-                                  Adjust
-                                </button>
-                              )}
                             </div>
                           );
                         })}
@@ -534,6 +523,9 @@ export default function BatchCardPrep() {
                   );
                 })}
               </div>
+              <p className="mt-4 text-xs text-white/55">
+                Corners are auto-detected for condition analysis. Retake if alignment looks off.
+              </p>
             </div>
           )}
 
@@ -655,7 +647,17 @@ export default function BatchCardPrep() {
             </button>
           </div>
         </div>
-      )}
+      </div>
+    );
+  };
+
+  const renderPrepView = () => (
+    <MagicCardPrep analysisActive={approving} />
+  );
+
+  return (
+    <>
+      {analysisVisible ? renderAnalysisView() : renderPrepView()}
       <div className="fixed top-4 right-4 z-50 flex flex-col items-end gap-2">
         <div className="text-xs uppercase tracking-[0.35em] text-white/70">
           Card {currentIndex + 1} / {batchItems.length}
@@ -678,6 +680,15 @@ export default function BatchCardPrep() {
             Next →
           </button>
         </div>
+        {canShowAnalysisView && (
+          <button
+            type="button"
+            className="lux-small-btn"
+            onClick={() => setAnalysisVisible((prev) => !prev)}
+          >
+            {analysisVisible ? "View Prep" : "View Analysis"}
+          </button>
+        )}
         <button
           type="button"
           className="text-[11px] uppercase tracking-[0.3em] text-white/70 hover:text-white transition"
@@ -686,57 +697,37 @@ export default function BatchCardPrep() {
           Back to Batch List
         </button>
       </div>
-      <div className="fixed bottom-6 right-6 z-50 w-full max-w-sm">
-        <div className="bg-black/70 border border-white/15 rounded-2xl p-4 shadow-[0_10px_40px_rgba(0,0,0,0.45)] backdrop-blur">
-          <div className="text-[11px] uppercase tracking-[0.35em] text-white/60 mb-2">
-            Batch Approval
-          </div>
-          <p className="text-sm text-white/80 mb-3">
-            Confirm the photos look good, then manually approve this card for AI analysis.
-          </p>
-          {approving && <AnalysisProgress active={approving} />}
-          <button
-            type="button"
-            className={`w-full py-3 text-center text-base font-semibold rounded-xl lux-continue-btn ${
-              approveDisabled ? "opacity-40 cursor-not-allowed" : ""
-            }`}
-            disabled={approveDisabled}
-            onClick={handleApproveForAnalysis}
-          >
-            {approving ? "Approving…" : "Approve for Analysis"}
-          </button>
-          {analysisError && (
-            <div className="mt-3 text-xs text-[#F6BDB2]">{analysisError}</div>
-          )}
-          {currentCard.approvedForAnalysis && !analysisError && (
-            <div className="mt-3 text-xs text-[#E8DCC0]">
-              Approved — running Single Listing analysis.
+      {!analysisVisible && (
+        <div className="fixed bottom-6 right-6 z-50 w-full max-w-sm">
+          <div className="bg-black/70 border border-white/15 rounded-2xl p-4 shadow-[0_10px_40px_rgba(0,0,0,0.45)] backdrop-blur">
+            <div className="text-[11px] uppercase tracking-[0.35em] text-white/60 mb-2">
+              Batch Approval
             </div>
-          )}
+            <p className="text-sm text-white/80 mb-3">
+              Confirm the photos look good, then manually approve this card for AI analysis.
+            </p>
+            {approving && <AnalysisProgress active={approving} />}
+            <button
+              type="button"
+              className={`w-full py-3 text-center text-base font-semibold rounded-xl lux-continue-btn ${
+                approveDisabled ? "opacity-40 cursor-not-allowed" : ""
+              }`}
+              disabled={approveDisabled}
+              onClick={handleApproveForAnalysis}
+            >
+              {approving ? "Approving…" : "Approve for Analysis"}
+            </button>
+            {analysisError && (
+              <div className="mt-3 text-xs text-[#F6BDB2]">{analysisError}</div>
+            )}
+            {currentCard.approvedForAnalysis && !analysisError && (
+              <div className="mt-3 text-xs text-[#E8DCC0]">
+                Approved — running Single Listing analysis.
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-      <CornerAdjustModal
-        target={
-          cornerAdjustTarget
-            ? {
-                url: cornerAdjustTarget.url,
-                label: cornerAdjustTarget.label,
-              }
-            : null
-        }
-        onClose={() => setCornerAdjustTarget(null)}
-        onSave={(dataUrl) => {
-          if (!cornerAdjustTarget) return;
-          handleCornerAdjustSave(
-            {
-              sideLabel: cornerAdjustTarget.sideLabel,
-              sideKey: cornerAdjustTarget.sideKey,
-              cornerKey: cornerAdjustTarget.cornerKey,
-            },
-            dataUrl
-          );
-        }}
-      />
+      )}
     </>
   );
 }

@@ -39,7 +39,6 @@ import {
 } from "../utils/savedListings";
 import { shareImage, getImageSaveLabel } from "../utils/saveImage";
 import "../styles/overrides.css";
-import CornerAdjustModal from "../components/CornerAdjustModal";
 import AnalysisProgress from "../components/AnalysisProgress";
 
 // --- TAG FALLBACKS (must be defined first) ---
@@ -55,6 +54,10 @@ const CORNER_LABELS = {
   topRight: "Top Right",
   bottomLeft: "Bottom Left",
   bottomRight: "Bottom Right",
+};
+const VIEW_STAGES = {
+  ANALYSIS: "analysis",
+  EDIT: "edit",
 };
 const GRADING_PATHS = {
   featured: null, // reserved for future partner
@@ -100,6 +103,54 @@ const hasListingDraftData = (data) => {
     Array.isArray(data.cornerPhotos) && data.cornerPhotos.length > 0;
   const hasTags = Array.isArray(data.tags) && data.tags.length > 0;
   const hasIntel = Boolean(data.cardAttributes || data.apparelAttributes);
+  if (viewStage === VIEW_STAGES.ANALYSIS) {
+    return (
+      <div className="app-wrapper px-6 py-10 max-w-2xl mx-auto">
+        <button
+          onClick={() => navigate(-1)}
+          className="text-left text-sm text-[#E8DCC0] uppercase tracking-[0.2em] mb-4 w-fit hover:opacity-80 transition"
+        >
+          ← Back
+        </button>
+        <h1 className="sparkly-header header-glitter text-center text-3xl mb-2">
+          Single Listing
+        </h1>
+        <p className="text-center text-sm opacity-65 mb-6">
+          Reading your confirmed photos for card details. Sit tight while we finish the scan.
+        </p>
+
+        <div className="lux-card relative">
+          <div
+            className={`relative analysis-scan-wrapper ${
+              displayedPhoto ? "analysis-scan-active" : ""
+            }`}
+          >
+            {displayedPhoto ? (
+              <img
+                src={displayedPhoto}
+                alt="Card photo"
+                className="max-w-[500px] w-full mx-auto rounded-xl shadow-[0_0_40px_rgba(0,0,0,0.4)] object-cover"
+              />
+            ) : (
+              <div className="py-16 text-center text-sm opacity-70">
+                Awaiting photo confirmation…
+              </div>
+            )}
+          </div>
+          <div className="mt-4 text-sm text-white/70 text-center">
+            {sportsStatusMessage?.text || "Analyzing card details now…"}
+          </div>
+          <div className="mt-4">
+            <AnalysisProgress active />
+          </div>
+          {cardError && (
+            <div className="mt-3 text-xs text-[#F6BDB2] text-center">{cardError}</div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     hasPhotos ||
     hasSecondary ||
@@ -183,7 +234,6 @@ export default function SingleListing() {
   const [composed, setComposed] = useState(null);
   const [exportLinks, setExportLinks] = useState(null);
   const [magicAccepted, setMagicAccepted] = useState({});
-  const [cornerAdjustTarget, setCornerAdjustTarget] = useState(null);
   const [magicError, setMagicError] = useState("");
   const [dynamicError, setDynamicError] = useState("");
   const [cardError, setCardError] = useState("");
@@ -234,6 +284,12 @@ export default function SingleListing() {
   const mainPhotoEntry = hasPhoto ? listingData.photos[0] : null;
   const mainPhoto = getPhotoUrl(mainPhotoEntry);
   const displayedPhoto = listingData?.editedPhoto || mainPhoto;
+  const backPhotoEntry =
+    Array.isArray(listingData?.secondaryPhotos) &&
+    listingData.secondaryPhotos.length > 0
+      ? listingData.secondaryPhotos[0]
+      : null;
+  const backPhoto = getPhotoUrl(backPhotoEntry);
 
   const cardAttributes = listingData?.cardAttributes || null;
   const cornerPhotos = listingData?.cornerPhotos || [];
@@ -280,6 +336,13 @@ export default function SingleListing() {
   }, [isSportsAnalysisMode, cardError, serverCardAnalyzing, cardAttributes]);
   const showPhotoTools = !isSportsAnalysisMode;
   const analysisActive = isSportsAnalysisMode && serverCardAnalyzing;
+  const [viewStage, setViewStage] = useState(
+    analysisActive ? VIEW_STAGES.ANALYSIS : VIEW_STAGES.EDIT
+  );
+
+  useEffect(() => {
+    setViewStage(analysisActive ? VIEW_STAGES.ANALYSIS : VIEW_STAGES.EDIT);
+  }, [analysisActive]);
   const hasResumableDraft = useMemo(
     () => hasListingDraftData(listingData),
     [listingData]
@@ -704,22 +767,34 @@ useEffect(() => {
     [apparelIntel]
   );
 
-  const renderCornerBadge = useCallback((level) => {
-    if (!level) return null;
-    const tone =
-      level === "high"
-        ? "text-emerald-300 border-emerald-300/40"
-        : level === "medium"
-        ? "text-[#CBB78A] border-[#CBB78A]/50"
-        : "text-white/60 border-white/20";
-    return (
-      <span
-        className={`ml-2 text-[9px] uppercase tracking-[0.3em] px-2 py-0.5 rounded-full border ${tone}`}
-      >
-        {level}
-      </span>
-    );
-  }, []);
+  const describeCornerConfidence = (level) => {
+    if (!level) return "";
+    if (level === "high") return "High confidence: corner image is clearly visible and well-framed.";
+    if (level === "medium")
+      return "Medium confidence: corner is visible but slightly cropped, angled, or soft.";
+    return "Low confidence: image lacks clarity — retake if the corner looks off.";
+  };
+
+  const renderCornerBadge = useCallback(
+    (level) => {
+      if (!level) return null;
+      const tone =
+        level === "high"
+          ? "text-emerald-300 border-emerald-300/40"
+          : level === "medium"
+          ? "text-[#CBB78A] border-[#CBB78A]/50"
+          : "text-white/60 border-white/20";
+      return (
+        <span
+          className={`ml-2 text-[9px] uppercase tracking-[0.3em] px-2 py-0.5 rounded-full border ${tone}`}
+          title={describeCornerConfidence(level)}
+        >
+          {level}
+        </span>
+      );
+    },
+    []
+  );
 
   const handleSaveCornerImages = useCallback(async () => {
     if (!cornerPhotos.length) return;
@@ -738,43 +813,6 @@ useEffect(() => {
       text: "Saved from Repost Rocket",
     });
   }, [cornerPhotos]);
-
-  const handleCornerAdjustSave = useCallback(
-    (target, dataUrl) => {
-      if (!target || !dataUrl) return;
-      const sideLabel = target.sideLabel?.toLowerCase() || "";
-      const updatedPhotos = (listingData.cornerPhotos || []).map((entry) =>
-        entry &&
-        entry.cornerKey === target.cornerKey &&
-        (entry.side || "").toLowerCase() === sideLabel
-          ? { ...entry, url: dataUrl, manualOverride: true }
-          : entry
-      );
-      setListingField("cornerPhotos", updatedPhotos);
-
-      const existingCorners = listingData.cardAttributes?.corners || {};
-      const sideKey = target.sideKey;
-      const sideSet = existingCorners?.[sideKey] || {};
-      const updatedSide = {
-        ...sideSet,
-        [target.cornerKey]: {
-          ...(sideSet?.[target.cornerKey] || {}),
-          image: dataUrl,
-          manualOverride: true,
-        },
-      };
-
-      setListingField("cardAttributes", {
-        ...(listingData.cardAttributes || {}),
-        corners: {
-          ...existingCorners,
-          [sideKey]: updatedSide,
-        },
-      });
-      setCornerAdjustTarget(null);
-    },
-    [listingData.cornerPhotos, listingData.cardAttributes, setListingField]
-  );
 
   useEffect(() => {
     if (magicAccepted?.title || parsingCard) {
@@ -1402,6 +1440,14 @@ useEffect(() => {
                 alt="Main Photo"
                 className="max-w-[500px] w-full mx-auto rounded-xl shadow-[0_0_40px_rgba(0,0,0,0.4)] object-cover"
               />
+              {analysisActive && (
+                <div className="corner-guides">
+                  <span className="corner-guide corner-guide--tl" />
+                  <span className="corner-guide corner-guide--tr" />
+                  <span className="corner-guide corner-guide--bl" />
+                  <span className="corner-guide corner-guide--br" />
+                </div>
+              )}
               {listingData?.editedPhoto && (
                 <div className="absolute top-2 right-2 z-10 px-2 py-1 rounded-md text-[10px] font-semibold bg-[#E8D5A8] text-black shadow-md border border-black/40">
                   Edited
@@ -1652,9 +1698,12 @@ useEffect(() => {
 
           {cardAttributes?.corners && (
             <div className="lux-card mb-8">
-              <div className="text-xs uppercase opacity-70 tracking-wide mb-3">
+              <div className="flex items-center gap-2 text-xs uppercase opacity-70 tracking-wide mb-2">
                 Corner Inspection
               </div>
+              <p className="text-xs text-white/55 mb-4">
+                Confidence only reflects image clarity (High = clearly framed, Medium = visible but slightly angled). It is not a grading score.
+              </p>
               <div className="space-y-4">
                 {["front", "back"].map((side) => {
                   const cornerSet = cardAttributes.corners?.[side];
@@ -1682,7 +1731,9 @@ useEffect(() => {
                                   <img
                                     src={entry.image}
                                     alt={`${prettySide} ${label}`}
-                                    className={`w-full h-24 object-cover ${entry.manualOverride ? "ring-1 ring-[#E8D5A8]" : ""}`}
+                                    className={`w-full h-24 object-cover ${
+                                      entry?.manualOverride ? "ring-1 ring-[#E8D5A8]" : ""
+                                    }`}
                                   />
                                 ) : (
                                   <div className="h-24 flex items-center justify-center text-[10px] opacity-40">
@@ -1694,23 +1745,6 @@ useEffect(() => {
                                 {label}
                                 {renderCornerBadge(entry?.confidence)}
                               </div>
-                              {entry?.image && (
-                                <button
-                                  type="button"
-                                  className="mt-2 text-[10px] tracking-[0.25em] text-[#E8D5A8]"
-                                  onClick={() =>
-                                    setCornerAdjustTarget({
-                                      url: entry.image,
-                                      label: `${prettySide} ${label}`,
-                                      sideKey: side,
-                                      sideLabel: prettySide,
-                                      cornerKey: key,
-                                    })
-                                  }
-                                >
-                                  Adjust
-                                </button>
-                              )}
                             </div>
                           );
                         })}
@@ -1719,6 +1753,9 @@ useEffect(() => {
                   );
                 })}
               </div>
+              <p className="mt-4 text-xs text-white/55">
+                Corners are auto-detected for condition analysis. Retake if alignment looks off.
+              </p>
               {cornerPhotos.length > 0 && (
                 <button
                   type="button"
@@ -2537,28 +2574,6 @@ useEffect(() => {
           </div>
         </div>
       )}
-      <CornerAdjustModal
-        target={
-          cornerAdjustTarget
-            ? {
-                url: cornerAdjustTarget.url,
-                label: cornerAdjustTarget.label,
-              }
-            : null
-        }
-        onClose={() => setCornerAdjustTarget(null)}
-        onSave={(dataUrl) => {
-          if (!cornerAdjustTarget) return;
-          handleCornerAdjustSave(
-            {
-              sideLabel: cornerAdjustTarget.sideLabel,
-              sideKey: cornerAdjustTarget.sideKey,
-              cornerKey: cornerAdjustTarget.cornerKey,
-            },
-            dataUrl
-          );
-        }}
-      />
     </div>
   );
 }
