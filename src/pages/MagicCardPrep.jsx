@@ -22,10 +22,14 @@ const STAGES = {
   CONFIRM: "confirm",
 };
 
-const ADJUST_STEP_RATIO = 0.04;
+const ADJUST_BASE_STEP_RATIO = 0.018;
+const ADJUST_ACCEL_WINDOW_MS = 420;
+const ADJUST_ACCEL_MULTIPLIER = 0.55;
+const ADJUST_HOLD_INTERVAL_MS = 140;
 
 const normalizeCornerEntry = (entry) => {
   if (!entry) return entry;
+  const bounds = entry.initialCropBounds || {};
   return {
     ...entry,
     offsetRatioX: entry.offsetRatioX || 0,
@@ -33,6 +37,15 @@ const normalizeCornerEntry = (entry) => {
     sourceX: typeof entry.sourceX === "number" ? entry.sourceX : null,
     sourceY: typeof entry.sourceY === "number" ? entry.sourceY : null,
     sourceSize: typeof entry.sourceSize === "number" ? entry.sourceSize : null,
+    baseImageWidth:
+      typeof entry.baseImageWidth === "number" ? entry.baseImageWidth : null,
+    baseImageHeight:
+      typeof entry.baseImageHeight === "number" ? entry.baseImageHeight : null,
+    initialCropBounds: {
+      x: typeof bounds.x === "number" ? bounds.x : null,
+      y: typeof bounds.y === "number" ? bounds.y : null,
+      size: typeof bounds.size === "number" ? bounds.size : null,
+    },
   };
 };
 
@@ -63,6 +76,32 @@ export default function MagicCardPrep({ analysisActive = false }) {
   const [cornerError, setCornerError] = useState("");
   const [adjustTarget, setAdjustTarget] = useState(null);
   const [adjustBusyKey, setAdjustBusyKey] = useState("");
+  const adjustMomentumRef = useRef({});
+  const adjustHoldTimerRef = useRef(null);
+  const adjustPointerActiveRef = useRef(false);
+  const cornerSyncSignatureRef = useRef("");
+  const isRegeneratingRef = useRef(false);
+  const adjustBusyKeyRef = useRef("");
+  const logAdjustEvent = useCallback((type, payload = {}) => {
+    try {
+      console.log(`[Adjust] ${type}`, payload);
+    } catch (err) {
+      // logging failure should never break UI
+    }
+  }, []);
+
+  const isAxisClamped = useCallback(
+    (entry, axis, direction) => {
+      if (!entry) return true;
+      const value = axis === "x" ? entry.offsetRatioX || 0 : entry.offsetRatioY || 0;
+      const limit = direction > 0 ? MAX_CORNER_NUDGE_RATIO : -MAX_CORNER_NUDGE_RATIO;
+      if (direction > 0) {
+        return value >= limit - 0.0005;
+      }
+      return value <= limit + 0.0005;
+    },
+    []
+  );
   const hasExistingCardDraft = useMemo(
     () =>
       Boolean(
@@ -140,20 +179,12 @@ export default function MagicCardPrep({ analysisActive = false }) {
     [setListingField]
   );
 
-  const syncCornerEntries = useCallback(
-    (nextEntries) => {
-      setCornerEntries((prev) => {
-        const resolved =
-          typeof nextEntries === "function" ? nextEntries(prev) : nextEntries;
-        const normalized = Array.isArray(resolved)
-          ? resolved.map(normalizeCornerEntry)
-          : [];
-        setListingField("cornerPhotos", normalized);
-        return normalized;
-      });
-    },
-    [setListingField]
-  );
+  const syncCornerEntries = useCallback((nextEntries) => {
+    setCornerEntries((prev) => {
+      const resolved = typeof nextEntries === "function" ? nextEntries(prev) : nextEntries;
+      return Array.isArray(resolved) ? resolved.map(normalizeCornerEntry) : [];
+    });
+  }, []);
 
   const clearCorners = useCallback(() => {
     syncCornerEntries([]);
@@ -478,13 +509,20 @@ export default function MagicCardPrep({ analysisActive = false }) {
                           key={`${sideKey}-${corner.key}`}
                           className="text-center text-[11px] uppercase tracking-[0.25em]"
                         >
-                          <div className="mb-2 rounded-2xl border border-white/10 bg-black/30 overflow-hidden">
+                          <div
+                            className={`mb-2 rounded-2xl border border-white/10 bg-black/30 overflow-hidden corner-thumb-shell ${
+                              adjustBusyKey === `${sideKey}-${corner.key}`
+                                ? "corner-thumb-shell--pending"
+                                : ""
+                            }`}
+                          >
                             {isAnalysisReady ? (
                               entry ? (
                                 <img
+                                  key={entry.url}
                                   src={entry.url}
                                   alt={entry.altText}
-                                  className="w-full h-24 object-cover"
+                                  className="w-full h-24 object-cover corner-thumb-image"
                                 />
                               ) : (
                                 <div className="h-24 flex items-center justify-center text-[10px] opacity-40">
@@ -526,42 +564,82 @@ export default function MagicCardPrep({ analysisActive = false }) {
                               <span />
                               <button
                                 type="button"
-                                className="py-1 rounded-lg border border-white/20 hover:bg-white/10 disabled:opacity-40"
-                                disabled={adjustBusyKey === `${sideKey}-${corner.key}`}
-                                onClick={() =>
-                                  handleAdjustMove(sideKey, corner.key, 0, -ADJUST_STEP_RATIO)
+                                className="adjust-arrow rounded-xl border border-white/20 hover:border-white/50 disabled:opacity-30"
+                                disabled={
+                                  adjustBusyKey === `${sideKey}-${corner.key}` ||
+                                  isAxisClamped(entry, "y", -1)
                                 }
+                                onPointerDown={(event) =>
+                                  handleAdjustPointerDown(event, sideKey, corner.key, "y", -1)
+                                }
+                                onPointerUp={handleAdjustPointerUp}
+                                onPointerLeave={handleAdjustPointerUp}
+                                onPointerCancel={handleAdjustPointerUp}
+                                onClick={() => {
+                                  if (adjustPointerActiveRef.current) return;
+                                  handleAdjustMove(sideKey, corner.key, "y", -1);
+                                }}
                               >
                                 ↑
                               </button>
                               <span />
                               <button
                                 type="button"
-                                className="py-1 rounded-lg border border-white/20 hover:bg-white/10 disabled:opacity-40"
-                                disabled={adjustBusyKey === `${sideKey}-${corner.key}`}
-                                onClick={() =>
-                                  handleAdjustMove(sideKey, corner.key, -ADJUST_STEP_RATIO, 0)
+                                className="adjust-arrow rounded-xl border border-white/20 hover:border-white/50 disabled:opacity-30"
+                                disabled={
+                                  adjustBusyKey === `${sideKey}-${corner.key}` ||
+                                  isAxisClamped(entry, "x", -1)
                                 }
+                                onPointerDown={(event) =>
+                                  handleAdjustPointerDown(event, sideKey, corner.key, "x", -1)
+                                }
+                                onPointerUp={handleAdjustPointerUp}
+                                onPointerLeave={handleAdjustPointerUp}
+                                onPointerCancel={handleAdjustPointerUp}
+                                onClick={() => {
+                                  if (adjustPointerActiveRef.current) return;
+                                  handleAdjustMove(sideKey, corner.key, "x", -1);
+                                }}
                               >
                                 ←
                               </button>
                               <button
                                 type="button"
-                                className="py-1 rounded-lg border border-white/20 hover:bg-white/10 disabled:opacity-40"
-                                disabled={adjustBusyKey === `${sideKey}-${corner.key}`}
-                                onClick={() =>
-                                  handleAdjustMove(sideKey, corner.key, 0, ADJUST_STEP_RATIO)
+                                className="adjust-arrow rounded-xl border border-white/20 hover:border-white/50 disabled:opacity-30"
+                                disabled={
+                                  adjustBusyKey === `${sideKey}-${corner.key}` ||
+                                  isAxisClamped(entry, "y", 1)
                                 }
+                                onPointerDown={(event) =>
+                                  handleAdjustPointerDown(event, sideKey, corner.key, "y", 1)
+                                }
+                                onPointerUp={handleAdjustPointerUp}
+                                onPointerLeave={handleAdjustPointerUp}
+                                onPointerCancel={handleAdjustPointerUp}
+                                onClick={() => {
+                                  if (adjustPointerActiveRef.current) return;
+                                  handleAdjustMove(sideKey, corner.key, "y", 1);
+                                }}
                               >
                                 ↓
                               </button>
                               <button
                                 type="button"
-                                className="py-1 rounded-lg border border-white/20 hover:bg-white/10 disabled:opacity-40"
-                                disabled={adjustBusyKey === `${sideKey}-${corner.key}`}
-                                onClick={() =>
-                                  handleAdjustMove(sideKey, corner.key, ADJUST_STEP_RATIO, 0)
+                                className="adjust-arrow rounded-xl border border-white/20 hover:border-white/50 disabled:opacity-30"
+                                disabled={
+                                  adjustBusyKey === `${sideKey}-${corner.key}` ||
+                                  isAxisClamped(entry, "x", 1)
                                 }
+                                onPointerDown={(event) =>
+                                  handleAdjustPointerDown(event, sideKey, corner.key, "x", 1)
+                                }
+                                onPointerUp={handleAdjustPointerUp}
+                                onPointerLeave={handleAdjustPointerUp}
+                                onPointerCancel={handleAdjustPointerUp}
+                                onClick={() => {
+                                  if (adjustPointerActiveRef.current) return;
+                                  handleAdjustMove(sideKey, corner.key, "x", 1);
+                                }}
                               >
                                 →
                               </button>
@@ -571,7 +649,10 @@ export default function MagicCardPrep({ analysisActive = false }) {
                             <button
                               type="button"
                               className="w-full py-1 rounded-full border border-white/20 text-[10px] uppercase tracking-[0.25em] text-white/70 hover:bg-white/5"
-                              onClick={() => setAdjustTarget(null)}
+                              onClick={() => {
+                                handleAdjustPointerUp();
+                                setAdjustTarget(null);
+                              }}
                             >
                               Done
                             </button>
@@ -645,10 +726,6 @@ export default function MagicCardPrep({ analysisActive = false }) {
   const coverageMessage =
     "We couldn’t capture all 8 corners. Retake the photos and keep each corner visible on both sides.";
 
-  useEffect(() => {
-    setAdjustTarget(null);
-  }, [stage]);
-
   const updateCornerEntryData = useCallback(
     (sideKey, cornerKey, updater) => {
       syncCornerEntries((prev) =>
@@ -665,42 +742,101 @@ export default function MagicCardPrep({ analysisActive = false }) {
     [syncCornerEntries]
   );
 
+  const getMomentumDelta = useCallback(
+    (sideKey, cornerKey, axis, direction) => {
+      const normalizedAxis = axis === "y" ? "y" : "x";
+      const normalizedDirection = direction >= 0 ? "pos" : "neg";
+      const key = `${sideKey}-${cornerKey}-${normalizedAxis}-${normalizedDirection}`;
+      const now = Date.now();
+      const record = adjustMomentumRef.current[key];
+      const withinWindow = record && now - record.time < ADJUST_ACCEL_WINDOW_MS;
+      const nextCount = withinWindow ? Math.min(record.count + 1, 5) : 1;
+      adjustMomentumRef.current[key] = { time: now, count: nextCount };
+      const boost = 1 + (nextCount - 1) * ADJUST_ACCEL_MULTIPLIER;
+      return ADJUST_BASE_STEP_RATIO * boost;
+    },
+    []
+  );
+
   const handleAdjustMove = useCallback(
-    async (sideKey, cornerKey, stepX = 0, stepY = 0) => {
+    async (sideKey, cornerKey, axis = "x", direction = 1) => {
       const entry = cornerMap[sideKey]?.[cornerKey];
       const sourcePhoto =
         sideKey === "front" ? frontPhoto?.url : sideKey === "back" ? backPhoto?.url : null;
       if (!entry || !sourcePhoto) return;
+      const busyKey = `${sideKey}-${cornerKey}`;
+      if (adjustBusyKey === busyKey) {
+        logAdjustEvent("ignored-corner-busy", { sideKey, cornerKey, axis, direction });
+        return;
+      }
+      if (isRegeneratingRef.current) {
+        logAdjustEvent("ignored-global-busy", { sideKey, cornerKey, axis, direction });
+        return;
+      }
+      const step = getMomentumDelta(sideKey, cornerKey, axis, direction);
+      const uiDeltaX = axis === "x" ? direction * step : 0;
+      const uiDeltaY = axis === "y" ? direction * step : 0;
+      const appliedDeltaX = axis === "x" ? -uiDeltaX : 0;
+      const appliedDeltaY = axis === "y" ? -uiDeltaY : 0;
       const currentX = entry.offsetRatioX || 0;
       const currentY = entry.offsetRatioY || 0;
       const nextX = clamp(
-        currentX + stepX,
+        currentX + appliedDeltaX,
         -MAX_CORNER_NUDGE_RATIO,
         MAX_CORNER_NUDGE_RATIO
       );
       const nextY = clamp(
-        currentY + stepY,
+        currentY + appliedDeltaY,
         -MAX_CORNER_NUDGE_RATIO,
         MAX_CORNER_NUDGE_RATIO
       );
-      if (nextX === currentX && nextY === currentY) return;
-      const busyKey = `${sideKey}-${cornerKey}`;
+      const lockedNextX = axis === "y" ? currentX : nextX;
+      const lockedNextY = axis === "x" ? currentY : nextY;
+      if (lockedNextX === currentX && lockedNextY === currentY) {
+        logAdjustEvent("clamp-reached", {
+          sideKey,
+          cornerKey,
+          axis,
+          direction,
+          offset: axis === "x" ? currentX : currentY,
+        });
+        return;
+      }
+      isRegeneratingRef.current = true;
       setAdjustBusyKey(busyKey);
-      const regenerated = await regenerateCornerImage(
-        sourcePhoto,
-        cornerKey,
-        nextX,
-        nextY,
-        entry
-      );
-      setAdjustBusyKey((prev) => (prev === busyKey ? "" : prev));
+      let fallbackTimeout = null;
+      if (typeof window !== "undefined") {
+        fallbackTimeout = window.setTimeout(() => {
+          if (isRegeneratingRef.current && adjustBusyKeyRef.current === busyKey) {
+            logAdjustEvent("regen-timeout", { sideKey, cornerKey, axis, direction });
+            isRegeneratingRef.current = false;
+            setAdjustBusyKey((prev) => (prev === busyKey ? "" : prev));
+          }
+        }, 600);
+      }
+      let regenerated = null;
+      try {
+        regenerated = await regenerateCornerImage(
+          sourcePhoto,
+          cornerKey,
+          lockedNextX,
+          lockedNextY,
+          entry
+        );
+      } finally {
+        if (fallbackTimeout) {
+          clearTimeout(fallbackTimeout);
+        }
+        isRegeneratingRef.current = false;
+        setAdjustBusyKey((prev) => (prev === busyKey ? "" : prev));
+      }
       if (!regenerated?.dataUrl) return;
       updateCornerEntryData(sideKey, cornerKey, (prevEntry) => ({
         ...prevEntry,
         url: regenerated.dataUrl,
         confidence: regenerated.confidence || prevEntry.confidence,
-        offsetRatioX: regenerated.offsetRatioX || 0,
-        offsetRatioY: regenerated.offsetRatioY || 0,
+        offsetRatioX: lockedNextX,
+        offsetRatioY: lockedNextY,
         manualOverride: true,
         sourceX:
           typeof regenerated.sourceX === "number"
@@ -714,10 +850,117 @@ export default function MagicCardPrep({ analysisActive = false }) {
           typeof regenerated.sourceSize === "number"
             ? regenerated.sourceSize
             : prevEntry.sourceSize ?? null,
+        baseImageWidth:
+          typeof prevEntry.baseImageWidth === "number"
+            ? prevEntry.baseImageWidth
+            : typeof regenerated.baseImageWidth === "number"
+            ? regenerated.baseImageWidth
+            : null,
+        baseImageHeight:
+          typeof prevEntry.baseImageHeight === "number"
+            ? prevEntry.baseImageHeight
+            : typeof regenerated.baseImageHeight === "number"
+            ? regenerated.baseImageHeight
+            : null,
+        initialCropBounds:
+          prevEntry.initialCropBounds &&
+          typeof prevEntry.initialCropBounds.x === "number" &&
+          typeof prevEntry.initialCropBounds.y === "number" &&
+          typeof prevEntry.initialCropBounds.size === "number"
+            ? prevEntry.initialCropBounds
+            : regenerated.initialCropBounds || prevEntry.initialCropBounds,
       }));
     },
-    [cornerMap, frontPhoto, backPhoto, updateCornerEntryData]
+    [cornerMap, frontPhoto, backPhoto, updateCornerEntryData, getMomentumDelta, adjustBusyKey]
   );
+
+  const stopAdjustHold = useCallback(() => {
+    if (adjustHoldTimerRef.current) {
+      clearInterval(adjustHoldTimerRef.current);
+      adjustHoldTimerRef.current = null;
+    }
+  }, []);
+
+  const handleAdjustPointerUp = useCallback(() => {
+    adjustPointerActiveRef.current = false;
+    stopAdjustHold();
+  }, [stopAdjustHold]);
+
+  const startAdjustHold = useCallback(
+    (sideKey, cornerKey, axis, direction) => {
+      stopAdjustHold();
+      handleAdjustMove(sideKey, cornerKey, axis, direction);
+      if (typeof window !== "undefined") {
+        adjustHoldTimerRef.current = window.setInterval(() => {
+          handleAdjustMove(sideKey, cornerKey, axis, direction);
+        }, ADJUST_HOLD_INTERVAL_MS);
+      }
+    },
+    [handleAdjustMove, stopAdjustHold]
+  );
+
+  const handleAdjustPointerDown = useCallback(
+    (event, sideKey, cornerKey, axis, direction) => {
+      event.preventDefault();
+      adjustPointerActiveRef.current = true;
+      startAdjustHold(sideKey, cornerKey, axis, direction);
+    },
+    [startAdjustHold]
+  );
+
+  useEffect(() => {
+    return () => {
+      stopAdjustHold();
+    };
+  }, [stopAdjustHold]);
+
+  useEffect(() => {
+    setAdjustTarget(null);
+    adjustPointerActiveRef.current = false;
+    stopAdjustHold();
+  }, [stage, stopAdjustHold, setAdjustTarget]);
+
+  useEffect(() => {
+    adjustBusyKeyRef.current = adjustBusyKey;
+  }, [adjustBusyKey]);
+
+  useEffect(() => {
+    const signature = JSON.stringify(
+      cornerEntries.map((entry) => ({
+        side: entry.side || "",
+        cornerKey: entry.cornerKey || "",
+        url: entry.url || "",
+        offsetRatioX: entry.offsetRatioX || 0,
+        offsetRatioY: entry.offsetRatioY || 0,
+        sourceX: typeof entry.sourceX === "number" ? entry.sourceX : null,
+        sourceY: typeof entry.sourceY === "number" ? entry.sourceY : null,
+        sourceSize: typeof entry.sourceSize === "number" ? entry.sourceSize : null,
+        baseImageWidth:
+          typeof entry.baseImageWidth === "number" ? entry.baseImageWidth : null,
+        baseImageHeight:
+          typeof entry.baseImageHeight === "number" ? entry.baseImageHeight : null,
+        initialCropBounds: {
+          x:
+            typeof entry?.initialCropBounds?.x === "number"
+              ? entry.initialCropBounds.x
+              : null,
+          y:
+            typeof entry?.initialCropBounds?.y === "number"
+              ? entry.initialCropBounds.y
+              : null,
+          size:
+            typeof entry?.initialCropBounds?.size === "number"
+              ? entry.initialCropBounds.size
+              : null,
+        },
+      }))
+    );
+    if (signature === cornerSyncSignatureRef.current) {
+      return;
+    }
+    cornerSyncSignatureRef.current = signature;
+    setListingField("cornerPhotos", cornerEntries);
+  }, [cornerEntries, setListingField]);
 
   useEffect(() => {
     if (!frontPhoto || !backPhoto || cornerLoading) return;

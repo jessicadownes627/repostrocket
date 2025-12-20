@@ -76,6 +76,37 @@ export async function handler(event) {
       };
     }
 
+    if (process.env.NODE_ENV === "development") {
+      const mockPayload = {
+        player: "Mock Player",
+        team: "Example Team",
+        sport: "Baseball",
+        year: "2022",
+        setName: "Repost Rocket Preview",
+        cardNumber: "RR-01",
+        brand: "Mock Brand",
+        notes: "Development mock result. Real AI is bypassed.",
+        confidence: {
+          player: "high",
+          year: "high",
+          setName: "medium",
+          cardNumber: "medium",
+          brand: "medium",
+        },
+        sources: {
+          player: "front",
+          year: "back",
+          setName: "back",
+          cardNumber: "back",
+          brand: "front",
+        },
+      };
+      return {
+        statusCode: 200,
+        body: JSON.stringify(mockPayload),
+      };
+    }
+
     const userContent = buildUserContent({ frontImage, backImage, hints, altText });
 
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -89,9 +120,13 @@ export async function handler(event) {
 
     const raw = response.output_text || "";
     const parsed = parseJsonSafe(raw);
+    let responsePayload = parsed ? { ...parsed } : { ...EMPTY_RESPONSE };
+    if (process.env.NODE_ENV === "development") {
+      stripDevOnlyImageFields(responsePayload);
+    }
     return {
       statusCode: 200,
-      body: JSON.stringify(parsed || EMPTY_RESPONSE),
+      body: JSON.stringify(responsePayload),
     };
   } catch (err) {
     console.error("Card Intel Backend Error:", err);
@@ -164,4 +199,68 @@ function parseJsonSafe(text) {
 
 function stripCodeFences(str) {
   return str.replace(/```json/gi, "").replace(/```/g, "").trim();
+}
+
+const DEV_IMAGE_KEYS = new Set([
+  "debugimages",
+  "rawimagedata",
+  "rawimage",
+  "imagedata",
+  "canvas",
+  "canvasoutput",
+  "canvaspreview",
+  "cornerimages",
+  "cornerimage",
+  "previewimage",
+  "previewimages",
+  "rawcorners",
+  "rawcanvas",
+]);
+
+function stripDevOnlyImageFields(target) {
+  if (!target || typeof target !== "object") return;
+  if (Array.isArray(target)) {
+    for (let i = target.length - 1; i >= 0; i -= 1) {
+      const value = target[i];
+      if (shouldDropDevValue(value)) {
+        target.splice(i, 1);
+        continue;
+      }
+      if (value && typeof value === "object") {
+        stripDevOnlyImageFields(value);
+      }
+    }
+    return;
+  }
+
+  Object.keys(target).forEach((key) => {
+    const value = target[key];
+    if (shouldDropDevKey(key) || shouldDropDevValue(value)) {
+      delete target[key];
+      return;
+    }
+    if (value && typeof value === "object") {
+      stripDevOnlyImageFields(value);
+      if (Array.isArray(value) && value.length === 0) {
+        target[key] = value;
+      }
+    }
+  });
+}
+
+function shouldDropDevKey(key = "") {
+  const normalized = key.toLowerCase();
+  if (DEV_IMAGE_KEYS.has(normalized)) return true;
+  if (normalized.startsWith("canvas")) return true;
+  if (normalized.endsWith("imagedata")) return true;
+  if (normalized.endsWith("imagebase64")) return true;
+  if (normalized.endsWith("imageblob")) return true;
+  return false;
+}
+
+function shouldDropDevValue(value) {
+  if (typeof value === "string" && value.startsWith("data:image")) {
+    return true;
+  }
+  return false;
 }

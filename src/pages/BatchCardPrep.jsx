@@ -290,12 +290,13 @@ export default function BatchCardPrep() {
       };
       const bundle = [...photos, ...secondary];
       const intel = await analyzeCardImages(payload, { photos: bundle });
-      if (!intel) {
-        setAnalysisError("Unable to analyze this card. Retake the photos and retry.");
+      if (!intel || intel.error) {
+        const message =
+          intel?.error || "Unable to analyze this card. Retake the photos and retry.";
+        setAnalysisError(message);
         updateBatchItem(currentCard.id, {
           approvedForAnalysis: false,
-          analysisError:
-            "Unable to analyze this card. Retake the photos and retry.",
+          analysisError: message,
         });
         return;
       }

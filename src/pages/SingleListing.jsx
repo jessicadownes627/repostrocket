@@ -103,53 +103,6 @@ const hasListingDraftData = (data) => {
     Array.isArray(data.cornerPhotos) && data.cornerPhotos.length > 0;
   const hasTags = Array.isArray(data.tags) && data.tags.length > 0;
   const hasIntel = Boolean(data.cardAttributes || data.apparelAttributes);
-  if (viewStage === VIEW_STAGES.ANALYSIS) {
-    return (
-      <div className="app-wrapper px-6 py-10 max-w-2xl mx-auto">
-        <button
-          onClick={() => navigate(-1)}
-          className="text-left text-sm text-[#E8DCC0] uppercase tracking-[0.2em] mb-4 w-fit hover:opacity-80 transition"
-        >
-          ← Back
-        </button>
-        <h1 className="sparkly-header header-glitter text-center text-3xl mb-2">
-          Single Listing
-        </h1>
-        <p className="text-center text-sm opacity-65 mb-6">
-          Reading your confirmed photos for card details. Sit tight while we finish the scan.
-        </p>
-
-        <div className="lux-card relative">
-          <div
-            className={`relative analysis-scan-wrapper ${
-              displayedPhoto ? "analysis-scan-active" : ""
-            }`}
-          >
-            {displayedPhoto ? (
-              <img
-                src={displayedPhoto}
-                alt="Card photo"
-                className="max-w-[500px] w-full mx-auto rounded-xl shadow-[0_0_40px_rgba(0,0,0,0.4)] object-cover"
-              />
-            ) : (
-              <div className="py-16 text-center text-sm opacity-70">
-                Awaiting photo confirmation…
-              </div>
-            )}
-          </div>
-          <div className="mt-4 text-sm text-white/70 text-center">
-            {sportsStatusMessage?.text || "Analyzing card details now…"}
-          </div>
-          <div className="mt-4">
-            <AnalysisProgress active />
-          </div>
-          {cardError && (
-            <div className="mt-3 text-xs text-[#F6BDB2] text-center">{cardError}</div>
-          )}
-        </div>
-      </div>
-    );
-  }
 
   return (
     hasPhotos ||
@@ -1142,18 +1095,20 @@ useEffect(() => {
       try {
         const intel = await analyzeCardImages(payload, { photos: photoBundle });
         if (cancelled) return;
-        if (intel) {
-          setListingField("cardIntel", intel);
-          const attrs = buildCardAttributesFromIntel(intel);
-          if (attrs) {
-            setListingField("cardAttributes", attrs);
-          }
-          const cornerAssets = extractCornerPhotoEntries(intel);
-          if (cornerAssets.length) {
-            setListingField("cornerPhotos", cornerAssets);
-          }
-        } else {
-          setCardError("Unable to analyze card details right now. Please retake the photos.");
+        if (!intel || intel.error) {
+          setCardError(
+            intel?.error || "Unable to analyze card details right now. Please retake the photos."
+          );
+          return;
+        }
+        setListingField("cardIntel", intel);
+        const attrs = buildCardAttributesFromIntel(intel);
+        if (attrs) {
+          setListingField("cardAttributes", attrs);
+        }
+        const cornerAssets = extractCornerPhotoEntries(intel);
+        if (cornerAssets.length) {
+          setListingField("cornerPhotos", cornerAssets);
         }
       } catch (err) {
         if (!cancelled) {

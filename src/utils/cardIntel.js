@@ -1,5 +1,6 @@
 import { fileToDataUrl, getPhotoUrl, normalizePhotosArray } from "./photoHelpers";
 import { cropToCardBounds } from "./cardCropper";
+import { generateDevCardIntelMock } from "./devCardIntelMock";
 
 const EMPTY_INTEL = {
   player: "",
@@ -23,7 +24,9 @@ const CORNER_NAME_MAP = {
 };
 const CORNER_SIZE_RATIO = 0.22;
 const CORNER_PADDING_RATIO = 0.12;
-export const MAX_CORNER_NUDGE_RATIO = 0.08;
+export const MAX_CORNER_NUDGE_RATIO = 0.12;
+const DEFAULT_ANALYSIS_ERROR_MESSAGE =
+  "Card analysis is offline right now. Please retry in a moment.";
 
 async function ensureDataUrlFromSource(source) {
   if (!source) return "";
@@ -122,20 +125,44 @@ export async function analyzeCardImages(item = {}, options = {}) {
       : { dataUrl: backImage, confidence: 0 };
 
   try {
-    const response = await fetch("/.netlify/functions/cardIntel", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
+    let data = null;
+    if (import.meta.env.DEV) {
+      data = await generateDevCardIntelMock(payload);
+    } else {
+      const response = await fetch("/.netlify/functions/cardIntel", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
 
-    if (!response.ok) {
-      console.error("Card intel function error:", await response.text());
-      return null;
+      if (!response.ok) {
+        let text = "";
+        try {
+          text = await response.text();
+        } catch {
+          text = "";
+        }
+        console.error("Card intel function error:", text);
+        return { ...EMPTY_INTEL, error: DEFAULT_ANALYSIS_ERROR_MESSAGE };
+      }
+
+      try {
+        data = await response.json();
+      } catch (err) {
+        console.error("Card intel JSON parse error:", err);
+        return { ...EMPTY_INTEL, error: DEFAULT_ANALYSIS_ERROR_MESSAGE };
+      }
     }
 
-    const data = await response.json();
+    if (!data || data.error) {
+      return {
+        ...EMPTY_INTEL,
+        error: data?.error || DEFAULT_ANALYSIS_ERROR_MESSAGE,
+      };
+    }
+
     const cornerInsights = await analyzeCornerPhotos({
       frontImage: cornerFront.dataUrl,
       backImage: cornerBack.dataUrl,
@@ -158,7 +185,7 @@ export async function analyzeCardImages(item = {}, options = {}) {
     return merged;
   } catch (err) {
     console.error("Failed to analyze card images:", err);
-    return null;
+    return { ...EMPTY_INTEL, error: DEFAULT_ANALYSIS_ERROR_MESSAGE };
   }
 }
 
@@ -215,6 +242,15 @@ export function extractCornerPhotoEntries(intel) {
         sourceX: data.sourceX ?? null,
         sourceY: data.sourceY ?? null,
         sourceSize: data.sourceSize ?? null,
+        baseImageWidth: data.baseImageWidth ?? null,
+        baseImageHeight: data.baseImageHeight ?? null,
+        initialCropBounds: data.initialCropBounds
+          ? {
+              x: data.initialCropBounds.x ?? null,
+              y: data.initialCropBounds.y ?? null,
+              size: data.initialCropBounds.size ?? null,
+            }
+          : null,
       });
     });
   });
@@ -291,27 +327,31 @@ async function extractCornersFromImage(dataUrl) {
       canvas.width = paddedSize;
       canvas.height = paddedSize;
       const ctx = canvas.getContext("2d");
+      const buildEntry = (cornerKey, sx, sy) => {
+        const baseCrop = cropCorner(ctx, img, sx, sy, paddedSize);
+        if (!baseCrop) return null;
+        return {
+          ...baseCrop,
+          offsetRatioX: 0,
+          offsetRatioY: 0,
+          baseImageWidth: img.width,
+          baseImageHeight: img.height,
+          initialCropBounds: {
+            x: baseCrop.sourceX,
+            y: baseCrop.sourceY,
+            size: paddedSize,
+          },
+        };
+      };
       const crops = {
-        topLeft: {
-          ...cropCorner(ctx, img, -padding, -padding, paddedSize),
-          offsetRatioX: 0,
-          offsetRatioY: 0,
-        },
-        topRight: {
-          ...cropCorner(ctx, img, img.width - size - padding, -padding, paddedSize),
-          offsetRatioX: 0,
-          offsetRatioY: 0,
-        },
-        bottomLeft: {
-          ...cropCorner(ctx, img, -padding, img.height - size - padding, paddedSize),
-          offsetRatioX: 0,
-          offsetRatioY: 0,
-        },
-        bottomRight: {
-          ...cropCorner(ctx, img, img.width - size - padding, img.height - size - padding, paddedSize),
-          offsetRatioX: 0,
-          offsetRatioY: 0,
-        },
+        topLeft: buildEntry("topLeft", -padding, -padding),
+        topRight: buildEntry("topRight", img.width - size - padding, -padding),
+        bottomLeft: buildEntry("bottomLeft", -padding, img.height - size - padding),
+        bottomRight: buildEntry(
+          "bottomRight",
+          img.width - size - padding,
+          img.height - size - padding
+        ),
       };
       resolve(crops);
     };
@@ -489,7 +529,11 @@ export async function regenerateCornerImage(
       const baseCrop = Math.round(Math.min(img.width, img.height) * CORNER_SIZE_RATIO);
       const basePadding = Math.round(baseCrop * CORNER_PADDING_RATIO);
       const fallbackSize = baseCrop + basePadding * 2;
-      const paddedSize = previousMeta?.sourceSize || fallbackSize;
+      const initialBounds = previousMeta?.initialCropBounds || {};
+      const storedSize = typeof initialBounds?.size === "number" ? initialBounds.size : null;
+      const paddedSize =
+        storedSize ||
+        (typeof previousMeta?.sourceSize === "number" ? previousMeta.sourceSize : fallbackSize);
       if (!paddedSize || paddedSize < 8) {
         resolve(null);
         return;
@@ -501,23 +545,52 @@ export async function regenerateCornerImage(
         baseCrop,
         basePadding
       );
+      const baseImageWidth =
+        typeof previousMeta?.baseImageWidth === "number" ? previousMeta.baseImageWidth : img.width;
+      const baseImageHeight =
+        typeof previousMeta?.baseImageHeight === "number"
+          ? previousMeta.baseImageHeight
+          : img.height;
       const maxX = Math.max(0, img.width - paddedSize);
       const maxY = Math.max(0, img.height - paddedSize);
-      const inferredBaseX =
-        typeof previousMeta?.sourceX === "number" ? previousMeta.sourceX : defaultBase.x;
-      const inferredBaseY =
-        typeof previousMeta?.sourceY === "number" ? previousMeta.sourceY : defaultBase.y;
+      const inferredBaseX = typeof initialBounds?.x === "number"
+        ? initialBounds.x
+        : typeof previousMeta?.sourceX === "number"
+        ? previousMeta.sourceX
+        : defaultBase.x;
+      const inferredBaseY = typeof initialBounds?.y === "number"
+        ? initialBounds.y
+        : typeof previousMeta?.sourceY === "number"
+        ? previousMeta.sourceY
+        : defaultBase.y;
       const baseX = Math.max(0, Math.min(maxX, inferredBaseX));
       const baseY = Math.max(0, Math.min(maxY, inferredBaseY));
-      const clampedX =
-        Math.max(-MAX_CORNER_NUDGE_RATIO, Math.min(MAX_CORNER_NUDGE_RATIO, offsetRatioX || 0));
-      const clampedY =
-        Math.max(-MAX_CORNER_NUDGE_RATIO, Math.min(MAX_CORNER_NUDGE_RATIO, offsetRatioY || 0));
-      const offsetPixels = paddedSize;
-      const candidateX = baseX + clampedX * offsetPixels;
-      const candidateY = baseY + clampedY * offsetPixels;
+      const rawDeltaX = offsetRatioX || 0;
+      const rawDeltaY = offsetRatioY || 0;
+      const clampedRatioX = Math.max(
+        -MAX_CORNER_NUDGE_RATIO,
+        Math.min(MAX_CORNER_NUDGE_RATIO, rawDeltaX)
+      );
+      const clampedRatioY = Math.max(
+        -MAX_CORNER_NUDGE_RATIO,
+        Math.min(MAX_CORNER_NUDGE_RATIO, rawDeltaY)
+      );
+      const candidateX = baseX + clampedRatioX * paddedSize;
+      const candidateY = baseY + clampedRatioY * paddedSize;
       const nextX = Math.max(0, Math.min(maxX, candidateX));
       const nextY = Math.max(0, Math.min(maxY, candidateY));
+      if (process.env.NODE_ENV === "development") {
+        const shiftX = Math.round((nextX - baseX) * 100) / 100;
+        const shiftY = Math.round((nextY - baseY) * 100) / 100;
+        console.log("[Adjust] pixels", {
+          cornerKey,
+          shiftX,
+          shiftY,
+          paddedSize,
+          clampedRatioX,
+          clampedRatioY,
+        });
+      }
       const canvas = document.createElement("canvas");
       canvas.width = paddedSize;
       canvas.height = paddedSize;
@@ -531,11 +604,19 @@ export async function regenerateCornerImage(
       resolve({
         dataUrl: result.image,
         confidence: result.confidence,
-        offsetRatioX: clampedX,
-        offsetRatioY: clampedY,
+        offsetRatioX: clampedRatioX,
+        offsetRatioY: clampedRatioY,
         sourceX: nextX,
         sourceY: nextY,
         sourceSize: paddedSize,
+        baseImageWidth,
+        baseImageHeight,
+        initialCropBounds: {
+          x: typeof initialBounds?.x === "number" ? initialBounds.x : baseX,
+          y: typeof initialBounds?.y === "number" ? initialBounds.y : baseY,
+          size:
+            typeof initialBounds?.size === "number" ? initialBounds.size : paddedSize,
+        },
       });
     };
     img.onerror = () => resolve(null);

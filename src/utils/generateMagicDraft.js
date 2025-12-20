@@ -84,9 +84,12 @@ export async function generateMagicDraft(item = {}, options = {}) {
 
   let cardIntel = options.cardIntel || item.cardIntel || null;
   if (!cardIntel && cardMode && photos.length) {
-    cardIntel = await analyzeCardImages(item, { photos });
-    if (options.onCardIntel) {
-      options.onCardIntel(cardIntel);
+    const intelResult = await analyzeCardImages(item, { photos });
+    if (intelResult && !intelResult.error) {
+      cardIntel = intelResult;
+      if (options.onCardIntel) {
+        options.onCardIntel(cardIntel);
+      }
     }
   }
 
