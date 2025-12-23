@@ -1,44 +1,67 @@
 import OpenAI from "openai";
 
 const SYSTEM_PROMPT = `
-You are Repost Rocket's Card Intelligence Engine.
-Your job is to read the FRONT and BACK images of a sports card and extract structured data.
-
+You are an OCR engine for sports cards.
 Rules:
-1. Prefer BACK-OF-CARD text for set name, numbering, or serial info. The back is authoritative.
-2. Only use brands or player names you can clearly read.
-3. If unsure, leave value as "" and set confidence to "low".
-4. Confidence scale: high (clear text), medium (strong inference), low (guess).
-5. Return clean JSON with camelCase keys. Do not include commentary.
-
-Output JSON:
-{
-  "player": "",
-  "team": "",
-  "sport": "",
-  "year": "",
-  "setName": "",
-  "cardNumber": "",
-  "brand": "",
-  "notes": "",
-  "confidence": {
-    "player": "high|medium|low",
-    "year": "high|medium|low",
-    "setName": "high|medium|low",
-    "cardNumber": "high|medium|low",
-    "brand": "high|medium|low"
-  },
-  "sources": {
-    "player": "front|back|infer",
-    "year": "front|back|infer",
-    "setName": "front|back|infer",
-    "cardNumber": "front|back|infer",
-    "brand": "front|back|infer"
-  }
-}
-
-Always return valid JSON.
+- Return ONLY raw text you can clearly read. No interpretation, no player names, no inference.
+- Output JSON exactly like: { "ocr": { "lines": [ { "text": "...", "confidence": 0.0 } ] } }
+- Each line represents a contiguous snippet of readable text from either image.
+- If you cannot read any text, return { "ocr": { "lines": [] } }.
+- Do NOT add player/team/year/set fields. Your job is OCR only.
 `;
+
+const MLB_TEAMS = [
+  "Arizona Diamondbacks",
+  "Atlanta Braves",
+  "Baltimore Orioles",
+  "Boston Red Sox",
+  "Chicago Cubs",
+  "Chicago White Sox",
+  "Cincinnati Reds",
+  "Cleveland Guardians",
+  "Cleveland Indians",
+  "Colorado Rockies",
+  "Detroit Tigers",
+  "Houston Astros",
+  "Kansas City Royals",
+  "Los Angeles Angels",
+  "Los Angeles Dodgers",
+  "Miami Marlins",
+  "Milwaukee Brewers",
+  "Minnesota Twins",
+  "New York Mets",
+  "New York Yankees",
+  "Oakland Athletics",
+  "Philadelphia Phillies",
+  "Pittsburgh Pirates",
+  "San Diego Padres",
+  "San Francisco Giants",
+  "Seattle Mariners",
+  "St. Louis Cardinals",
+  "Tampa Bay Rays",
+  "Texas Rangers",
+  "Toronto Blue Jays",
+  "Washington Nationals",
+  "Montreal Expos",
+  "Brooklyn Dodgers",
+  "New York Giants",
+];
+
+const CARD_BRANDS = [
+  "Topps",
+  "Donruss",
+  "Fleer",
+  "Upper Deck",
+  "Bowman",
+  "Score",
+  "Panini",
+  "Leaf",
+  "O-Pee-Chee",
+  "Stadium Club",
+  "SkyBox",
+];
+
+const REQUIRED_IDENTITY_FIELDS = ["player", "team", "year", "setName"];
 
 const EMPTY_RESPONSE = {
   player: "",
@@ -51,24 +74,61 @@ const EMPTY_RESPONSE = {
   notes: "",
   confidence: {
     player: "low",
+    team: "low",
     year: "low",
     setName: "low",
     cardNumber: "low",
     brand: "low",
   },
-  sources: {},
+  sources: {
+    player: "infer",
+    team: "infer",
+    year: "infer",
+    setName: "infer",
+    cardNumber: "infer",
+    brand: "infer",
+  },
+  sourceEvidence: [],
+  isTextVerified: {
+    player: false,
+    team: false,
+    year: false,
+    setName: false,
+  },
+  needsUserConfirmation: true,
+  ocr: {
+    lines: [],
+  },
 };
 
 export async function handler(event) {
+  console.log("[cardIntel] function invoked");
+  let currentRequestId = `cardIntel-${Date.now()}`;
   try {
-    if (!process.env.OPENAI_API_KEY) {
+    const hasKey = Boolean(process.env.OPENAI_API_KEY);
+    console.log("[cardIntel] OPENAI key present:", hasKey);
+    if (!hasKey) {
       return {
         statusCode: 500,
         body: JSON.stringify({ error: "Missing OPENAI_API_KEY" }),
       };
     }
 
-    const { frontImage, backImage, hints = {}, altText = {} } = JSON.parse(event.body || "{}");
+    const {
+      frontImage,
+      backImage,
+      hints = {},
+      altText = {},
+      imageHash = null,
+      requestId = currentRequestId,
+    } = JSON.parse(event.body || "{}");
+    currentRequestId = requestId;
+    console.log("[cardIntel] payload received", {
+      requestId,
+      imageHash,
+      hasFront: Boolean(frontImage),
+      hasBack: Boolean(backImage),
+    });
     if (!frontImage && !backImage) {
       return {
         statusCode: 400,
@@ -76,40 +136,41 @@ export async function handler(event) {
       };
     }
 
-    if (process.env.NODE_ENV === "development") {
-      const mockPayload = {
-        player: "Mock Player",
-        team: "Example Team",
-        sport: "Baseball",
-        year: "2022",
-        setName: "Repost Rocket Preview",
-        cardNumber: "RR-01",
-        brand: "Mock Brand",
-        notes: "Development mock result. Real AI is bypassed.",
-        confidence: {
-          player: "high",
-          year: "high",
-          setName: "medium",
-          cardNumber: "medium",
-          brand: "medium",
-        },
-        sources: {
-          player: "front",
-          year: "back",
-          setName: "back",
-          cardNumber: "back",
-          brand: "front",
-        },
-      };
-      return {
-        statusCode: 200,
-        body: JSON.stringify(mockPayload),
-      };
-    }
+    // if (process.env.NODE_ENV === "development") {
+    //   const mockPayload = {
+    //     player: "Mock Player",
+    //     team: "Example Team",
+    //     sport: "Baseball",
+    //     year: "2022",
+    //     setName: "Repost Rocket Preview",
+    //     cardNumber: "RR-01",
+    //     brand: "Mock Brand",
+    //     notes: "Development mock result. Real AI is bypassed.",
+    //     confidence: {
+    //       player: "high",
+    //       year: "high",
+    //       setName: "medium",
+    //       cardNumber: "medium",
+    //       brand: "medium",
+    //     },
+    //     sources: {
+    //       player: "front",
+    //       year: "back",
+    //       setName: "back",
+    //       cardNumber: "back",
+    //       brand: "front",
+    //     },
+    //   };
+    //   return {
+    //     statusCode: 200,
+    //     body: JSON.stringify(mockPayload),
+    //   };
+    // }
 
-    const userContent = buildUserContent({ frontImage, backImage, hints, altText });
+    const userContent = buildUserContent({ frontImage, backImage, altText });
 
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    console.log("[cardIntel] OpenAI request starting", { requestId, imageHash });
     const response = await client.responses.create({
       model: "gpt-4o",
       input: [
@@ -117,13 +178,19 @@ export async function handler(event) {
         { role: "user", content: userContent },
       ],
     });
+    console.log("[cardIntel] OpenAI request completed", { requestId });
 
     const raw = response.output_text || "";
     const parsed = parseJsonSafe(raw);
-    let responsePayload = parsed ? { ...parsed } : { ...EMPTY_RESPONSE };
-    if (process.env.NODE_ENV === "development") {
-      stripDevOnlyImageFields(responsePayload);
-    }
+    const ocrLines = extractOcrLines(parsed);
+    const derived = deriveFieldsFromOcr(ocrLines, hints);
+    const responsePayload = {
+      ...EMPTY_RESPONSE,
+      ...derived,
+      imageHash,
+      requestId,
+      ocr: { lines: ocrLines },
+    };
     return {
       statusCode: 200,
       body: JSON.stringify(responsePayload),
@@ -132,12 +199,17 @@ export async function handler(event) {
     console.error("Card Intel Backend Error:", err);
     return {
       statusCode: 200,
-      body: JSON.stringify({ ...EMPTY_RESPONSE, error: err.message }),
+      body: JSON.stringify({
+        ...EMPTY_RESPONSE,
+        error: err?.message || "Card intel failed unexpectedly.",
+        stack: err?.stack || null,
+        requestId: currentRequestId || `cardIntel-error-${Date.now()}`,
+      }),
     };
   }
 }
 
-function buildUserContent({ frontImage, backImage, hints, altText }) {
+function buildUserContent({ frontImage, backImage, altText }) {
   const segments = [];
   if (frontImage) {
     if (altText?.front) {
@@ -165,26 +237,7 @@ function buildUserContent({ frontImage, backImage, hints, altText }) {
     segments.push({ type: "input_text", text: "Back image not provided." });
   }
 
-  const hintText = buildHintText(hints);
-  if (hintText) {
-    segments.push({
-      type: "input_text",
-      text: `Seller hints: ${hintText}`,
-    });
-  }
-
   return segments;
-}
-
-function buildHintText(hints = {}) {
-  const parts = [];
-  if (hints.title) parts.push(`Title: ${hints.title}`);
-  if (hints.description) parts.push(`Description: ${hints.description}`);
-  if (hints.brand) parts.push(`Brand: ${hints.brand}`);
-  if (Array.isArray(hints.tags) && hints.tags.length) {
-    parts.push(`Tags: ${hints.tags.join(", ")}`);
-  }
-  return parts.join(" | ");
 }
 
 function parseJsonSafe(text) {
@@ -201,66 +254,199 @@ function stripCodeFences(str) {
   return str.replace(/```json/gi, "").replace(/```/g, "").trim();
 }
 
-const DEV_IMAGE_KEYS = new Set([
-  "debugimages",
-  "rawimagedata",
-  "rawimage",
-  "imagedata",
-  "canvas",
-  "canvasoutput",
-  "canvaspreview",
-  "cornerimages",
-  "cornerimage",
-  "previewimage",
-  "previewimages",
-  "rawcorners",
-  "rawcanvas",
-]);
+function extractOcrLines(payload) {
+  if (!payload || typeof payload !== "object") {
+    return [];
+  }
+  const rawLines = payload?.ocr?.lines;
+  if (!Array.isArray(rawLines)) return [];
+  return rawLines
+    .map((line, index) => {
+      const text = typeof line?.text === "string" ? line.text.trim() : "";
+      if (!text) return null;
+      return {
+        text,
+        normalized: normalizeTextLine(text),
+        confidence: typeof line?.confidence === "number" ? line.confidence : null,
+        index,
+      };
+    })
+    .filter(Boolean);
+}
 
-function stripDevOnlyImageFields(target) {
-  if (!target || typeof target !== "object") return;
-  if (Array.isArray(target)) {
-    for (let i = target.length - 1; i >= 0; i -= 1) {
-      const value = target[i];
-      if (shouldDropDevValue(value)) {
-        target.splice(i, 1);
-        continue;
-      }
-      if (value && typeof value === "object") {
-        stripDevOnlyImageFields(value);
-      }
-    }
-    return;
+export function deriveFieldsFromOcr(lines = [], hints = {}) {
+  const evidence = [];
+  const sources = { ...EMPTY_RESPONSE.sources };
+  const isTextVerified = { ...EMPTY_RESPONSE.isTextVerified };
+  const confidence = { ...EMPTY_RESPONSE.confidence };
+
+  const playerEntry = findPlayerCandidate(lines);
+  const player = playerEntry ? titleCase(playerEntry.text) : "";
+  if (playerEntry) {
+    evidence.push(buildEvidenceLine("player", playerEntry));
+    sources.player = "ocr";
+    isTextVerified.player = true;
+    confidence.player = "high";
   }
 
-  Object.keys(target).forEach((key) => {
-    const value = target[key];
-    if (shouldDropDevKey(key) || shouldDropDevValue(value)) {
-      delete target[key];
-      return;
-    }
-    if (value && typeof value === "object") {
-      stripDevOnlyImageFields(value);
-      if (Array.isArray(value) && value.length === 0) {
-        target[key] = value;
-      }
-    }
+  const teamEntry = findTeamCandidate(lines);
+  const team = teamEntry ? titleCaseTeam(teamEntry.text) : "";
+  if (teamEntry) {
+    evidence.push(buildEvidenceLine("team", teamEntry));
+    sources.team = "ocr";
+    isTextVerified.team = true;
+    confidence.team = "high";
+  }
+
+  const yearEntry = findYearCandidate(lines);
+  const year = yearEntry ? yearEntry.match : "";
+  if (yearEntry) {
+    evidence.push(buildEvidenceLine("year", yearEntry));
+    sources.year = "ocr";
+    isTextVerified.year = true;
+    confidence.year = "high";
+  }
+
+  const setEntry = findSetCandidate(lines);
+  const setName = setEntry ? titleCase(setEntry.brand) : "";
+  let brand = setName || "";
+  if (setEntry) {
+    evidence.push(buildEvidenceLine("setName", setEntry));
+    sources.setName = "ocr";
+    confidence.setName = "medium";
+    confidence.brand = "medium";
+    isTextVerified.setName = true;
+  } else {
+    confidence.setName = "low";
+    confidence.brand = "low";
+  }
+
+  const needsUserConfirmation = REQUIRED_IDENTITY_FIELDS.some((field) => {
+    if (field === "setName") return !setName;
+    if (field === "player") return !player;
+    if (field === "team") return !team;
+    if (field === "year") return !year;
+    return false;
+  });
+
+  if (!player) {
+    evidence.push("No readable player text detected in OCR.");
+    confidence.player = "low";
+  }
+  if (!team) {
+    evidence.push("No MLB team name detected in OCR text.");
+    confidence.team = "low";
+  }
+  if (!year) {
+    evidence.push("No printed year detected in OCR text.");
+    confidence.year = "low";
+  }
+  if (!setName) {
+    evidence.push("No card brand/set text detected in OCR.");
+  }
+
+  return {
+    player,
+    team,
+    sport: hints?.sport || "",
+    year,
+    setName,
+    cardNumber: "",
+    brand,
+    notes: "",
+    confidence,
+    sources,
+    sourceEvidence: evidence,
+    isTextVerified,
+    needsUserConfirmation,
+  };
+}
+
+function normalizeTextLine(text) {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function titleCase(value = "") {
+  return value
+    .toLowerCase()
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function titleCaseTeam(value = "") {
+  const normalized = value.toLowerCase();
+  const match = MLB_TEAMS.find((team) => team.toLowerCase() === normalized);
+  if (match) return match;
+  return titleCase(value);
+}
+
+function findPlayerCandidate(lines) {
+  return lines.find((entry) => {
+    if (!isLikelyPlayer(entry.text)) return false;
+    const normalized = entry.text.toLowerCase();
+    const matchesTeam = MLB_TEAMS.some((team) => team.toLowerCase() === normalized);
+    if (matchesTeam) return false;
+    const matchesBrand = CARD_BRANDS.some((brand) =>
+      normalized.includes(brand.toLowerCase())
+    );
+    return !matchesBrand;
   });
 }
 
-function shouldDropDevKey(key = "") {
-  const normalized = key.toLowerCase();
-  if (DEV_IMAGE_KEYS.has(normalized)) return true;
-  if (normalized.startsWith("canvas")) return true;
-  if (normalized.endsWith("imagedata")) return true;
-  if (normalized.endsWith("imagebase64")) return true;
-  if (normalized.endsWith("imageblob")) return true;
-  return false;
+function findTeamCandidate(lines) {
+  for (const entry of lines) {
+    const normalized = entry.text.toLowerCase();
+    const hit = MLB_TEAMS.find((team) => team.toLowerCase() === normalized);
+    if (hit) {
+      return { ...entry, text: hit };
+    }
+  }
+  return null;
 }
 
-function shouldDropDevValue(value) {
-  if (typeof value === "string" && value.startsWith("data:image")) {
-    return true;
+function findYearCandidate(lines) {
+  for (const entry of lines) {
+    const match = entry.text.match(/\b(18|19|20)\d{2}\b/);
+    if (match) {
+      return { ...entry, match: match[0] };
+    }
   }
-  return false;
+  return null;
+}
+
+function findSetCandidate(lines) {
+  for (const entry of lines) {
+    const hit = CARD_BRANDS.find((brand) =>
+      entry.text.toLowerCase().includes(brand.toLowerCase())
+    );
+    if (hit) {
+      return { ...entry, brand: hit };
+    }
+  }
+  return null;
+}
+
+function isLikelyPlayer(text = "") {
+  if (!text) return false;
+  const cleaned = text.replace(/[^A-Z\s'-]/gi, "");
+  if (!cleaned.trim()) return false;
+  const words = cleaned.trim().split(/\s+/);
+  if (words.length < 2 || words.length > 3) return false;
+  const uppercaseRatio =
+    cleaned.replace(/[^A-Z]/g, "").length / cleaned.replace(/[^A-Za-z]/g, "").length || 0;
+  return uppercaseRatio > 0.7;
+}
+
+function buildEvidenceLine(field, entry) {
+  const text =
+    typeof entry?.text === "string"
+      ? entry.text
+      : typeof entry?.match === "string"
+      ? entry.match
+      : "";
+  return text
+    ? `OCR line ${entry.index + 1 || 0}: "${text}" -> ${field}`
+    : `OCR mapping for ${field}`;
 }

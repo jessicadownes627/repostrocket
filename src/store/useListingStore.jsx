@@ -3,11 +3,19 @@ import {
   deriveAltTextFromFilename,
   normalizePhotosArray,
 } from "../utils/photoHelpers";
+import {
+  analyzeCardImages,
+  buildCardAttributesFromIntel,
+  extractCornerPhotoEntries,
+} from "../utils/cardIntel";
 
 const ListingContext = createContext(null);
 const STORAGE_KEY = "rr_draft_listing";
 const SAVED_KEY = "rr_saved_drafts";
 const MAGIC_KEY = "rr_magic_usage";
+
+const SPORTS_ANALYSIS_ERROR_MESSAGE =
+  "Unable to analyze card details right now. Please retake the photos.";
 
 const defaultListing = {
   title: "",
@@ -32,6 +40,7 @@ const defaultListing = {
   tags: {},
   cardIntel: null,
   cardAttributes: null,
+  cardIntelHash: null,
   apparelIntel: null,
   apparelAttributes: null,
 };
@@ -42,6 +51,22 @@ export function ListingProvider({ children }) {
   const [savedDrafts, setSavedDrafts] = useState([]);
   const [premiumUsesRemaining, setPremiumUsesRemaining] = useState(1);
   const [batchMode, setBatchMode] = useState("general");
+  const [storeHydrated, setStoreHydrated] = useState(false);
+  const [analysisSessionId, setAnalysisSessionId] = useState(null);
+  const [analysisInFlight, setAnalysisInFlight] = useState(false);
+  const [lastAnalyzedHash, setLastAnalyzedHash] = useState(null);
+  const [sportsAnalysisError, setSportsAnalysisError] = useState("");
+
+  const resetCardIntelState = () => {
+    setListingData((prev) => ({
+      ...prev,
+      cardIntel: null,
+      cardAttributes: null,
+      cardIntelHash: null,
+      cornerPhotos: [],
+    }));
+    setLastAnalyzedHash(null);
+  };
 
   // Restore from localStorage on mount
   useEffect(() => {
@@ -76,6 +101,8 @@ export function ListingProvider({ children }) {
       }
     } catch (err) {
       console.error("Failed to restore draft", err);
+    } finally {
+      setStoreHydrated(true);
     }
   }, []);
 
@@ -121,6 +148,10 @@ export function ListingProvider({ children }) {
     }
   }, [savedDrafts]);
 
+  useEffect(() => {
+    setLastAnalyzedHash((listingData?.cardIntelHash) || null);
+  }, [listingData?.cardIntelHash]);
+
   // Persist Magic Fill usage with daily reset
   useEffect(() => {
     try {
@@ -135,6 +166,27 @@ export function ListingProvider({ children }) {
   }, [premiumUsesRemaining]);
 
   const value = useMemo(() => {
+    const applyCardIntelResult = (intel) => {
+      if (!intel) return;
+      setListingData((prev) => {
+        const updates = {
+          ...prev,
+          cardIntel: intel,
+          cardIntelHash: intel?.imageHash || null,
+        };
+        const attrs = buildCardAttributesFromIntel(intel);
+        if (attrs) {
+          updates.cardAttributes = attrs;
+        }
+        const cornerAssets = extractCornerPhotoEntries(intel);
+        if (cornerAssets.length) {
+          updates.cornerPhotos = cornerAssets;
+        }
+        return updates;
+      });
+      setLastAnalyzedHash(intel?.imageHash || null);
+    };
+
     const setListingField = (key, value) => {
       setListingData((prev) => {
         let nextValue = value;
@@ -144,13 +196,118 @@ export function ListingProvider({ children }) {
             normalized = normalized.slice(0, 1);
           }
           nextValue = normalized;
-        } else if (key === "secondaryPhotos") {
+          setSportsAnalysisError("");
+          setAnalysisSessionId(null);
+          setAnalysisInFlight(false);
+          setLastAnalyzedHash(null);
+          return {
+            ...prev,
+            [key]: nextValue,
+            cardIntel: null,
+            cardAttributes: null,
+            cardIntelHash: null,
+            cornerPhotos: [],
+          };
+        }
+        if (key === "secondaryPhotos") {
           nextValue = normalizePhotosArray(value, "secondary photo");
-        } else if (key === "cornerPhotos" && Array.isArray(value)) {
+          setSportsAnalysisError("");
+          setAnalysisSessionId(null);
+          setAnalysisInFlight(false);
+          setLastAnalyzedHash(null);
+          return {
+            ...prev,
+            [key]: nextValue,
+            cardIntel: null,
+            cardAttributes: null,
+            cardIntelHash: null,
+            cornerPhotos: [],
+          };
+        }
+        if (key === "cornerPhotos" && Array.isArray(value)) {
           nextValue = value.filter(Boolean);
         }
         return { ...prev, [key]: nextValue };
       });
+    };
+
+    const clearSportsAnalysisError = () => {
+      setSportsAnalysisError("");
+    };
+
+    const requestSportsAnalysis = async ({ force = false } = {}) => {
+      if (analysisInFlight || analysisSessionId) {
+        console.log("[listingStore] sports analysis already running");
+        return { skipped: true, reason: "in_flight" };
+      }
+      if (!storeHydrated) {
+        console.log("[listingStore] sports analysis waiting for hydration");
+        return { skipped: true, reason: "not_hydrated" };
+      }
+      const front = Array.isArray(listingData?.photos) ? listingData.photos : [];
+      const back = Array.isArray(listingData?.secondaryPhotos)
+        ? listingData.secondaryPhotos
+        : [];
+      if (!front.length || !back.length) {
+        console.log("[listingStore] sports analysis missing photos", {
+          frontCount: front.length,
+          backCount: back.length,
+        });
+        return { skipped: true, reason: "missing_photos" };
+      }
+      const sessionId = `analysis-${Date.now()}`;
+      setAnalysisSessionId(sessionId);
+      setAnalysisInFlight(true);
+      setSportsAnalysisError("");
+      const payload = {
+        ...listingData,
+        category: "Sports Cards",
+        photos: front,
+        secondaryPhotos: back,
+      };
+      const photoBundle = [...front, ...back];
+      const onHashDecision = (hash) => {
+        const existingHash = listingData?.cardIntelHash || lastAnalyzedHash;
+        if (!force && listingData?.cardIntel && existingHash && existingHash === hash) {
+          console.log("[listingStore] hash unchanged — skipping request");
+          return false;
+        }
+        if (existingHash && existingHash !== hash) {
+          console.log("[listingStore] clearing intel after hash mismatch");
+          resetCardIntelState();
+        }
+        return true;
+      };
+      try {
+        const intel = await analyzeCardImages(payload, {
+          photos: photoBundle,
+          onHash: onHashDecision,
+          requestId: sessionId,
+        });
+        if (!intel) {
+          setSportsAnalysisError(SPORTS_ANALYSIS_ERROR_MESSAGE);
+          return { error: SPORTS_ANALYSIS_ERROR_MESSAGE };
+        }
+        if (intel.cancelled) {
+          console.log("[listingStore] sports analysis cancelled before request", {
+            sessionId,
+          });
+          return { cancelled: true };
+        }
+        if (intel.error) {
+          setSportsAnalysisError(intel.error);
+          return { error: intel.error };
+        }
+        applyCardIntelResult(intel);
+        return { success: true, intel };
+      } catch (err) {
+        console.error("Sports card analysis failed:", err);
+        setSportsAnalysisError(SPORTS_ANALYSIS_ERROR_MESSAGE);
+        return { error: SPORTS_ANALYSIS_ERROR_MESSAGE };
+      } finally {
+        setAnalysisInFlight(false);
+        setAnalysisSessionId((current) => (current === sessionId ? null : current));
+      }
     };
 
     const setBatchItems = (items) => {
@@ -244,6 +401,7 @@ export function ListingProvider({ children }) {
       savedDrafts,
       premiumUsesRemaining,
       batchMode,
+      storeHydrated,
       setSelectedPlatforms,
       setListingField,
       setBatchItems,
@@ -256,9 +414,26 @@ export function ListingProvider({ children }) {
       deleteDraft,
       loadDraft,
       consumeMagicUse,
-      setBatchMode,
+        setBatchMode,
+      analysisSessionId,
+      analysisInFlight,
+      lastAnalyzedHash,
+      sportsAnalysisError,
+      requestSportsAnalysis,
+      clearSportsAnalysisError,
     };
-  }, [selectedPlatforms, listingData, savedDrafts, premiumUsesRemaining, batchMode]);
+  }, [
+    selectedPlatforms,
+    listingData,
+    savedDrafts,
+    premiumUsesRemaining,
+    batchMode,
+    storeHydrated,
+    analysisSessionId,
+    analysisInFlight,
+    lastAnalyzedHash,
+    sportsAnalysisError,
+  ]);
 
   return <ListingContext.Provider value={value}>{children}</ListingContext.Provider>;
 }

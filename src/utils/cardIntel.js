@@ -13,9 +13,12 @@ const EMPTY_INTEL = {
   notes: "",
   confidence: {},
   sources: {},
+  isTextVerified: {},
+  sourceEvidence: [],
+  needsUserConfirmation: true,
 };
 
-const CONFIDENCE_DEFAULTS = ["player", "year", "setName", "cardNumber", "brand"];
+const CONFIDENCE_DEFAULTS = ["player", "team", "year", "setName", "cardNumber", "brand"];
 const CORNER_NAME_MAP = {
   topLeft: "Top Left",
   topRight: "Top Right",
@@ -27,6 +30,29 @@ const CORNER_PADDING_RATIO = 0.12;
 export const MAX_CORNER_NUDGE_RATIO = 0.12;
 const DEFAULT_ANALYSIS_ERROR_MESSAGE =
   "Card analysis is offline right now. Please retry in a moment.";
+const textEncoder = typeof TextEncoder !== "undefined" ? new TextEncoder() : null;
+
+async function computeImageHash(frontImage = "", backImage = "") {
+  const combined = `${frontImage || ""}::${backImage || ""}`;
+  if (typeof crypto !== "undefined" && crypto.subtle && textEncoder) {
+    try {
+      const data = textEncoder.encode(combined);
+      const digest = await crypto.subtle.digest("SHA-256", data);
+      return Array.from(new Uint8Array(digest))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+    } catch (err) {
+      console.error("Image hash (subtle) failed:", err);
+    }
+  }
+  // fallback simple hash
+  let hash = 0;
+  for (let i = 0; i < combined.length; i += 1) {
+    hash = (hash << 5) - hash + combined.charCodeAt(i);
+    hash |= 0;
+  }
+  return `fallback-${Math.abs(hash)}`;
+}
 
 async function ensureDataUrlFromSource(source) {
   if (!source) return "";
@@ -114,6 +140,18 @@ export async function analyzeCardImages(item = {}, options = {}) {
     },
     hints: buildHints(item),
   };
+  const imageHash = await computeImageHash(frontImage, backImage);
+  const requestId =
+    options.requestId ||
+    `cardIntel-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  payload.imageHash = imageHash;
+  payload.requestId = requestId;
+  if (typeof options.onHash === "function") {
+    const shouldContinue = await options.onHash(imageHash);
+    if (shouldContinue === false) {
+      return { ...EMPTY_INTEL, cancelled: true, imageHash, requestId };
+    }
+  }
 
   const cornerFront =
     frontImage && options.enableCornerCrop !== false
@@ -129,6 +167,12 @@ export async function analyzeCardImages(item = {}, options = {}) {
     if (import.meta.env.DEV) {
       data = await generateDevCardIntelMock(payload);
     } else {
+      console.log("[cardIntel] frontend request start", {
+        method: "POST",
+        path: "/.netlify/functions/cardIntel",
+        requestId,
+        imageHash,
+      });
       const response = await fetch("/.netlify/functions/cardIntel", {
         method: "POST",
         headers: {
@@ -140,10 +184,10 @@ export async function analyzeCardImages(item = {}, options = {}) {
       if (!response.ok) {
         let text = "";
         try {
-          text = await response.text();
-        } catch {
-          text = "";
-        }
+        text = await response.text();
+      } catch {
+        text = "";
+      }
         console.error("Card intel function error:", text);
         return { ...EMPTY_INTEL, error: DEFAULT_ANALYSIS_ERROR_MESSAGE };
       }
@@ -173,6 +217,8 @@ export async function analyzeCardImages(item = {}, options = {}) {
       ...data,
       confidence: ensureConfidence(data?.confidence),
       sources: data?.sources || data?.verification || {},
+      imageHash,
+      requestId,
     };
 
     if (cornerInsights) {
@@ -212,6 +258,12 @@ export function buildCardAttributesFromIntel(intel) {
     notes: intel.notes || "",
     confidence: ensureConfidence(intel.confidence || {}),
     sources: intel.sources || {},
+    sourceEvidence: Array.isArray(intel.sourceEvidence) ? intel.sourceEvidence : [],
+    isTextVerified: intel.isTextVerified || {},
+    needsUserConfirmation: Boolean(
+      typeof intel.needsUserConfirmation === "boolean" ? intel.needsUserConfirmation : true
+    ),
+    manualOverrides: intel.manualOverrides || {},
     corners: intel.corners || null,
     cornerCondition: intel.cornerCondition || null,
     grading: intel.grading || null,

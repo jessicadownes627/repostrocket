@@ -10,7 +10,6 @@ import {
 import { generateMagicDraft } from "../utils/generateMagicDraft";
 import { buildApparelAttributesFromIntel } from "../utils/apparelIntel";
 import {
-  analyzeCardImages,
   buildCardAttributesFromIntel,
   extractCornerPhotoEntries,
 } from "../utils/cardIntel";
@@ -55,6 +54,12 @@ const CORNER_LABELS = {
   bottomLeft: "Bottom Left",
   bottomRight: "Bottom Right",
 };
+const CARD_IDENTITY_FIELDS = [
+  { key: "player", label: "Player" },
+  { key: "team", label: "Team" },
+  { key: "year", label: "Year" },
+  { key: "setName", label: "Set" },
+];
 const VIEW_STAGES = {
   ANALYSIS: "analysis",
   EDIT: "edit",
@@ -158,6 +163,11 @@ export default function SingleListing() {
     consumeMagicUse,
     removePhoto,
     batchMode,
+    setBatchMode,
+    storeHydrated, // ensures sports mode gating waits for persisted draft
+    analysisInFlight,
+    sportsAnalysisError,
+    requestSportsAnalysis,
   } = useListingStore();
 
   const devPremiumOverride =
@@ -215,7 +225,9 @@ export default function SingleListing() {
   const lastPolishedPhotoRef = useRef(null);
   const [autoAnalysisTriggered, setAutoAnalysisTriggered] = useState(false);
   const [autoScrollDone, setAutoScrollDone] = useState(false);
-  const [serverCardAnalyzing, setServerCardAnalyzing] = useState(false);
+  const [manualCardField, setManualCardField] = useState(null);
+  const [manualCardValue, setManualCardValue] = useState("");
+  const lastPhotoSignatureRef = useRef("");
 
   useEffect(() => {
     const id = listingData?.libraryId;
@@ -244,33 +256,135 @@ export default function SingleListing() {
       : null;
   const backPhoto = getPhotoUrl(backPhotoEntry);
 
+  const cardIntel = listingData?.cardIntel || null;
   const cardAttributes = listingData?.cardAttributes || null;
   const cornerPhotos = listingData?.cornerPhotos || [];
   const apparelIntel = listingData?.apparelIntel || null;
   const apparelAttributes = listingData?.apparelAttributes || null;
+  const showCardVerificationWarning = Boolean(
+    cardIntel?.needsUserConfirmation || cardAttributes?.needsUserConfirmation
+  );
+  const cardIdentityStatuses = useMemo(() => {
+    const manualOverrides = cardAttributes?.manualOverrides || {};
+    return CARD_IDENTITY_FIELDS.reduce((acc, field) => {
+      const verified =
+        cardIntel?.sources?.[field.key] === "ocr" &&
+        cardIntel?.isTextVerified?.[field.key];
+      const baseValue =
+        field.key === "setName"
+          ? cardAttributes?.set || cardAttributes?.setName || ""
+          : cardAttributes?.[field.key] || "";
+      const manualValue =
+        typeof manualOverrides[field.key] === "string"
+          ? manualOverrides[field.key]
+          : "";
+      acc[field.key] = {
+        verified,
+        manualValue,
+        hasManual: Boolean(manualValue),
+        baseValue,
+        needsManual: !verified && !manualValue,
+      };
+      return acc;
+    }, {});
+  }, [cardAttributes, cardIntel]);
+
+  const computeNeedsUserConfirmation = useCallback(
+    (manualOverrides = {}) => {
+      return CARD_IDENTITY_FIELDS.some((field) => {
+        const verified =
+          cardIntel?.sources?.[field.key] === "ocr" &&
+          cardIntel?.isTextVerified?.[field.key];
+        const manualValue =
+          typeof manualOverrides[field.key] === "string"
+            ? manualOverrides[field.key].trim()
+            : "";
+        return !verified && !manualValue;
+      });
+    },
+    [cardIntel]
+  );
+
+  const startManualCardField = useCallback(
+    (fieldKey) => {
+      const manualOverrides = cardAttributes?.manualOverrides || {};
+      const fallback =
+        manualOverrides[fieldKey] ||
+        (fieldKey === "setName"
+          ? cardAttributes?.set || cardAttributes?.setName || ""
+          : cardAttributes?.[fieldKey] || "");
+      setManualCardField(fieldKey);
+      setManualCardValue(fallback || "");
+    },
+    [cardAttributes]
+  );
+
+  const cancelManualCardField = useCallback(() => {
+    setManualCardField(null);
+    setManualCardValue("");
+  }, []);
+
+  const saveManualCardField = useCallback(() => {
+    if (!manualCardField) return;
+    const trimmed = manualCardValue.trim();
+    const existing = cardAttributes || {};
+    const manualOverrides = { ...(existing.manualOverrides || {}) };
+    if (trimmed) {
+      manualOverrides[manualCardField] = trimmed;
+    } else {
+      delete manualOverrides[manualCardField];
+    }
+    const nextAttributes = {
+      ...existing,
+      manualOverrides,
+      needsUserConfirmation: computeNeedsUserConfirmation(manualOverrides),
+    };
+    if (manualCardField === "setName") {
+      nextAttributes.setName = trimmed;
+      nextAttributes.set = trimmed;
+    } else {
+      nextAttributes[manualCardField] = trimmed;
+    }
+    setListingField("cardAttributes", nextAttributes);
+    cancelManualCardField();
+  }, [
+    manualCardField,
+    manualCardValue,
+    cardAttributes,
+    setListingField,
+    computeNeedsUserConfirmation,
+    cancelManualCardField,
+  ]);
   const hasApparelSignals =
     Boolean(apparelAttributes?.itemType) ||
     Boolean(apparelAttributes?.brand) ||
     Boolean(apparelAttributes?.size) ||
     Boolean(apparelAttributes?.condition) ||
     Boolean(apparelIntel?.notes);
-  const cardIntel = listingData?.cardIntel || null;
   const isCardMode =
     category === "Sports Cards" ||
     Boolean(
       cardAttributes && typeof cardAttributes === "object" && Object.keys(cardAttributes).length
     );
+  useEffect(() => {
+    if (!storeHydrated) return;
+    if (isCardMode && batchMode !== "sports_cards") {
+      console.log("[runAnalysis] auto-enabling sports analysis mode");
+      setBatchMode("sports_cards");
+    }
+  }, [isCardMode, batchMode, setBatchMode, storeHydrated]);
   const isSportsAnalysisMode = batchMode === "sports_cards" && isCardMode;
+  const combinedCardError = sportsAnalysisError || cardError;
   const sportsStatusMessage = useMemo(() => {
     if (!isSportsAnalysisMode) return null;
-    if (cardError) {
+    if (combinedCardError) {
       return {
         tone: "text-[#F6BDB2]",
         text:
           "We couldn’t finish analyzing this card. Retake photos in Sports Card Studio or continue with manual entry below.",
       };
     }
-    if (serverCardAnalyzing) {
+    if (analysisInFlight) {
       return {
         tone: "text-[#E8D5A8]",
         text: "Analyzing your confirmed card photo. No extra action is required here.",
@@ -286,9 +400,9 @@ export default function SingleListing() {
       tone: "text-white/70",
       text: "Card queued for analysis. We’ll move you forward automatically.",
     };
-  }, [isSportsAnalysisMode, cardError, serverCardAnalyzing, cardAttributes]);
+  }, [isSportsAnalysisMode, combinedCardError, analysisInFlight, cardAttributes]);
   const showPhotoTools = !isSportsAnalysisMode;
-  const analysisActive = isSportsAnalysisMode && serverCardAnalyzing;
+  const analysisActive = isSportsAnalysisMode && analysisInFlight;
   const [viewStage, setViewStage] = useState(
     analysisActive ? VIEW_STAGES.ANALYSIS : VIEW_STAGES.EDIT
   );
@@ -569,12 +683,47 @@ useEffect(() => {
   };
 
   useEffect(() => {
+    if (!storeHydrated) return;
     if (!listingData?.photos || listingData.photos.length === 0) {
-      navigate("/prep");
+      navigate("/card-prep");
     }
     // run ONLY once on first load
     // DO NOT depend on listingData
-  }, []);
+  }, [storeHydrated]);
+
+  useEffect(() => {
+    if (!storeHydrated) return;
+    const frontSignature =
+      mainPhotoEntry?.url ||
+      mainPhotoEntry?.altText ||
+      (mainPhotoEntry?.file ? mainPhotoEntry.file.name : "");
+    const backSignature =
+      backPhotoEntry?.url ||
+      backPhotoEntry?.altText ||
+      (backPhotoEntry?.file ? backPhotoEntry.file.name : "");
+    const signatureValue =
+      frontSignature || backSignature ? `${frontSignature}::${backSignature}` : "";
+    if (!signatureValue) return;
+    if (!lastPhotoSignatureRef.current) {
+      lastPhotoSignatureRef.current = signatureValue;
+      return;
+    }
+    if (signatureValue === lastPhotoSignatureRef.current) return;
+    lastPhotoSignatureRef.current = signatureValue;
+    if (listingData?.cardIntel) {
+      console.log("[runAnalysis] clearing intel due to new photo signature");
+      setListingField("cardIntel", null);
+      setListingField("cardAttributes", null);
+      setListingField("cornerPhotos", []);
+      setListingField("cardIntelHash", null);
+    }
+  }, [
+    storeHydrated,
+    mainPhotoEntry,
+    backPhotoEntry,
+    listingData?.cardIntel,
+    setListingField,
+  ]);
 
   useEffect(() => {
     if (!Array.isArray(listingData?.photos) || listingData.photos.length === 0) {
@@ -680,6 +829,9 @@ useEffect(() => {
 
   const renderCardConfidence = useCallback(
     (field) => {
+      if (field === "player" || field === "team" || field === "year" || field === "setName") {
+        return null;
+      }
       const level = cardIntel?.confidence?.[field];
       if (!level) return null;
       const tone =
@@ -1070,70 +1222,28 @@ useEffect(() => {
     return () => clearTimeout(timer);
   }, [isSportsAnalysisMode, cardAttributes, autoScrollDone]);
 
-  useEffect(() => {
-    if (!isSportsAnalysisMode) return;
-    if (serverCardAnalyzing) return;
-    if (listingData?.cardIntel) return;
-    const front = Array.isArray(listingData?.photos) ? listingData.photos : [];
-    const back = Array.isArray(listingData?.secondaryPhotos)
-      ? listingData.secondaryPhotos
-      : [];
-    if (!front.length || !back.length) return;
-
-    let cancelled = false;
-    const payload = {
-      ...listingData,
-      category: "Sports Cards",
-      photos: front,
-      secondaryPhotos: back,
-    };
-    const photoBundle = [...front, ...back];
-
-    const runAnalysis = async () => {
-      setServerCardAnalyzing(true);
-      setCardError("");
-      try {
-        const intel = await analyzeCardImages(payload, { photos: photoBundle });
-        if (cancelled) return;
-        if (!intel || intel.error) {
-          setCardError(
-            intel?.error || "Unable to analyze card details right now. Please retake the photos."
-          );
-          return;
-        }
-        setListingField("cardIntel", intel);
-        const attrs = buildCardAttributesFromIntel(intel);
-        if (attrs) {
-          setListingField("cardAttributes", attrs);
-        }
-        const cornerAssets = extractCornerPhotoEntries(intel);
-        if (cornerAssets.length) {
-          setListingField("cornerPhotos", cornerAssets);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          console.error("Sports card analysis failed:", err);
-          setCardError("Unable to analyze card details right now. Please retake the photos.");
-        }
-      } finally {
-        if (!cancelled) {
-          setServerCardAnalyzing(false);
-        }
+  const handleRunSportsAnalysis = useCallback(() => {
+    if (!storeHydrated) {
+      console.log("[runAnalysis] waiting for store hydration");
+      return;
+    }
+    if (!isSportsAnalysisMode) {
+      if (isCardMode && batchMode !== "sports_cards") {
+        console.log("[runAnalysis] enabling sports mode within handler");
+        setBatchMode("sports_cards");
+      } else {
+        console.log("[runAnalysis] skipping — not in sports analysis mode");
+        return;
       }
-    };
-
-    runAnalysis();
-    return () => {
-      cancelled = true;
-    };
+    }
+    requestSportsAnalysis();
   }, [
+    storeHydrated,
     isSportsAnalysisMode,
-    serverCardAnalyzing,
-    listingData,
-    listingData?.cardIntel,
-    listingData?.photos,
-    listingData?.secondaryPhotos,
-    setListingField,
+    isCardMode,
+    batchMode,
+    requestSportsAnalysis,
+    setBatchMode,
   ]);
 
   // -------------------------------------------
@@ -1361,6 +1471,18 @@ useEffect(() => {
             <span className={`inline-flex h-2 w-2 rounded-full ${parsingCard ? "bg-[#E8D5A8] animate-pulse" : cardAttributes ? "bg-emerald-400" : "bg-white/50"}`}></span>
             {sportsStatusMessage.text}
           </div>
+          <div className="mt-4 flex flex-col sm:flex-row gap-3">
+            <button
+              type="button"
+              onClick={handleRunSportsAnalysis}
+              disabled={analysisInFlight}
+              className={`flex-1 sm:flex-none px-5 py-2.5 rounded-2xl border border-white/20 text-[11px] uppercase tracking-[0.3em] text-white/85 hover:border-white/50 transition ${
+                analysisInFlight ? "opacity-50 cursor-not-allowed" : ""
+              }`}
+            >
+              {analysisInFlight ? "Analyzing…" : "Run Sports Analysis"}
+            </button>
+          </div>
         </div>
       )}
 
@@ -1437,7 +1559,7 @@ useEffect(() => {
             )}
             {isSportsAnalysisMode && (
               <div className="mt-4 text-xs text-white/60">
-                {serverCardAnalyzing
+                {analysisInFlight
                   ? "Analyzing card details now…"
                   : cardAttributes
                   ? "Analysis finished — review the detected details below."
@@ -1445,9 +1567,9 @@ useEffect(() => {
                 <AnalysisProgress active={analysisActive} />
               </div>
             )}
-            {cardError && (
+            {combinedCardError && (
               <div className="text-xs opacity-60 mt-2">
-                {cardError}
+                {combinedCardError}
               </div>
             )}
             {showPhotoTools ? (
@@ -1595,58 +1717,130 @@ useEffect(() => {
         <>
           <HeaderBar label="Card Details" />
 
+          {showCardVerificationWarning && (
+            <div className="relative overflow-hidden rounded-3xl border border-[#f6d48f]/30 bg-gradient-to-br from-[#3a2317] via-[#2b1a12] to-[#1a0f0a] p-5 mb-6 text-sm text-[#FBEACC] shadow-[0_20px_45px_rgba(0,0,0,0.55)]">
+              <div className="absolute -top-10 -right-6 h-32 w-32 bg-[#f6d48f]/20 blur-3xl pointer-events-none" />
+              <div className="flex items-start gap-3 relative z-10">
+                <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[#F6D48F]/15 border border-[#F6D48F]/40 text-[#F6D48F] text-lg">
+                  !
+                </div>
+                <div>
+                  <p className="font-semibold text-[#FBEACC]">
+                    Couldn’t verify identity from card text
+                  </p>
+                  <p className="text-xs text-white/70 mt-1">
+                    Confirm the fields below so buyers see the correct player, team, year, and set.
+                  </p>
+                  {Array.isArray(cardIntel?.sourceEvidence) && cardIntel.sourceEvidence.length > 0 && (
+                    <ul className="mt-3 space-y-1 text-[11px] text-white/65">
+                      {cardIntel.sourceEvidence.slice(0, 3).map((item, idx) => (
+                        <li key={`${item}-${idx}`} className="flex items-start gap-2">
+                          <span className="mt-0.5 h-1.5 w-1.5 rounded-full bg-[#F6D48F]/70" />
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="lux-card mb-8">
             <div className="text-xs uppercase opacity-70 tracking-wide mb-3">
               Detected Attributes
             </div>
-            <div className="space-y-1 text-sm opacity-85">
-              <div className="flex items-center gap-2">
-                <span className="opacity-60">Player:</span>
-                {renderCardConfidence("player")}
+            <div className="space-y-4 text-sm opacity-85">
+              {CARD_IDENTITY_FIELDS.map(({ key, label }) => {
+                const status = cardIdentityStatuses[key] || {};
+                const displayValue = status.verified
+                  ? status.baseValue
+                  : status.hasManual
+                  ? status.manualValue
+                  : "";
+                const manualTag = !status.verified && status.hasManual;
+                return (
+                  <div key={key}>
+                    <div className="flex items-center gap-2">
+                      <span className="opacity-60">{label}:</span>
+                      {status.verified && (
+                        <span className="text-[10px] uppercase tracking-[0.35em] text-emerald-300/80 border border-emerald-300/40 rounded-full px-2 py-0.5">
+                          OCR VERIFIED
+                        </span>
+                      )}
+                      {manualTag && (
+                        <span className="text-[10px] uppercase tracking-[0.35em] text-[#E8D5A8] border border-[#E8D5A8]/60 rounded-full px-2 py-0.5">
+                          MANUAL
+                        </span>
+                      )}
+                    </div>
+                      <div className="pl-4 mt-1 space-y-2">
+                        {displayValue ? (
+                          <div>{displayValue}</div>
+                        ) : (
+                          <span className="opacity-40">—</span>
+                        )}
+                      {status.needsManual && (
+                        <div className="text-xs text-[#F6D48F] space-y-2">
+                          <div>Couldn’t verify from visible card text.</div>
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-2 text-[10px] uppercase tracking-[0.3em] text-white/80 border border-white/25 rounded-full px-3 py-1 hover:border-white/60 transition"
+                            onClick={() => startManualCardField(key)}
+                          >
+                            Confirm manually
+                          </button>
+                        </div>
+                      )}
+                      {manualCardField === key && (
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <input
+                            type="text"
+                            autoFocus
+                            value={manualCardValue}
+                            onChange={(event) => setManualCardValue(event.target.value)}
+                            className="flex-1 rounded-2xl border border-white/20 bg-black/40 px-3 py-2 text-sm focus:border-white/60 focus:outline-none"
+                            placeholder={`Enter ${label}`}
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={saveManualCardField}
+                              className="px-4 py-2 rounded-2xl bg-[#E8D5A8] text-black text-xs uppercase tracking-[0.3em]"
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              onClick={cancelManualCardField}
+                              className="px-4 py-2 rounded-2xl border border-white/25 text-white/70 text-xs uppercase tracking-[0.3em]"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="opacity-60">Parallel:</span>
+                  {renderCardConfidence("parallel")}
+                </div>
+                <div className="pl-4">
+                  {cardAttributes?.parallel || <span className="opacity-40">—</span>}
+                </div>
               </div>
-              <div className="pl-4">
-                {cardAttributes?.player || <span className="opacity-40">—</span>}
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="opacity-60">Team:</span>
-                {renderCardConfidence("team")}
-              </div>
-              <div className="pl-4">
-                {cardAttributes?.team || <span className="opacity-40">—</span>}
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="opacity-60">Year:</span>
-                {renderCardConfidence("year")}
-              </div>
-              <div className="pl-4">
-                {cardAttributes?.year || <span className="opacity-40">—</span>}
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="opacity-60">Set:</span>
-                {renderCardConfidence("setName")}
-              </div>
-              <div className="pl-4">
-                {cardAttributes?.set || cardAttributes?.setName || (
-                  <span className="opacity-40">—</span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="opacity-60">Parallel:</span>
-                {renderCardConfidence("parallel")}
-              </div>
-              <div className="pl-4">
-                {cardAttributes?.parallel || (
-                  <span className="opacity-40">—</span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="opacity-60">Card #:</span>
-                {renderCardConfidence("cardNumber")}
-              </div>
-              <div className="pl-4">
-                {cardAttributes?.cardNumber || (
-                  <span className="opacity-40">—</span>
-                )}
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="opacity-60">Card #:</span>
+                  {renderCardConfidence("cardNumber")}
+                </div>
+                <div className="pl-4">
+                  {cardAttributes?.cardNumber || <span className="opacity-40">—</span>}
+                </div>
               </div>
             </div>
           </div>
@@ -1804,7 +1998,7 @@ useEffect(() => {
               </div>
             ) : (
               <div className="text-sm text-white/55">
-                {serverCardAnalyzing
+                {analysisInFlight
                   ? "Grading insights will appear after analysis completes."
                   : "No grading data available for this card."}
               </div>
@@ -2531,4 +2725,5 @@ useEffect(() => {
       )}
     </div>
   );
+
 }

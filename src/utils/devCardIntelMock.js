@@ -45,5 +45,7 @@ export async function generateDevCardIntelMock(payload = {}) {
       cardNumber: "back",
       brand: "front",
     },
+    imageHash: payload?.imageHash || null,
+    requestId: payload?.requestId || `mock-${Date.now()}`,
   };
 }

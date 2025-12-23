@@ -59,6 +59,9 @@ export default function MagicCardPrep({ analysisActive = false }) {
     listingData,
     setListingField,
     resetListing,
+    requestSportsAnalysis,
+    batchMode,
+    setBatchMode,
   } = useListingStore();
 
   const [frontPhoto, setFrontPhoto] = useState(listingData?.photos?.[0] || null);
@@ -984,6 +987,12 @@ export default function MagicCardPrep({ analysisActive = false }) {
       setCornerError(coverageMessage);
       return;
     }
+    if (batchMode !== "sports_cards") {
+      setBatchMode("sports_cards");
+    }
+    requestSportsAnalysis().catch((err) => {
+      console.error("Failed to trigger sports analysis:", err);
+    });
     navigate("/single-listing");
   };
 
