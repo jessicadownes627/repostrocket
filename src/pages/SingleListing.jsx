@@ -60,6 +60,12 @@ const CARD_IDENTITY_FIELDS = [
   { key: "year", label: "Year" },
   { key: "setName", label: "Set" },
 ];
+const OCR_ZONE_LABELS = {
+  bottomCenter: "Bottom Center Nameplate",
+  bottomLeft: "Bottom Left Accent",
+  topBanner: "Top Banner / Title",
+};
+const OCR_ZONE_ORDER = ["bottomCenter", "bottomLeft", "topBanner"];
 const VIEW_STAGES = {
   ANALYSIS: "analysis",
   EDIT: "edit",
@@ -91,6 +97,7 @@ const GRADING_PATHS = {
     },
   ],
 };
+const IS_DEV_BUILD = Boolean(import.meta.env.DEV);
 
 const hasListingDraftData = (data) => {
   if (!data || typeof data !== "object") return false;
@@ -258,6 +265,32 @@ export default function SingleListing() {
 
   const cardIntel = listingData?.cardIntel || null;
   const cardAttributes = listingData?.cardAttributes || null;
+  const manualSuggestions = cardIntel?.manualSuggestions || {};
+  const ocrZoneRows = useMemo(() => {
+    const zones = cardIntel?.ocrZones;
+    if (!zones || typeof zones !== "object") return [];
+    const seen = new Set();
+    const ordered = [];
+    OCR_ZONE_ORDER.forEach((zoneKey) => {
+      if (!zones[zoneKey]) return;
+      ordered.push({
+        key: zoneKey,
+        label: OCR_ZONE_LABELS[zoneKey] || zoneKey,
+        data: zones[zoneKey],
+      });
+      seen.add(zoneKey);
+    });
+    Object.keys(zones).forEach((zoneKey) => {
+      if (seen.has(zoneKey) || !zones[zoneKey]) return;
+      ordered.push({
+        key: zoneKey,
+        label: OCR_ZONE_LABELS[zoneKey] || zoneKey,
+        data: zones[zoneKey],
+      });
+    });
+    return ordered;
+  }, [cardIntel?.ocrZones]);
+  const showOcrDebugPanel = IS_DEV_BUILD && ocrZoneRows.length > 0;
   const cornerPhotos = listingData?.cornerPhotos || [];
   const apparelIntel = listingData?.apparelIntel || null;
   const apparelAttributes = listingData?.apparelAttributes || null;
@@ -278,16 +311,22 @@ export default function SingleListing() {
         typeof manualOverrides[field.key] === "string"
           ? manualOverrides[field.key]
           : "";
+      const suggestion =
+        typeof manualSuggestions[field.key] === "string"
+          ? manualSuggestions[field.key]
+          : "";
       acc[field.key] = {
         verified,
         manualValue,
         hasManual: Boolean(manualValue),
         baseValue,
+        suggestion: suggestion || "",
+        hasSuggestion: Boolean(suggestion),
         needsManual: !verified && !manualValue,
       };
       return acc;
     }, {});
-  }, [cardAttributes, cardIntel]);
+  }, [cardAttributes, cardIntel, manualSuggestions]);
 
   const computeNeedsUserConfirmation = useCallback(
     (manualOverrides = {}) => {
@@ -310,13 +349,14 @@ export default function SingleListing() {
       const manualOverrides = cardAttributes?.manualOverrides || {};
       const fallback =
         manualOverrides[fieldKey] ||
+        manualSuggestions[fieldKey] ||
         (fieldKey === "setName"
           ? cardAttributes?.set || cardAttributes?.setName || ""
           : cardAttributes?.[fieldKey] || "");
       setManualCardField(fieldKey);
       setManualCardValue(fallback || "");
     },
-    [cardAttributes]
+    [cardAttributes, manualSuggestions]
   );
 
   const cancelManualCardField = useCallback(() => {
@@ -1223,67 +1263,20 @@ useEffect(() => {
   }, [isSportsAnalysisMode, cardAttributes, autoScrollDone]);
 
   const handleRunSportsAnalysis = useCallback(() => {
-    if (!storeHydrated) {
-      console.log("[runAnalysis] waiting for store hydration");
-      return;
-    }
-    if (!isSportsAnalysisMode) {
-      if (isCardMode && batchMode !== "sports_cards") {
-        console.log("[runAnalysis] enabling sports mode within handler");
-        setBatchMode("sports_cards");
-      } else {
-        console.log("[runAnalysis] skipping — not in sports analysis mode");
-        return;
-      }
-    }
-    requestSportsAnalysis();
-  }, [
-    storeHydrated,
-    isSportsAnalysisMode,
-    isCardMode,
-    batchMode,
-    requestSportsAnalysis,
-    setBatchMode,
-  ]);
+    const flags = { force: true, bypassAllGuards: true };
+    console.log("[runAnalysis] handler entered");
+    console.log("[runAnalysis] flags received:", flags);
+    console.log("[runAnalysis] dispatching requestSportsAnalysis");
+    requestSportsAnalysis(flags);
+  }, [requestSportsAnalysis]);
 
   // -------------------------------------------
   //  MAGIC PHOTO FIX (Single Listing)
   // -------------------------------------------
-  const handleFix = useCallback(
-    async (fn, mode = null) => {
-      try {
-        const src = displayedPhoto;
-        if (!src) return;
-        if (mode) {
-          setPhotoProcessing(mode);
-        }
-        try {
-          console.log("[QA] handleFix invoked", {
-            action: fn?.name || mode || "unknown",
-            mode,
-            timestamp: Date.now(),
-          });
-        } catch (err) {
-          // logging failure should never block UI
-        }
-        const updated = await fn(src);
-        setListingField("editedPhoto", updated);
-        setListingField("editHistory", [
-          ...(Array.isArray(listingData?.editHistory)
-            ? listingData.editHistory
-            : []),
-          updated,
-        ]);
-      } catch (err) {
-        console.error("Photo fix failed:", err);
-      } finally {
-        if (mode) {
-          setPhotoProcessing((prev) => (prev === mode ? null : prev));
-        }
-      }
-    },
-    [displayedPhoto, listingData?.editHistory, setListingField]
-  );
+  const handleFix = useCallback(async () => {
+    console.log("[photoFix] temporarily disabled during forced sports analysis run");
+    return null;
+  }, []);
 
   useEffect(() => {
     if (!mainPhoto) return;
@@ -1474,7 +1467,10 @@ useEffect(() => {
           <div className="mt-4 flex flex-col sm:flex-row gap-3">
             <button
               type="button"
-              onClick={handleRunSportsAnalysis}
+              onClick={() => {
+                console.log("[FORCE] Run Sports Analysis clicked");
+                handleRunSportsAnalysis();
+              }}
               disabled={analysisInFlight}
               className={`flex-1 sm:flex-none px-5 py-2.5 rounded-2xl border border-white/20 text-[11px] uppercase tracking-[0.3em] text-white/85 hover:border-white/50 transition ${
                 analysisInFlight ? "opacity-50 cursor-not-allowed" : ""
@@ -1573,97 +1569,9 @@ useEffect(() => {
               </div>
             )}
             {showPhotoTools ? (
-              <>
-                <div className="mt-4 space-y-3">
-                  <div className="text-[11px] uppercase tracking-[0.3em] text-white/45 mb-1">
-                    Smart Polish
-                  </div>
-                  <button
-                    className={`w-full flex items-center justify-center gap-2 py-3 rounded-[22px] bg-[#E8D5A8] text-black text-sm font-semibold tracking-[0.2em] shadow-[0_15px_35px_rgba(0,0,0,0.55)] hover:shadow-[0_18px_45px_rgba(0,0,0,0.6)] transition ${photoProcessing ? "opacity-70 pointer-events-none" : ""}`}
-                    disabled={Boolean(photoProcessing)}
-                    onClick={() => handleFix(autoFix, "autoFix")}
-                  >
-                    {photoProcessing === "autoFix" ? "Polishing…" : "Auto-Fix"}
-                  </button>
-                  <button
-                    className={`w-full flex items-center justify-center gap-2 py-3 rounded-[20px] border border-[#E8D5A8]/50 bg-black/30 text-[#E8D5A8] text-sm tracking-[0.2em] hover:bg-black/55 transition ${photoProcessing ? "opacity-60 pointer-events-none" : ""}`}
-                    disabled={Boolean(photoProcessing)}
-                    onClick={() => handleFix(studioMode, "studioMode")}
-                  >
-                    {photoProcessing === "studioMode" ? "Applying Studio…" : "Studio Mode"}
-                  </button>
-                  <button
-                    className="w-full py-3 mt-2 rounded-[18px] border border-[#4CC790]/60 bg-transparent text-[#80F5C2] text-sm tracking-[0.18em] shadow-[0_8px_24px_rgba(76,199,144,0.25)] hover:bg-[#4CC790]/10 transition"
-                    onClick={handleSavePhotoAction}
-                  >
-                    Save Image
-                  </button>
-                  {photoProcessing && (
-                    <div className="text-center text-xs text-white/60">
-                      {photoProcessing === "autoFix"
-                        ? "Auto-Fix is polishing your photo…"
-                        : "Studio Mode is giving this photo the luxe treatment…"}
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-6">
-                  <div className="text-[11px] uppercase tracking-[0.3em] text-white/45 mb-2">
-                    Quick Adjustments
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button className="lux-small-btn" onClick={() => handleFix(brighten)}>
-                      Brighten
-                    </button>
-                    <button className="lux-small-btn" onClick={() => handleFix(warm)}>
-                      Warm
-                    </button>
-                    <button className="lux-small-btn" onClick={() => handleFix(cool)}>
-                      Cool
-                    </button>
-                    <button className="lux-small-btn" onClick={() => handleFix(removeShadows)}>
-                      Shadows
-                    </button>
-                    <button className="lux-small-btn" onClick={() => handleFix(cropPhoto)}>
-                      Crop
-                    </button>
-                  </div>
-                </div>
-                <div className="mt-6 pt-4 border-t border-white/10 space-y-2 text-[13px] text-white/70">
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <button
-                      type="button"
-                      className="flex-1 py-2 rounded-[12px] border border-white/12 bg-black/20 text-[11px] tracking-[0.2em] hover:bg-black/40 transition"
-                      onClick={triggerPhotoPicker}
-                    >
-                      Replace Photo
-                    </button>
-                    <button
-                      type="button"
-                      className="flex-1 py-2 rounded-[12px] border border-[rgba(255,93,93,0.4)] bg-black/15 text-[#F7B3B3] text-[11px] tracking-[0.2em] hover:bg-black/30 transition"
-                      onClick={handleRemoveMainPhoto}
-                    >
-                      Remove Photo
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-2 text-[11px] tracking-[0.2em]">
-                    {listingData?.editHistory?.length > 0 && (
-                      <button
-                        className="flex-1 min-w-[110px] py-2 rounded-[10px] border border-white/70 text-white tracking-[0.2em] bg-transparent hover:bg-white/10 transition"
-                        onClick={handleUndo}
-                      >
-                        Undo
-                      </button>
-                    )}
-                    <button
-                      className="flex-1 min-w-[110px] py-2 rounded-[10px] border border-white/8 bg-black/10 text-white/60 hover:bg-black/25 transition"
-                      onClick={handleRevertOriginal}
-                    >
-                      Revert
-                    </button>
-                  </div>
-                </div>
-              </>
+              <div class="mt-4 text-xs text-white/60 italic">
+                Photo polish controls are temporarily disabled while we validate sports analysis.
+              </div>
             ) : (
               <div className="mt-4 text-xs text-white/50">
                 Photo edits are locked from Sports Card Studio. Head below to see the detected card details.
@@ -1773,11 +1681,16 @@ useEffect(() => {
                           MANUAL
                         </span>
                       )}
+                      {!status.verified && !status.hasManual && status.hasSuggestion && (
+                        <span className="text-[10px] uppercase tracking-[0.35em] text-white/70 border border-white/30 rounded-full px-2 py-0.5">
+                          SUGGESTED
+                        </span>
+                      )}
                     </div>
-                      <div className="pl-4 mt-1 space-y-2">
-                        {displayValue ? (
-                          <div>{displayValue}</div>
-                        ) : (
+                    <div className="pl-4 mt-1 space-y-2">
+                      {displayValue ? (
+                        <div>{displayValue}</div>
+                      ) : (
                           <span className="opacity-40">—</span>
                         )}
                       {status.needsManual && (
@@ -1790,6 +1703,11 @@ useEffect(() => {
                           >
                             Confirm manually
                           </button>
+                          {!status.hasManual && status.suggestion && (
+                            <div className="text-[11px] text-white/60">
+                              Suggested: {status.suggestion}
+                            </div>
+                          )}
                         </div>
                       )}
                       {manualCardField === key && (
@@ -1842,14 +1760,82 @@ useEffect(() => {
                   {cardAttributes?.cardNumber || <span className="opacity-40">—</span>}
                 </div>
               </div>
+          </div>
+        </div>
+
+        {showOcrDebugPanel && (
+          <div className="lux-card mb-8 border border-[#7BDFF2]/30 bg-[#04121F]/70">
+            <div className="text-xs uppercase tracking-[0.35em] text-[#7BDFF2]/80 mb-2">
+              OCR Debug Panel (Dev Only)
+            </div>
+            <p className="text-[11px] text-white/60 mb-4">
+              Inspecting zone-level OCR crops helps tune detection without impacting buyers. Visible in
+              development builds only.
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {ocrZoneRows.map(({ key, label, data }) => {
+                const lines = Array.isArray(data?.lines) ? data.lines : [];
+                const confidenceValue =
+                  typeof data?.bestConfidence === "number"
+                    ? `${Math.round(data.bestConfidence * 100)}%`
+                    : "—";
+                return (
+                  <div
+                    key={key}
+                    className="rounded-2xl border border-white/10 bg-black/30 p-3 text-sm text-white/80"
+                  >
+                    <div className="flex items-center justify-between gap-2 text-[11px] uppercase tracking-[0.3em] text-white/60 mb-2">
+                      <span>{label}</span>
+                      {data?.usedForSuggestion && (
+                        <span className="text-[9px] tracking-[0.35em] text-[#7BDFF2] border border-[#7BDFF2]/40 rounded-full px-2 py-0.5">
+                          Suggestion Input
+                        </span>
+                      )}
+                    </div>
+                    {data?.image ? (
+                      <img
+                        src={data.image}
+                        alt={`${label} OCR zone`}
+                        className="w-full h-28 object-cover rounded-xl border border-white/10"
+                      />
+                    ) : (
+                      <div className="w-full h-28 rounded-xl border border-dashed border-white/15 flex items-center justify-center text-xs text-white/40">
+                        No crop preview
+                      </div>
+                    )}
+                    <div className="mt-2 text-[11px] text-white/55">
+                      Best confidence: {confidenceValue}
+                    </div>
+                    {lines.length ? (
+                      <ol className="mt-2 space-y-1 text-xs text-white/80">
+                        {lines.map((line, index) => (
+                          <li key={`${key}-line-${index}`} className="flex items-center gap-2">
+                            <span className="text-[10px] text-white/45 font-mono">
+                              {typeof line?.confidence === "number"
+                                ? `${Math.round(line.confidence * 100)}%`
+                                : "—"}
+                            </span>
+                            <span className="flex-1">{line?.text || "(blank)"}</span>
+                          </li>
+                        ))}
+                      </ol>
+                    ) : (
+                      <div className="mt-2 text-[11px] text-white/50">
+                        No OCR text detected in this zone.
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
+        )}
 
-          {cardAttributes?.corners && (
-            <div className="lux-card mb-8">
-              <div className="flex items-center gap-2 text-xs uppercase opacity-70 tracking-wide mb-2">
-                Corner Inspection
-              </div>
+        {cardAttributes?.corners && (
+          <div className="lux-card mb-8">
+            <div className="flex items-center gap-2 text-xs uppercase opacity-70 tracking-wide mb-2">
+              Corner Inspection
+            </div>
               <p className="text-xs text-white/55 mb-4">
                 Confidence only reflects image clarity (High = clearly framed, Medium = visible but slightly angled). It is not a grading score.
               </p>

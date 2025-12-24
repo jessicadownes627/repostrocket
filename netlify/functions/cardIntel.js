@@ -62,6 +62,8 @@ const CARD_BRANDS = [
 ];
 
 const REQUIRED_IDENTITY_FIELDS = ["player", "team", "year", "setName"];
+const DISABLE_OCR_FILTERING =
+  typeof process !== "undefined" && process.env.NODE_ENV === "development";
 
 const EMPTY_RESPONSE = {
   player: "",
@@ -99,9 +101,16 @@ const EMPTY_RESPONSE = {
   ocr: {
     lines: [],
   },
+  manualSuggestions: {
+    player: "",
+    team: "",
+    year: "",
+    setName: "",
+  },
 };
 
 export async function handler(event) {
+  console.log("[cardIntel] handler entered");
   console.log("[cardIntel] function invoked");
   let currentRequestId = `cardIntel-${Date.now()}`;
   try {
@@ -121,6 +130,7 @@ export async function handler(event) {
       altText = {},
       imageHash = null,
       requestId = currentRequestId,
+      nameZoneCrops = null,
     } = JSON.parse(event.body || "{}");
     currentRequestId = requestId;
     console.log("[cardIntel] payload received", {
@@ -128,7 +138,21 @@ export async function handler(event) {
       imageHash,
       hasFront: Boolean(frontImage),
       hasBack: Boolean(backImage),
+      frontImageBytes: frontImage ? frontImage.length : 0,
+      backImageBytes: backImage ? backImage.length : 0,
     });
+    if (nameZoneCrops && typeof nameZoneCrops === "object") {
+      Object.entries(nameZoneCrops).forEach(([zoneKey, zoneValue]) => {
+        if (!zoneValue || typeof zoneValue !== "object") return;
+        const rect = zoneValue.rect || {};
+        const meta = zoneValue.meta || {};
+        console.log("[cardIntel][CROP] zone=%s rect=%o image=%o", zoneKey, rect, {
+          width: meta.imageWidth,
+          height: meta.imageHeight,
+          cardBounds: meta.cardBounds,
+        });
+      });
+    }
     if (!frontImage && !backImage) {
       return {
         statusCode: 400,
@@ -171,6 +195,7 @@ export async function handler(event) {
 
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     console.log("[cardIntel] OpenAI request starting", { requestId, imageHash });
+    console.log("[cardIntel] calling OpenAI OCR for full card");
     const response = await client.responses.create({
       model: "gpt-4o",
       input: [
@@ -181,26 +206,61 @@ export async function handler(event) {
     console.log("[cardIntel] OpenAI request completed", { requestId });
 
     const raw = response.output_text || "";
+    console.log('[cardIntel][OCR FULL CARD] rawText="%s"', raw);
     const parsed = parseJsonSafe(raw);
     const ocrLines = extractOcrLines(parsed);
-    const derived = deriveFieldsFromOcr(ocrLines, hints);
+    const fullCardOcr = {
+      lines: ocrLines,
+      confidence: ocrLines.reduce(
+        (max, line) => Math.max(max, typeof line?.confidence === "number" ? line.confidence : 0),
+        0
+      ),
+    };
+    const zoneOcrResults = {};
+    const zoneSuggestions = {};
+    const zoneUsage = {};
+  const derived = deriveFieldsFromOcr(ocrLines, hints);
+    const formattedZones = Object.entries(zoneOcrResults || {}).reduce(
+      (acc, [zoneKey, zoneData]) => {
+        const lines = Array.isArray(zoneData?.lines) ? zoneData.lines : [];
+        const bestConfidence = lines.reduce(
+          (max, line) => Math.max(max, line.confidence || 0),
+          0
+        );
+        acc[zoneKey] = {
+          lines,
+          bestConfidence,
+          usedForSuggestion: Boolean(zoneUsage?.[zoneKey]),
+          image: nameZoneCrops?.[zoneKey]?.image || null,
+        };
+        return acc;
+      },
+      {}
+    );
+
     const responsePayload = {
       ...EMPTY_RESPONSE,
       ...derived,
       imageHash,
       requestId,
       ocr: { lines: ocrLines },
+      ocrFull: fullCardOcr,
+      ocrZones: formattedZones,
+      manualSuggestions: {
+        ...EMPTY_RESPONSE.manualSuggestions,
+        ...zoneSuggestions,
+        ...derived.manualSuggestions,
+      },
     };
     return {
       statusCode: 200,
       body: JSON.stringify(responsePayload),
     };
   } catch (err) {
-    console.error("Card Intel Backend Error:", err);
+    console.error("[cardIntel] fatal error", err);
     return {
-      statusCode: 200,
+      statusCode: 500,
       body: JSON.stringify({
-        ...EMPTY_RESPONSE,
         error: err?.message || "Card intel failed unexpectedly.",
         stack: err?.stack || null,
         requestId: currentRequestId || `cardIntel-error-${Date.now()}`,
@@ -254,24 +314,107 @@ function stripCodeFences(str) {
   return str.replace(/```json/gi, "").replace(/```/g, "").trim();
 }
 
-function extractOcrLines(payload) {
+function extractOcrLines(payload, { skipFiltering = DISABLE_OCR_FILTERING } = {}) {
   if (!payload || typeof payload !== "object") {
     return [];
   }
   const rawLines = payload?.ocr?.lines;
   if (!Array.isArray(rawLines)) return [];
-  return rawLines
-    .map((line, index) => {
-      const text = typeof line?.text === "string" ? line.text.trim() : "";
-      if (!text) return null;
-      return {
-        text,
-        normalized: normalizeTextLine(text),
-        confidence: typeof line?.confidence === "number" ? line.confidence : null,
-        index,
-      };
-    })
-    .filter(Boolean);
+  const mapped = rawLines.map((line, index) => {
+    const rawText =
+      typeof line?.text === "string"
+        ? line.text
+        : line?.text === null || line?.text === undefined
+        ? ""
+        : String(line.text);
+    return {
+      text: rawText,
+      normalized: normalizeTextLine(rawText),
+      confidence: typeof line?.confidence === "number" ? line.confidence : null,
+      index,
+    };
+  });
+  if (skipFiltering) {
+    return mapped;
+  }
+  return mapped.filter((entry) => Boolean(entry.text && entry.text.trim()));
+}
+
+async function runNameZoneOcr(client, zoneMap) {
+  if (!zoneMap || typeof zoneMap !== "object") return {};
+  const entries = Object.entries(zoneMap);
+  if (!entries.length) return {};
+  const results = {};
+  const model = "gpt-4o";
+  for (const [zoneKey, zoneValue] of entries) {
+    const imageDataUrl =
+      typeof zoneValue === "string"
+        ? zoneValue
+        : typeof zoneValue?.image === "string"
+        ? zoneValue.image
+        : null;
+    if (!imageDataUrl) continue;
+    try {
+      console.log("[cardIntel][OCR] zone=%s model=%s request -> start", zoneKey, model);
+      const response = await client.responses.create({
+        model,
+        input: [
+          { role: "system", content: SYSTEM_PROMPT },
+          {
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text: `OCR zone focus: ${zoneKey}`,
+              },
+              {
+                type: "input_image",
+                image_url: imageDataUrl,
+              },
+            ],
+          },
+        ],
+      });
+      const rawText = response.output_text || "";
+      console.log("[cardIntel][OCR RAW] zone=%s model=%s raw=%s", zoneKey, model, rawText);
+      const parsed = parseJsonSafe(rawText);
+      const lines = extractOcrLines(parsed, { skipFiltering: true });
+      results[zoneKey] = { lines };
+    } catch (err) {
+      console.error("Card intel zone OCR failed:", zoneKey, err);
+    }
+  }
+  return results;
+}
+
+function buildManualSuggestionsFromZones(zones = {}) {
+  if (!zones || typeof zones !== "object") {
+    return { suggestions: {}, zoneUsage: {} };
+  }
+  const zoneOrder = ["bottomCenter", "bottomLeft", "topBanner"];
+  const zoneUsage = {};
+  const suggestions = {};
+
+  const findValue = (fieldKey, finderFn, transformFn) => {
+    if (suggestions[fieldKey]) return;
+    for (const zoneKey of zoneOrder) {
+      const lines = zones?.[zoneKey]?.lines;
+      if (!Array.isArray(lines) || !lines.length) continue;
+      const entry = finderFn(lines);
+      if (entry) {
+        suggestions[fieldKey] = transformFn(entry);
+        zoneUsage[zoneKey] = zoneUsage[zoneKey] || {};
+        zoneUsage[zoneKey][fieldKey] = true;
+        break;
+      }
+    }
+  };
+
+  findValue("player", findPlayerCandidate, (entry) => titleCase(entry.text));
+  findValue("team", findTeamCandidate, (entry) => titleCaseTeam(entry.text));
+  findValue("setName", findSetCandidate, (entry) => titleCase(entry.brand));
+
+  return { suggestions, zoneUsage };
 }
 
 export function deriveFieldsFromOcr(lines = [], hints = {}) {
@@ -279,6 +422,7 @@ export function deriveFieldsFromOcr(lines = [], hints = {}) {
   const sources = { ...EMPTY_RESPONSE.sources };
   const isTextVerified = { ...EMPTY_RESPONSE.isTextVerified };
   const confidence = { ...EMPTY_RESPONSE.confidence };
+  const manualSuggestions = { ...EMPTY_RESPONSE.manualSuggestions };
 
   const playerEntry = findPlayerCandidate(lines);
   const player = playerEntry ? titleCase(playerEntry.text) : "";
@@ -288,6 +432,7 @@ export function deriveFieldsFromOcr(lines = [], hints = {}) {
     isTextVerified.player = true;
     confidence.player = "high";
   }
+  manualSuggestions.player = player;
 
   const teamEntry = findTeamCandidate(lines);
   const team = teamEntry ? titleCaseTeam(teamEntry.text) : "";
@@ -297,6 +442,7 @@ export function deriveFieldsFromOcr(lines = [], hints = {}) {
     isTextVerified.team = true;
     confidence.team = "high";
   }
+  manualSuggestions.team = team;
 
   const yearEntry = findYearCandidate(lines);
   const year = yearEntry ? yearEntry.match : "";
@@ -306,6 +452,7 @@ export function deriveFieldsFromOcr(lines = [], hints = {}) {
     isTextVerified.year = true;
     confidence.year = "high";
   }
+  manualSuggestions.year = year;
 
   const setEntry = findSetCandidate(lines);
   const setName = setEntry ? titleCase(setEntry.brand) : "";
@@ -320,6 +467,7 @@ export function deriveFieldsFromOcr(lines = [], hints = {}) {
     confidence.setName = "low";
     confidence.brand = "low";
   }
+  manualSuggestions.setName = setName;
 
   const needsUserConfirmation = REQUIRED_IDENTITY_FIELDS.some((field) => {
     if (field === "setName") return !setName;
@@ -359,6 +507,7 @@ export function deriveFieldsFromOcr(lines = [], hints = {}) {
     sourceEvidence: evidence,
     isTextVerified,
     needsUserConfirmation,
+    manualSuggestions,
   };
 }
 

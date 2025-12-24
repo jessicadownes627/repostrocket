@@ -990,7 +990,7 @@ export default function MagicCardPrep({ analysisActive = false }) {
     if (batchMode !== "sports_cards") {
       setBatchMode("sports_cards");
     }
-    requestSportsAnalysis().catch((err) => {
+    requestSportsAnalysis({ force: true, bypassAllGuards: true }).catch((err) => {
       console.error("Failed to trigger sports analysis:", err);
     });
     navigate("/single-listing");

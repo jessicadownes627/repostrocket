@@ -116,20 +116,26 @@ function collectPhotos(item = {}, explicit = []) {
   return list.filter(Boolean);
 }
 
-export async function analyzeCardImages(item = {}, options = {}) {
+export async function prepareCardIntelPayload(item = {}, options = {}) {
   const entries = collectPhotos(item, options.photos || []);
-  if (!entries.length) return null;
+  if (!entries.length) {
+    return { error: "missing_photos" };
+  }
 
   const frontEntry = entries[0];
   const backEntry = entries[1] || null;
 
   const overrideFront = options.frontDataUrl;
-  const overrideBack = options.backDataUrl;
+  const overrideBack = options.frontDataUrl ? null : options.backDataUrl;
+  const includeBackImage = options.includeBackImage !== false;
 
   const frontImage = overrideFront || (await dataUrlFromEntry(frontEntry));
-  const backImage = overrideBack || (backEntry ? await dataUrlFromEntry(backEntry) : null);
+  const backImage =
+    includeBackImage && backEntry ? await dataUrlFromEntry(backEntry) : overrideBack || null;
 
-  if (!frontImage && !backImage) return null;
+  if (!frontImage && !backImage) {
+    return { error: "no_images" };
+  }
 
   const payload = {
     frontImage,
@@ -140,6 +146,13 @@ export async function analyzeCardImages(item = {}, options = {}) {
     },
     hints: buildHints(item),
   };
+
+  if (options.includeNameZones !== false) {
+    const nameZoneCrops = await buildNameZoneCrops(frontImage);
+    if (nameZoneCrops && Object.keys(nameZoneCrops).length) {
+      payload.nameZoneCrops = nameZoneCrops;
+    }
+  }
   const imageHash = await computeImageHash(frontImage, backImage);
   const requestId =
     options.requestId ||
@@ -149,18 +162,85 @@ export async function analyzeCardImages(item = {}, options = {}) {
   if (typeof options.onHash === "function") {
     const shouldContinue = await options.onHash(imageHash);
     if (shouldContinue === false) {
-      return { ...EMPTY_INTEL, cancelled: true, imageHash, requestId };
+      return {
+        payload,
+        imageHash,
+        requestId,
+        cancelled: true,
+      };
     }
   }
 
-  const cornerFront =
-    frontImage && options.enableCornerCrop !== false
-      ? await maybeCropForCorners(frontImage)
-      : { dataUrl: frontImage, confidence: 0 };
-  const cornerBack =
-    backImage && options.enableCornerCrop !== false
-      ? await maybeCropForCorners(backImage)
-      : { dataUrl: backImage, confidence: 0 };
+  let cornerFront = null;
+  let cornerBack = null;
+  if (!options.disableCrops) {
+    cornerFront =
+      frontImage && options.enableCornerCrop !== false
+        ? await maybeCropForCorners(frontImage)
+        : { dataUrl: frontImage, confidence: 0 };
+    cornerBack =
+      backImage && options.enableCornerCrop !== false
+        ? await maybeCropForCorners(backImage)
+        : { dataUrl: backImage, confidence: 0 };
+  }
+  return {
+    payload,
+    imageHash,
+    requestId,
+    frontImage,
+    backImage,
+    cornerFront,
+    cornerBack,
+    skipCornerAnalysis: Boolean(options.disableCrops),
+  };
+}
+
+export async function finalizeCardIntelResponse(data, meta = {}) {
+  const { cornerFront, cornerBack, imageHash, requestId, skipCornerAnalysis } = meta;
+  let cornerInsights = null;
+  if (!skipCornerAnalysis) {
+    cornerInsights = await analyzeCornerPhotos({
+      frontImage: cornerFront?.dataUrl,
+      backImage: cornerBack?.dataUrl,
+    });
+  }
+  const merged = {
+    ...EMPTY_INTEL,
+    ...data,
+    confidence: ensureConfidence(data?.confidence),
+    sources: data?.sources || data?.verification || {},
+    imageHash,
+    requestId,
+  };
+
+  if (cornerInsights) {
+    merged.corners = cornerInsights.corners;
+    merged.cornerCondition = cornerInsights.condition;
+    if (!merged.notes && cornerInsights.condition?.summary) {
+      merged.notes = cornerInsights.condition.summary;
+    }
+  }
+  return merged;
+}
+
+export async function analyzeCardImages(item = {}, options = {}) {
+  const prep = await prepareCardIntelPayload(item, options);
+  if (!prep) {
+    return { ...EMPTY_INTEL, error: DEFAULT_ANALYSIS_ERROR_MESSAGE };
+  }
+  if (prep.error) {
+    return { ...EMPTY_INTEL, error: prep.error };
+  }
+  if (prep.cancelled) {
+    return {
+      ...EMPTY_INTEL,
+      cancelled: true,
+      imageHash: prep.imageHash,
+      requestId: prep.requestId,
+    };
+  }
+
+  const { payload, imageHash, requestId } = prep;
 
   try {
     let data = null;
@@ -173,6 +253,7 @@ export async function analyzeCardImages(item = {}, options = {}) {
         requestId,
         imageHash,
       });
+      console.log("cardIntel fetch fired", { requestId, imageHash });
       const response = await fetch("/.netlify/functions/cardIntel", {
         method: "POST",
         headers: {
@@ -184,16 +265,21 @@ export async function analyzeCardImages(item = {}, options = {}) {
       if (!response.ok) {
         let text = "";
         try {
-        text = await response.text();
-      } catch {
-        text = "";
-      }
+          text = await response.text();
+        } catch {
+          text = "";
+        }
         console.error("Card intel function error:", text);
         return { ...EMPTY_INTEL, error: DEFAULT_ANALYSIS_ERROR_MESSAGE };
       }
 
       try {
         data = await response.json();
+        console.log("[cardIntel] frontend request completed", {
+          requestId,
+          imageHash,
+          keys: Object.keys(data || {}),
+        });
       } catch (err) {
         console.error("Card intel JSON parse error:", err);
         return { ...EMPTY_INTEL, error: DEFAULT_ANALYSIS_ERROR_MESSAGE };
@@ -207,28 +293,7 @@ export async function analyzeCardImages(item = {}, options = {}) {
       };
     }
 
-    const cornerInsights = await analyzeCornerPhotos({
-      frontImage: cornerFront.dataUrl,
-      backImage: cornerBack.dataUrl,
-    });
-
-    const merged = {
-      ...EMPTY_INTEL,
-      ...data,
-      confidence: ensureConfidence(data?.confidence),
-      sources: data?.sources || data?.verification || {},
-      imageHash,
-      requestId,
-    };
-
-    if (cornerInsights) {
-      merged.corners = cornerInsights.corners;
-      merged.cornerCondition = cornerInsights.condition;
-      if (!merged.notes && cornerInsights.condition?.summary) {
-        merged.notes = cornerInsights.condition.summary;
-      }
-    }
-    return merged;
+    return finalizeCardIntelResponse(data, prep);
   } catch (err) {
     console.error("Failed to analyze card images:", err);
     return { ...EMPTY_INTEL, error: DEFAULT_ANALYSIS_ERROR_MESSAGE };
@@ -528,6 +593,159 @@ function getCornerBasePosition(cornerKey, imgWidth, imgHeight, size, padding) {
     default:
       return { x: -padding, y: -padding };
   }
+}
+
+async function buildNameZoneCrops(dataUrl) {
+  if (!dataUrl) return null;
+  try {
+    const baseImage = await loadImageElement(dataUrl);
+    if (!baseImage) return null;
+    const boundsResult = await cropToCardBounds(dataUrl);
+    const cardBounds = boundsResult?.bounds || {
+      x: 0,
+      y: 0,
+      width: baseImage.width,
+      height: baseImage.height,
+    };
+    const definitions = [
+      {
+        key: "bottomCenter",
+        xRatio: 0.15,
+        yRatio: 0.72,
+        widthRatio: 0.7,
+        heightRatio: 0.2,
+      },
+      {
+        key: "bottomLeft",
+        xRatio: 0.05,
+        yRatio: 0.75,
+        widthRatio: 0.38,
+        heightRatio: 0.22,
+      },
+      {
+        key: "topBanner",
+        xRatio: 0.08,
+        yRatio: 0.05,
+        widthRatio: 0.84,
+        heightRatio: 0.16,
+      },
+    ];
+    const results = {};
+    definitions.forEach((zone) => {
+      const rect = clampZoneRect(cardBounds, baseImage.width, baseImage.height, zone);
+      if (!rect || rect.width < 24 || rect.height < 24) return;
+      const cropped = cropAndPreprocessZone(baseImage, rect);
+      if (cropped) {
+        results[zone.key] = {
+          image: cropped,
+          rect,
+          meta: {
+            imageWidth: baseImage.width,
+            imageHeight: baseImage.height,
+            cardBounds,
+          },
+        };
+      }
+    });
+    return results;
+  } catch (err) {
+    console.error("Card intel: failed to build name zone crops", err);
+    return null;
+  }
+}
+
+function clampZoneRect(bounds, imageWidth, imageHeight, zone) {
+  if (!bounds || !zone) return null;
+  const rect = {
+    x: Math.round(bounds.x + bounds.width * zone.xRatio),
+    y: Math.round(bounds.y + bounds.height * zone.yRatio),
+    width: Math.round(bounds.width * zone.widthRatio),
+    height: Math.round(bounds.height * zone.heightRatio),
+  };
+  rect.x = Math.max(bounds.x, Math.min(bounds.x + bounds.width - rect.width, rect.x));
+  rect.y = Math.max(bounds.y, Math.min(bounds.y + bounds.height - rect.height, rect.y));
+  rect.width = Math.min(rect.width, imageWidth - rect.x);
+  rect.height = Math.min(rect.height, imageHeight - rect.y);
+  return rect;
+}
+
+function cropAndPreprocessZone(image, rect) {
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(image, rect.x, rect.y, rect.width, rect.height, 0, 0, rect.width, rect.height);
+    preprocessForOcr(ctx, rect.width, rect.height);
+    return canvas.toDataURL("image/png");
+  } catch (err) {
+    console.error("Card intel: failed to crop OCR zone", err);
+    return null;
+  }
+}
+
+function preprocessForOcr(ctx, width, height) {
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const data = imageData.data;
+  const contrast = 1.25;
+  const midpoint = 128;
+  for (let i = 0; i < data.length; i += 4) {
+    const avg = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    let value = avg;
+    value = (value - midpoint) * contrast + midpoint;
+    value = Math.max(0, Math.min(255, value));
+    data[i] = data[i + 1] = data[i + 2] = value;
+  }
+  ctx.putImageData(imageData, 0, 0);
+  applySharpen(ctx, width, height);
+}
+
+function applySharpen(ctx, width, height) {
+  const weights = [0, -1, 0, -1, 5, -1, 0, -1, 0];
+  const side = Math.round(Math.sqrt(weights.length));
+  const halfSide = Math.floor(side / 2);
+  const src = ctx.getImageData(0, 0, width, height);
+  const dst = ctx.createImageData(width, height);
+  const srcData = src.data;
+  const dstData = dst.data;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      for (let cy = 0; cy < side; cy += 1) {
+        for (let cx = 0; cx < side; cx += 1) {
+          const scy = Math.min(height - 1, Math.max(0, y + cy - halfSide));
+          const scx = Math.min(width - 1, Math.max(0, x + cx - halfSide));
+          const srcOffset = (scy * width + scx) * 4;
+          const weight = weights[cy * side + cx];
+          r += srcData[srcOffset] * weight;
+          g += srcData[srcOffset + 1] * weight;
+          b += srcData[srcOffset + 2] * weight;
+        }
+      }
+      const dstOffset = (y * width + x) * 4;
+      dstData[dstOffset] = Math.max(0, Math.min(255, r));
+      dstData[dstOffset + 1] = Math.max(0, Math.min(255, g));
+      dstData[dstOffset + 2] = Math.max(0, Math.min(255, b));
+      dstData[dstOffset + 3] = srcData[dstOffset + 3];
+    }
+  }
+  ctx.putImageData(dst, 0, 0);
+}
+
+function loadImageElement(dataUrl) {
+  return new Promise((resolve, reject) => {
+    if (!dataUrl) {
+      resolve(null);
+      return;
+    }
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = (err) => reject(err);
+    img.src = dataUrl;
+  });
 }
 
 function buildCornerConditionSummary(corners = {}) {

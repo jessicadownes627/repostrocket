@@ -4,9 +4,10 @@ import {
   normalizePhotosArray,
 } from "../utils/photoHelpers";
 import {
-  analyzeCardImages,
   buildCardAttributesFromIntel,
   extractCornerPhotoEntries,
+  prepareCardIntelPayload,
+  finalizeCardIntelResponse,
 } from "../utils/cardIntel";
 
 const ListingContext = createContext(null);
@@ -235,12 +236,26 @@ export function ListingProvider({ children }) {
       setSportsAnalysisError("");
     };
 
-    const requestSportsAnalysis = async ({ force = false } = {}) => {
-      if (analysisInFlight || analysisSessionId) {
+    const requestSportsAnalysis = async (params) => {
+      const incomingForce = params?.force;
+      const incomingBypass = params?.bypassAllGuards;
+      console.assert(incomingForce === true, "FORCE FLAG LOST BEFORE STORE");
+      console.log("[listingStore] requestSportsAnalysis entered");
+      console.log("[listingStore] flags received (raw):", {
+        force: incomingForce,
+        bypassAllGuards: incomingBypass,
+      });
+      const forceFlag = true;
+      const bypassFlag = true;
+      console.log("[listingStore] flags applied (forced):", {
+        force: forceFlag,
+        bypassAllGuards: bypassFlag,
+      });
+      if (!forceFlag && (analysisInFlight || analysisSessionId)) {
         console.log("[listingStore] sports analysis already running");
         return { skipped: true, reason: "in_flight" };
       }
-      if (!storeHydrated) {
+      if (!forceFlag && !storeHydrated) {
         console.log("[listingStore] sports analysis waiting for hydration");
         return { skipped: true, reason: "not_hydrated" };
       }
@@ -248,7 +263,7 @@ export function ListingProvider({ children }) {
       const back = Array.isArray(listingData?.secondaryPhotos)
         ? listingData.secondaryPhotos
         : [];
-      if (!front.length || !back.length) {
+      if (!forceFlag && (!front.length || !back.length)) {
         console.log("[listingStore] sports analysis missing photos", {
           frontCount: front.length,
           backCount: back.length,
@@ -259,6 +274,7 @@ export function ListingProvider({ children }) {
       setAnalysisSessionId(sessionId);
       setAnalysisInFlight(true);
       setSportsAnalysisError("");
+      console.log("[listingStore] step: preparing listing payload");
       const payload = {
         ...listingData,
         category: "Sports Cards",
@@ -268,7 +284,7 @@ export function ListingProvider({ children }) {
       const photoBundle = [...front, ...back];
       const onHashDecision = (hash) => {
         const existingHash = listingData?.cardIntelHash || lastAnalyzedHash;
-        if (!force && listingData?.cardIntel && existingHash && existingHash === hash) {
+        if (!forceFlag && listingData?.cardIntel && existingHash && existingHash === hash) {
           console.log("[listingStore] hash unchanged — skipping request");
           return false;
         }
@@ -279,25 +295,84 @@ export function ListingProvider({ children }) {
         return true;
       };
       try {
-        const intel = await analyzeCardImages(payload, {
+        console.log("[listingStore] step: building Netlify payload");
+        const prep = await prepareCardIntelPayload(payload, {
           photos: photoBundle,
           onHash: onHashDecision,
           requestId: sessionId,
+          includeBackImage: false,
+          disableCrops: true,
+          includeNameZones: false,
         });
-        if (!intel) {
+        if (!prep || prep.error) {
+          console.error("[listingStore] failed to prepare payload", prep?.error);
           setSportsAnalysisError(SPORTS_ANALYSIS_ERROR_MESSAGE);
-          return { error: SPORTS_ANALYSIS_ERROR_MESSAGE };
+          return { error: prep?.error || SPORTS_ANALYSIS_ERROR_MESSAGE };
         }
-        if (intel.cancelled) {
+        if (prep.cancelled) {
           console.log("[listingStore] sports analysis cancelled before request", {
             sessionId,
           });
           return { cancelled: true };
         }
-        if (intel.error) {
-          setSportsAnalysisError(intel.error);
-          return { error: intel.error };
+
+        console.log("[client] calling /.netlify/functions/cardIntel", {
+          requestId: prep.requestId,
+          imageHash: prep.imageHash,
+        });
+        const minimalPayload = {
+          frontImage: prep.payload?.frontImage || null,
+          backImage: null,
+          altText: {
+            front: prep.payload?.altText?.front || "",
+            back: null,
+          },
+          hints: prep.payload?.hints || {},
+          requestId: prep.payload?.requestId,
+          imageHash: prep.payload?.imageHash,
+        };
+        console.log("[listingStore] payload sizes (bytes)", {
+          frontImage: minimalPayload.frontImage ? minimalPayload.frontImage.length : 0,
+        });
+        const response = await fetch("/.netlify/functions/cardIntel", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(minimalPayload),
+        });
+        if (!response.ok) {
+          let text = "";
+          try {
+            text = await response.text();
+          } catch (err) {
+            text = err?.message || "";
+          }
+          console.error("[listingStore] cardIntel function error:", text);
+          setSportsAnalysisError(SPORTS_ANALYSIS_ERROR_MESSAGE);
+          return { error: SPORTS_ANALYSIS_ERROR_MESSAGE };
         }
+        let data = null;
+        try {
+          data = await response.json();
+          console.log("[listingStore] step: received cardIntel payload", {
+            keys: Object.keys(data || {}),
+          });
+        } catch (err) {
+          console.error("[listingStore] failed to parse cardIntel response", err);
+          setSportsAnalysisError(SPORTS_ANALYSIS_ERROR_MESSAGE);
+          return { error: SPORTS_ANALYSIS_ERROR_MESSAGE };
+        }
+        if (!data || data.error) {
+          setSportsAnalysisError(data?.error || SPORTS_ANALYSIS_ERROR_MESSAGE);
+          return { error: data?.error || SPORTS_ANALYSIS_ERROR_MESSAGE };
+        }
+
+        console.log("[listingStore] step: finalizing intel with local corners");
+        const intel = await finalizeCardIntelResponse(data, {
+          ...prep,
+          skipCornerAnalysis: true,
+        });
         applyCardIntelResult(intel);
         return { success: true, intel };
       } catch (err) {
