@@ -176,6 +176,14 @@ export default function SingleListing() {
     sportsAnalysisError,
     requestSportsAnalysis,
   } = useListingStore();
+  const photoPickerRef = useRef(null);
+  const resultsRef = useRef(null);
+  const chipFlashTimeouts = useRef({});
+  const lastPolishedPhotoRef = useRef(null);
+  const lastPhotoSignatureRef = useRef("");
+  const mobileResumeHandledRef = useRef(false);
+  const mainContainerRef = useRef(null);
+  const analysisStageRef = useRef(analysisInFlight);
 
   const devPremiumOverride =
     typeof window !== "undefined" &&
@@ -214,74 +222,23 @@ export default function SingleListing() {
   const [showShippingTips, setShowShippingTips] = useState(true);
   const [shippingAudience, setShippingAudience] = useState("sellers");
   const [chipFlash, setChipFlash] = useState({});
-  const chipFlashTimeouts = useRef({});
   const [customTag, setCustomTag] = useState("");
   const [isTrackedForTrends, setIsTrackedForTrends] = useState(false);
   const [trackFeedback, setTrackFeedback] = useState("");
-  const photoPickerRef = useRef(null);
-  const resultsRef = useRef(null);
-  const magicDiffs = Array.isArray(magicResults?.diffs)
-    ? magicResults.diffs
-    : [];
-  const glowScore = magicResults?.glowScore || null;
-  const glowRecommendations = Array.isArray(glowScore?.recommendations)
-    ? glowScore.recommendations
-    : [];
-  const saveImageLabel = getImageSaveLabel();
+  const [showResumeNotice, setShowResumeNotice] = useState(() =>
+    hasListingDraftData(listingData)
+  );
+  const [isMobileViewport, setIsMobileViewport] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia("(max-width: 720px)").matches;
+  });
+  const [showMobileResumePrompt, setShowMobileResumePrompt] = useState(false);
   const [photoProcessing, setPhotoProcessing] = useState(null);
-  const lastPolishedPhotoRef = useRef(null);
   const [autoAnalysisTriggered, setAutoAnalysisTriggered] = useState(false);
   const [autoScrollDone, setAutoScrollDone] = useState(false);
   const [manualCardField, setManualCardField] = useState(null);
   const [manualCardValue, setManualCardValue] = useState("");
   const [openEvidenceField, setOpenEvidenceField] = useState(null);
-  const lastPhotoSignatureRef = useRef("");
-  const mobileResumeHandledRef = useRef(false);
-  const mainContainerRef = useRef(null);
-  const analysisStageRef = useRef(analysisInFlight);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const ack = window.sessionStorage.getItem("rr_mobile_resume_ack") === "true";
-      mobileResumeHandledRef.current = ack;
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const mq = window.matchMedia("(max-width: 720px)");
-    const handleChange = (event) => {
-      const matches =
-        typeof event?.matches === "boolean" ? event.matches : mq.matches;
-      setIsMobileViewport(matches);
-    };
-    handleChange(mq);
-    const cleanupFns = [];
-    if (typeof mq.addEventListener === "function") {
-      mq.addEventListener("change", handleChange);
-      cleanupFns.push(() => mq.removeEventListener("change", handleChange));
-    } else if (typeof mq.addListener === "function") {
-      mq.addListener(handleChange);
-      cleanupFns.push(() => mq.removeListener(handleChange));
-    }
-    if (!cleanupFns.length) {
-      const resizeHandler = () => setIsMobileViewport(window.innerWidth <= 720);
-      window.addEventListener("resize", resizeHandler);
-      cleanupFns.push(() => window.removeEventListener("resize", resizeHandler));
-    }
-    return () => {
-      cleanupFns.forEach((fn) => {
-        try {
-          fn();
-        } catch {
-          // ignore
-        }
-      });
-    };
-  }, []);
 
   useEffect(() => {
     const id = listingData?.libraryId;
@@ -344,6 +301,40 @@ export default function SingleListing() {
   const showCardVerificationWarning = Boolean(
     cardIntel?.needsUserConfirmation || cardAttributes?.needsUserConfirmation
   );
+  const acknowledgeMobilePrompt = useCallback(() => {
+    mobileResumeHandledRef.current = true;
+    try {
+      window.sessionStorage.setItem("rr_mobile_resume_ack", "true");
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const clearDraftState = useCallback(() => {
+    const nextMode = batchMode === "sports_cards" ? "sports_cards" : "general";
+    resetListing(nextMode);
+    setShowResumeNotice(false);
+  }, [batchMode, resetListing]);
+
+  const handleMobileResumeContinue = useCallback(() => {
+    acknowledgeMobilePrompt();
+    setShowMobileResumePrompt(false);
+  }, [acknowledgeMobilePrompt]);
+
+  const handleMobileResumeStartNew = useCallback(() => {
+    acknowledgeMobilePrompt();
+    setShowMobileResumePrompt(false);
+    clearDraftState();
+  }, [acknowledgeMobilePrompt, clearDraftState]);
+  const magicDiffs = Array.isArray(magicResults?.diffs)
+    ? magicResults.diffs
+    : [];
+  const glowScore = magicResults?.glowScore || null;
+  const glowRecommendations = Array.isArray(glowScore?.recommendations)
+    ? glowScore.recommendations
+    : [];
+  const saveImageLabel = getImageSaveLabel();
+
   const cardIdentityStatuses = useMemo(() => {
     const manualOverrides = cardAttributes?.manualOverrides || {};
     return CARD_IDENTITY_FIELDS.reduce((acc, field) => {
@@ -383,6 +374,49 @@ export default function SingleListing() {
     Boolean(cardBackDetails?.team) ||
     Boolean(cardBackDetails?.position) ||
     (Array.isArray(cardBackDetails?.lines) && cardBackDetails.lines.length > 0);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const ack = window.sessionStorage.getItem("rr_mobile_resume_ack") === "true";
+      mobileResumeHandledRef.current = ack;
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 720px)");
+    const handleChange = (event) => {
+      const matches =
+        typeof event?.matches === "boolean" ? event.matches : mq.matches;
+      setIsMobileViewport(matches);
+    };
+    handleChange(mq);
+    const cleanupFns = [];
+    if (typeof mq.addEventListener === "function") {
+      mq.addEventListener("change", handleChange);
+      cleanupFns.push(() => mq.removeEventListener("change", handleChange));
+    } else if (typeof mq.addListener === "function") {
+      mq.addListener(handleChange);
+      cleanupFns.push(() => mq.removeListener(handleChange));
+    }
+    if (!cleanupFns.length) {
+      const resizeHandler = () => setIsMobileViewport(window.innerWidth <= 720);
+      window.addEventListener("resize", resizeHandler);
+      cleanupFns.push(() => window.removeEventListener("resize", resizeHandler));
+    }
+    return () => {
+      cleanupFns.forEach((fn) => {
+        try {
+          fn();
+        } catch {
+          // ignore
+        }
+      });
+    };
+  }, []);
+
   const identityEvidenceByField = useMemo(() => {
     const map = {};
     CARD_IDENTITY_FIELDS.forEach(({ key }) => {
@@ -403,25 +437,6 @@ export default function SingleListing() {
   useEffect(() => {
     setOpenEvidenceField(null);
   }, [cardIntel?.imageHash]);
-  const acknowledgeMobilePrompt = useCallback(() => {
-    mobileResumeHandledRef.current = true;
-    try {
-      window.sessionStorage.setItem("rr_mobile_resume_ack", "true");
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  const handleMobileResumeContinue = useCallback(() => {
-    acknowledgeMobilePrompt();
-    setShowMobileResumePrompt(false);
-  }, [acknowledgeMobilePrompt]);
-
-  const handleMobileResumeStartNew = useCallback(() => {
-    acknowledgeMobilePrompt();
-    setShowMobileResumePrompt(false);
-    clearDraftState();
-  }, [acknowledgeMobilePrompt, clearDraftState]);
 
   const computeNeedsUserConfirmation = useCallback(
     (manualOverrides = {}) => {
@@ -549,12 +564,6 @@ export default function SingleListing() {
     () => hasListingDraftData(listingData),
     [listingData]
   );
-  const [showResumeNotice, setShowResumeNotice] = useState(() => hasResumableDraft);
-  const [isMobileViewport, setIsMobileViewport] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return window.matchMedia("(max-width: 720px)").matches;
-  });
-  const [showMobileResumePrompt, setShowMobileResumePrompt] = useState(false);
   const shouldShowResumeNotice =
     showResumeNotice && (!isMobileViewport || !showMobileResumePrompt);
   useEffect(() => {
@@ -626,12 +635,6 @@ export default function SingleListing() {
     showMagicResults,
     showUsageModal,
   ]);
-  const clearDraftState = useCallback(() => {
-    const nextMode = batchMode === "sports_cards" ? "sports_cards" : "general";
-    resetListing(nextMode);
-    setShowResumeNotice(false);
-  }, [batchMode, resetListing]);
-
   const handleStartFreshDraft = useCallback(() => {
     const nextMode = batchMode === "sports_cards" ? "sports_cards" : "general";
     clearDraftState();
