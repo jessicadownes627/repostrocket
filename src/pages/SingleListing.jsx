@@ -1753,7 +1753,12 @@ useEffect(() => {
                     <div className="pl-4 mt-1 space-y-2">
                       {isVerified && (
                         <div className="rounded-2xl border border-[#1F4B37] bg-[#061711] px-4 py-3 text-white/90">
-                          <div className="text-base font-semibold text-white">{displayValue}</div>
+                          <div className="flex items-start gap-3">
+                            <div className="px-2 py-0.5 text-xs uppercase tracking-[0.3em] text-[#8FF0C5] border border-[#1F4B37] rounded-full">
+                              Verified from card
+                            </div>
+                            <div className="text-base font-semibold text-white">{displayValue}</div>
+                          </div>
                           {hasEvidence && (
                             <>
                               <button
@@ -1763,7 +1768,7 @@ useEffect(() => {
                                   setOpenEvidenceField((prev) => (prev === key ? null : key))
                                 }
                               >
-                                {showEvidence ? "Hide evidence" : "Show evidence"}
+                                {showEvidence ? "Hide proof" : "Show proof"}
                               </button>
                               {showEvidence && (
                                 <ul className="mt-2 space-y-1 text-xs text-white/70">
@@ -1781,36 +1786,43 @@ useEffect(() => {
                       )}
 
                       {!isVerified && status.hasManual && (
-                        <div className="rounded-2xl border border-[#E8D5A8]/40 bg-[#1C1610] px-4 py-3 text-white/85">
-                          <div className="text-xs uppercase tracking-[0.3em] text-[#E8D5A8]/80 mb-1">
-                            Manual entry
+                        <div className="rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-white/85">
+                          <div className="flex items-start gap-3">
+                            <div className="px-2 py-0.5 text-xs uppercase tracking-[0.3em] text-white/70 border border-white/20 rounded-full">
+                              Entered by you
+                            </div>
+                            <div>
+                              <div className="text-xs text-white/60 mb-1">Manual entry</div>
+                              <div>{displayValue}</div>
+                            </div>
                           </div>
-                          <div>{displayValue}</div>
                         </div>
                       )}
 
                       {isSuggested && (
                         <div className="rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-white/80">
-                          <div className="text-xs uppercase tracking-[0.3em] text-white/60 mb-1">
-                            Suggested
+                          <div className="flex items-start gap-3">
+                            <div className="px-2 py-0.5 text-xs uppercase tracking-[0.3em] text-white/60 border border-white/20 rounded-full">
+                              Suggested
+                            </div>
+                            <div>
+                              <div className="text-xs text-white/60 mb-1">Looks like:</div>
+                              <div>{status.suggestion}</div>
+                            </div>
                           </div>
-                          <div>{status.suggestion}</div>
                         </div>
                       )}
 
                       {isBlank && (
-                        <div className="rounded-2xl border border-dashed border-white/20 px-4 py-3 text-white/40 italic">
-                          Not confirmed yet
+                        <div className="rounded-2xl border border-dashed border-white/20 px-4 py-3 text-white/40">
+                          <div className="text-2xl leading-none">—</div>
+                          <div className="text-xs uppercase tracking-[0.3em] mt-1">Not verified yet</div>
                         </div>
-                      )}
-
-                      {!isVerified && status.hasManual && !status.manualValue && (
-                        <span className="opacity-40">—</span>
                       )}
 
                       {status.needsManual && (
                         <div className="text-xs text-[#F6D48F] space-y-2">
-                          <div>Couldn’t verify from visible card text.</div>
+                          <div>Please confirm this detail manually.</div>
                           <button
                             type="button"
                             className="inline-flex items-center gap-2 text-[10px] uppercase tracking-[0.3em] text-white/80 border border-white/25 rounded-full px-3 py-1 hover:border-white/60 transition"
