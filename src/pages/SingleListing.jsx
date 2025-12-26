@@ -236,6 +236,7 @@ export default function SingleListing() {
   const [manualCardValue, setManualCardValue] = useState("");
   const [openEvidenceField, setOpenEvidenceField] = useState(null);
   const lastPhotoSignatureRef = useRef("");
+  const mobileResumeHandledRef = useRef(false);
   const mainContainerRef = useRef(null);
   const analysisStageRef = useRef(analysisInFlight);
 
@@ -556,7 +557,6 @@ export default function SingleListing() {
     return window.matchMedia("(max-width: 720px)").matches;
   });
   const [showMobileResumePrompt, setShowMobileResumePrompt] = useState(false);
-  const mobileResumeHandledRef = useRef(false);
   useEffect(() => {
     if (!hasResumableDraft) {
       setShowResumeNotice(false);
