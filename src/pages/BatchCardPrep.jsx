@@ -17,6 +17,12 @@ const CORNER_LABELS = {
   bottomLeft: "Bottom Left",
   bottomRight: "Bottom Right",
 };
+const CARD_IDENTITY_FIELDS = [
+  { key: "player", label: "Player" },
+  { key: "team", label: "Team" },
+  { key: "year", label: "Year" },
+  { key: "setName", label: "Set" },
+];
 
 const HeaderBar = ({ label }) => (
   <div className="w-full mt-8 mb-6">
@@ -40,8 +46,16 @@ export default function BatchCardPrep() {
   const [launching, setLaunching] = useState(false);
   const [analysisVisible, setAnalysisVisible] = useState(false);
   const [analysisInitialized, setAnalysisInitialized] = useState(false);
+  const [filterNeedsVerification, setFilterNeedsVerification] = useState(false);
+  const [openEvidenceField, setOpenEvidenceField] = useState(null);
 
   const hasCards = batchItems.length > 0;
+  const visibleCards = useMemo(
+    () => (filterNeedsVerification ? batchItems.filter(cardNeedsVerification) : batchItems),
+    [batchItems, filterNeedsVerification]
+  );
+  const hasVisibleCards = visibleCards.length > 0;
+  const filterActiveButEmpty = filterNeedsVerification && !hasVisibleCards;
 
   useEffect(() => {
     if (!hasCards) {
@@ -54,14 +68,14 @@ export default function BatchCardPrep() {
   }, [hasCards, requestedId, batchItems, navigate, setSearchParams]);
 
   const currentIndex = useMemo(
-    () => batchItems.findIndex((item) => item.id === requestedId),
-    [batchItems, requestedId]
+    () => visibleCards.findIndex((item) => item.id === requestedId),
+    [visibleCards, requestedId]
   );
-  const currentCard = currentIndex >= 0 ? batchItems[currentIndex] : null;
-  const prevCardId = currentIndex > 0 ? batchItems[currentIndex - 1]?.id : null;
+  const currentCard = currentIndex >= 0 ? visibleCards[currentIndex] : null;
+  const prevCardId = currentIndex > 0 ? visibleCards[currentIndex - 1]?.id : null;
   const nextCardId =
-    currentIndex >= 0 && currentIndex < batchItems.length - 1
-      ? batchItems[currentIndex + 1]?.id
+    currentIndex >= 0 && currentIndex < visibleCards.length - 1
+      ? visibleCards[currentIndex + 1]?.id
       : null;
 
   const listingMatchesCard =
@@ -93,6 +107,61 @@ export default function BatchCardPrep() {
   const listingTitle = listingMatchesCard
     ? listingData.title || currentCard?.title || ""
     : currentCard?.title || "";
+  const cardIdentityStatuses = useMemo(() => {
+    const manualOverrides = activeCardAttributes?.manualOverrides || {};
+    const suggestions = activeCardIntel?.manualSuggestions || {};
+    return CARD_IDENTITY_FIELDS.reduce((acc, field) => {
+      const verified =
+        activeCardIntel?.sources?.[field.key] === "ocr" &&
+        activeCardIntel?.isTextVerified?.[field.key];
+      const baseValue =
+        field.key === "setName"
+          ? activeCardAttributes?.set || activeCardAttributes?.setName || ""
+          : activeCardAttributes?.[field.key] || "";
+      const manualValue =
+        typeof manualOverrides[field.key] === "string"
+          ? manualOverrides[field.key]
+          : "";
+      const suggestion =
+        typeof suggestions[field.key] === "string" ? suggestions[field.key] : "";
+      acc[field.key] = {
+        verified,
+        baseValue,
+        manualValue,
+        hasManual: Boolean(manualValue),
+        suggestion,
+        hasSuggestion: Boolean(suggestion),
+        needsManual: !verified && !manualValue,
+      };
+      return acc;
+    }, {});
+  }, [activeCardAttributes, activeCardIntel]);
+
+  const identityEvidenceByField = useMemo(() => {
+    const map = {};
+    CARD_IDENTITY_FIELDS.forEach(({ key }) => {
+      map[key] = [];
+    });
+    if (Array.isArray(activeCardIntel?.sourceEvidence)) {
+      activeCardIntel.sourceEvidence.forEach((line) => {
+        if (typeof line !== "string") return;
+        CARD_IDENTITY_FIELDS.forEach(({ key }) => {
+          if (line.toLowerCase().includes(`-> ${key.toLowerCase()}`)) {
+            map[key].push(line);
+          }
+        });
+      });
+    }
+    return map;
+  }, [activeCardIntel?.sourceEvidence]);
+
+  const verifiedIdentityFields = useMemo(
+    () => CARD_IDENTITY_FIELDS.filter((field) => cardIdentityStatuses[field.key]?.verified),
+    [cardIdentityStatuses]
+  );
+  const hasVerifiedIdentity = verifiedIdentityFields.length > 0;
+  const totalIdentityFields = CARD_IDENTITY_FIELDS.length;
+  const verifiedIdentityCount = verifiedIdentityFields.length;
 
   useEffect(() => {
     if (!hasCards || !requestedId) {
@@ -102,6 +171,14 @@ export default function BatchCardPrep() {
       setSearchParams({ cardId: batchItems[0].id }, { replace: true });
     }
   }, [hasCards, requestedId, currentCard, batchItems, setSearchParams]);
+
+  useEffect(() => {
+    if (!filterNeedsVerification || !hasVisibleCards) return;
+    if (visibleCards.some((item) => item.id === requestedId)) return;
+    if (visibleCards[0]) {
+      setSearchParams({ cardId: visibleCards[0].id }, { replace: true });
+    }
+  }, [filterNeedsVerification, hasVisibleCards, visibleCards, requestedId, setSearchParams]);
 
   useEffect(() => {
     if (!currentCard) return;
@@ -151,6 +228,10 @@ export default function BatchCardPrep() {
     updateBatchItem,
   ]);
 
+  useEffect(() => {
+    setOpenEvidenceField(null);
+  }, [currentCard?.id]);
+
   if (!hasCards) {
     return (
       <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center gap-4">
@@ -161,6 +242,23 @@ export default function BatchCardPrep() {
           onClick={() => navigate("/batch-comps")}
         >
           Go to Batch Upload
+        </button>
+      </div>
+    );
+  }
+
+  if (filterActiveButEmpty) {
+    return (
+      <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center gap-4 px-6 text-center">
+        <p className="text-lg text-white/70">
+          Every card is already verified. Turn off “Needs verification” to review all cards.
+        </p>
+        <button
+          type="button"
+          className="lux-continue-btn"
+          onClick={() => setFilterNeedsVerification(false)}
+        >
+          Show all cards
         </button>
       </div>
     );
@@ -184,6 +282,13 @@ export default function BatchCardPrep() {
   const goToCard = (id) => {
     if (!id) return;
     setSearchParams({ cardId: id }, { replace: true });
+  };
+
+  const cardNeedsVerification = (card) => {
+    if (!card) return true;
+    const attrs = card.cardAttributes;
+    if (!attrs) return true;
+    return attrs.needsUserConfirmation !== false;
   };
 
   const listingHasFullPrep =
@@ -401,64 +506,132 @@ export default function BatchCardPrep() {
           <HeaderBar label="Card Details" />
 
           <div className="lux-card mb-8">
-            <div className="text-xs uppercase opacity-70 tracking-wide mb-3">
-              Detected Attributes
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs uppercase opacity-70 tracking-wide mb-3">
+              <span>Detected Attributes</span>
+              <span className="text-white/60 text-[11px]">
+                Verified {verifiedIdentityCount} of {totalIdentityFields} identity fields
+              </span>
             </div>
-            <div className="space-y-1 text-sm opacity-85">
-              <div className="flex items-center gap-2">
-                <span className="opacity-60">Player:</span>
-                {renderCardConfidence("player")}
+            {!hasVerifiedIdentity && (
+              <div className="rounded-2xl border border-[#f6d48f]/30 bg-gradient-to-r from-[#352217] to-[#1f120c] px-4 py-3 text-sm text-[#FBEACC] mb-4">
+                We couldn’t verify details from the card yet. Confirm them before launching.
               </div>
-              <div className="pl-4">
-                {activeCardAttributes?.player || (
-                  <span className="opacity-40">—</span>
-                )}
+            )}
+            <div className="space-y-4 text-sm opacity-85">
+              {CARD_IDENTITY_FIELDS.map(({ key, label }) => {
+                const status = cardIdentityStatuses[key] || {};
+                const displayValue = status.verified
+                  ? status.baseValue
+                  : status.hasManual
+                  ? status.manualValue
+                  : "";
+                const manualTag = !status.verified && status.hasManual;
+                const isVerified = Boolean(status.verified);
+                const isSuggested = !isVerified && !status.hasManual && status.hasSuggestion;
+                const isBlank = !isVerified && !status.hasManual && !status.hasSuggestion;
+                const hasEvidence = isVerified && identityEvidenceByField[key]?.length > 0;
+                const showEvidence = hasEvidence && openEvidenceField === key;
+                return (
+                  <div key={key}>
+                    <div className="flex items-center gap-2">
+                      <span className="opacity-60">{label}:</span>
+                      {isVerified && (
+                        <span className="text-[10px] uppercase tracking-[0.35em] text-[#8FF0C5] border border-[#1F4B37] rounded-full px-2 py-0.5 bg-[#081811]">
+                          Verified from card
+                        </span>
+                      )}
+                      {manualTag && (
+                        <span className="text-[10px] uppercase tracking-[0.35em] text-white/70 border border-white/20 rounded-full px-2 py-0.5">
+                          Entered by you
+                        </span>
+                      )}
+                      {isSuggested && (
+                        <span className="text-[10px] uppercase tracking-[0.35em] text-white/70 border border-white/20 rounded-full px-2 py-0.5">
+                          Suggested
+                        </span>
+                      )}
+                    </div>
+                    <div className="pl-4 mt-1 space-y-2">
+                      {isVerified && (
+                        <div className="rounded-2xl border border-[#1F4B37] bg-[#061711] px-4 py-3 text-white/90">
+                          <div className="flex items-start gap-3">
+                            <div className="text-base font-semibold text-white">{displayValue}</div>
+                          </div>
+                          {hasEvidence && (
+                            <>
+                              <button
+                                type="button"
+                                className="mt-2 inline-flex items-center gap-2 text-xs text-[#8FF0C5] hover:text-white transition"
+                                onClick={() =>
+                                  setOpenEvidenceField((prev) => (prev === key ? null : key))
+                                }
+                              >
+                                {showEvidence ? "Hide proof" : "Show proof"}
+                              </button>
+                              {showEvidence && (
+                                <ul className="mt-2 space-y-1 text-xs text-white/70">
+                                  {identityEvidenceByField[key].slice(0, 3).map((line, idx) => (
+                                    <li key={`${key}-evidence-${idx}`} className="flex gap-2">
+                                      <span className="h-1.5 w-1.5 rounded-full bg-[#8FF0C5] mt-1" />
+                                      <span>{line}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
+
+                      {!isVerified && status.hasManual && (
+                        <div className="rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-white/85">
+                          <div className="text-xs text-white/60 mb-1">Entered by you</div>
+                          <div>{displayValue}</div>
+                        </div>
+                      )}
+
+                      {isSuggested && (
+                        <div className="rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-white/80">
+                          <div className="text-xs text-white/60 mb-1">Suggested</div>
+                          <div>{status.suggestion}</div>
+                        </div>
+                      )}
+
+                      {isBlank && (
+                        <div className="rounded-2xl border border-dashed border-white/20 px-4 py-3 text-white/40">
+                          <div className="text-2xl leading-none">—</div>
+                          <div className="text-xs uppercase tracking-[0.3em] mt-1">
+                            Not verified yet
+                          </div>
+                        </div>
+                      )}
+
+                      {status.needsManual && (
+                        <div className="text-xs text-[#F6D48F] space-y-1">
+                          <div>Please confirm this detail before batch launch.</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="opacity-60">Parallel:</span>
+                  {renderCardConfidence("parallel")}
+                </div>
+                <div className="pl-4">
+                  {activeCardAttributes?.parallel || <span className="opacity-40">—</span>}
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="opacity-60">Team:</span>
-                {renderCardConfidence("team")}
-              </div>
-              <div className="pl-4">
-                {activeCardAttributes?.team || (
-                  <span className="opacity-40">—</span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="opacity-60">Year:</span>
-                {renderCardConfidence("year")}
-              </div>
-              <div className="pl-4">
-                {activeCardAttributes?.year || (
-                  <span className="opacity-40">—</span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="opacity-60">Set:</span>
-                {renderCardConfidence("setName")}
-              </div>
-              <div className="pl-4">
-                {activeCardAttributes?.set ||
-                  activeCardAttributes?.setName || (
-                    <span className="opacity-40">—</span>
-                  )}
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="opacity-60">Parallel:</span>
-                {renderCardConfidence("parallel")}
-              </div>
-              <div className="pl-4">
-                {activeCardAttributes?.parallel || (
-                  <span className="opacity-40">—</span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="opacity-60">Card #:</span>
-                {renderCardConfidence("cardNumber")}
-              </div>
-              <div className="pl-4">
-                {activeCardAttributes?.cardNumber || (
-                  <span className="opacity-40">—</span>
-                )}
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="opacity-60">Card #:</span>
+                  {renderCardConfidence("cardNumber")}
+                </div>
+                <div className="pl-4">
+                  {activeCardAttributes?.cardNumber || <span className="opacity-40">—</span>}
+                </div>
               </div>
             </div>
           </div>
@@ -660,8 +833,21 @@ export default function BatchCardPrep() {
     <>
       {analysisVisible ? renderAnalysisView() : renderPrepView()}
       <div className="fixed top-4 right-4 z-50 flex flex-col items-end gap-2">
-        <div className="text-xs uppercase tracking-[0.35em] text-white/70">
-          Card {currentIndex + 1} / {batchItems.length}
+        <div className="text-xs uppercase tracking-[0.35em] text-white/70 flex flex-col items-end gap-1">
+          {hasVisibleCards ? (
+            <>
+              <span>
+                Card {currentIndex + 1} / {visibleCards.length}
+              </span>
+              {filterNeedsVerification && (
+                <span className="text-[10px] text-[#8FF0C5] tracking-[0.3em]">
+                  Filter: Needs verification
+                </span>
+              )}
+            </>
+          ) : (
+            <span>Card — / {batchItems.length}</span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -690,6 +876,17 @@ export default function BatchCardPrep() {
             {analysisVisible ? "View Prep" : "View Analysis"}
           </button>
         )}
+        <button
+          type="button"
+          className={`text-[11px] uppercase tracking-[0.3em] border rounded-full px-3 py-1 transition ${
+            filterNeedsVerification
+              ? "border-[#8FF0C5]/60 text-[#8FF0C5]"
+              : "border-white/20 text-white/70 hover:text-white"
+          }`}
+          onClick={() => setFilterNeedsVerification((prev) => !prev)}
+        >
+          Needs verification
+        </button>
         <button
           type="button"
           className="text-[11px] uppercase tracking-[0.3em] text-white/70 hover:text-white transition"
