@@ -383,8 +383,6 @@ export default function SingleListing() {
     Boolean(cardBackDetails?.team) ||
     Boolean(cardBackDetails?.position) ||
     (Array.isArray(cardBackDetails?.lines) && cardBackDetails.lines.length > 0);
-  const shouldShowResumeNotice =
-    showResumeNotice && (!isMobileViewport || !showMobileResumePrompt);
   const identityEvidenceByField = useMemo(() => {
     const map = {};
     CARD_IDENTITY_FIELDS.forEach(({ key }) => {
@@ -557,6 +555,8 @@ export default function SingleListing() {
     return window.matchMedia("(max-width: 720px)").matches;
   });
   const [showMobileResumePrompt, setShowMobileResumePrompt] = useState(false);
+  const shouldShowResumeNotice =
+    showResumeNotice && (!isMobileViewport || !showMobileResumePrompt);
   useEffect(() => {
     if (!hasResumableDraft) {
       setShowResumeNotice(false);
