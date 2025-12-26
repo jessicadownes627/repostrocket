@@ -60,10 +60,69 @@ const CARD_BRANDS = [
   "Stadium Club",
   "SkyBox",
 ];
+const CARD_BRAND_SET = new Set(CARD_BRANDS.map((brand) => brand.toLowerCase()));
+const KNOWN_PLAYER_NAMES = [
+  "Ron Darling",
+  "Mike Trout",
+  "Shohei Ohtani",
+  "Derek Jeter",
+  "Barry Bonds",
+  "Ken Griffey Jr",
+  "Cal Ripken Jr",
+  "Willie Mays",
+  "Hank Aaron",
+  "Nolan Ryan",
+  "Rickey Henderson",
+  "Ichiro Suzuki",
+  "Chipper Jones",
+  "David Ortiz",
+  "Clayton Kershaw",
+  "Mookie Betts",
+  "Aaron Judge",
+  "Vladimir Guerrero Jr",
+  "Jose Altuve",
+  "Freddie Freeman",
+  "Fernando Tatis Jr",
+  "Yadier Molina",
+  "Bryce Harper",
+  "Juan Soto",
+];
+const KNOWN_PLAYER_SET = new Set(
+  KNOWN_PLAYER_NAMES.map((name) => name.toLowerCase())
+);
+const MLB_TEAM_SET = new Set(MLB_TEAMS.map((team) => team.toLowerCase()));
+const POSITION_KEYWORDS = [
+  "Pitcher",
+  "Catcher",
+  "Infielder",
+  "Shortstop",
+  "First Baseman",
+  "Second Baseman",
+  "Third Baseman",
+  "Outfielder",
+  "Left Fielder",
+  "Right Fielder",
+  "Center Fielder",
+  "Designated Hitter",
+  "Quarterback",
+  "Running Back",
+  "Wide Receiver",
+  "Linebacker",
+  "Center",
+  "Guard",
+  "Forward",
+  "Goalie",
+  "Defenseman",
+];
 
 const REQUIRED_IDENTITY_FIELDS = ["player", "team", "year", "setName"];
 const DISABLE_OCR_FILTERING =
   typeof process !== "undefined" && process.env.NODE_ENV === "development";
+const PLAYER_OCR_CONFIDENCE_THRESHOLD = 0.85;
+const YEAR_OCR_CONFIDENCE_THRESHOLD = 0.85;
+const MIN_YEAR = 1970;
+const TEAM_OCR_CONFIDENCE_THRESHOLD = 0.85;
+const CARD_NUMBER_OCR_CONFIDENCE_THRESHOLD = 0.85;
 
 const EMPTY_RESPONSE = {
   player: "",
@@ -96,9 +155,13 @@ const EMPTY_RESPONSE = {
     team: false,
     year: false,
     setName: false,
+    cardNumber: false,
   },
   needsUserConfirmation: true,
   ocr: {
+    lines: [],
+  },
+  ocrBack: {
     lines: [],
   },
   manualSuggestions: {
@@ -106,7 +169,9 @@ const EMPTY_RESPONSE = {
     team: "",
     year: "",
     setName: "",
+    cardNumber: "",
   },
+  cardBackDetails: null,
 };
 
 export async function handler(event) {
@@ -191,24 +256,28 @@ export async function handler(event) {
     //   };
     // }
 
-    const userContent = buildUserContent({ frontImage, backImage, altText });
-
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    console.log("[cardIntel] OpenAI request starting", { requestId, imageHash });
-    console.log("[cardIntel] calling OpenAI OCR for full card");
-    const response = await client.responses.create({
-      model: "gpt-4o",
-      input: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: userContent },
-      ],
-    });
-    console.log("[cardIntel] OpenAI request completed", { requestId });
-
-    const raw = response.output_text || "";
-    console.log('[cardIntel][OCR FULL CARD] rawText="%s"', raw);
-    const parsed = parseJsonSafe(raw);
-    const ocrLines = extractOcrLines(parsed);
+    let ocrLines = [];
+    if (frontImage) {
+      const frontResult = await runFullImageOcr(client, {
+        imageUrl: frontImage,
+        label: "Front of card",
+        altText: altText?.front,
+        requestId,
+      });
+      ocrLines = frontResult.lines;
+    }
+    let backOcrLines = [];
+    if (backImage) {
+      const backResult = await runFullImageOcr(client, {
+        imageUrl: backImage,
+        label: "Back of card",
+        altText: altText?.back,
+        requestId,
+        logLabel: "OCR BACK",
+      });
+      backOcrLines = backResult.lines;
+    }
     const fullCardOcr = {
       lines: ocrLines,
       confidence: ocrLines.reduce(
@@ -237,6 +306,7 @@ export async function handler(event) {
       },
       {}
     );
+    const cardBackDetails = buildBackDetailsFromOcr(backOcrLines);
 
     const responsePayload = {
       ...EMPTY_RESPONSE,
@@ -244,8 +314,10 @@ export async function handler(event) {
       imageHash,
       requestId,
       ocr: { lines: ocrLines },
+      ocrBack: { lines: backOcrLines },
       ocrFull: fullCardOcr,
       ocrZones: formattedZones,
+      cardBackDetails,
       manualSuggestions: {
         ...EMPTY_RESPONSE.manualSuggestions,
         ...zoneSuggestions,
@@ -269,35 +341,41 @@ export async function handler(event) {
   }
 }
 
-function buildUserContent({ frontImage, backImage, altText }) {
-  const segments = [];
-  if (frontImage) {
-    if (altText?.front) {
-      segments.push({
-        type: "input_text",
-        text: `Front image description: ${altText.front}`,
-      });
-    }
-    segments.push({ type: "input_text", text: "Front of card" });
-    segments.push({ type: "input_image", image_url: frontImage });
-  } else {
-    segments.push({ type: "input_text", text: "Front image not provided." });
+async function runFullImageOcr(client, { imageUrl, label, altText, requestId, logLabel }) {
+  if (!imageUrl) {
+    return { lines: [] };
   }
-
-  if (backImage) {
-    if (altText?.back) {
-      segments.push({
-        type: "input_text",
-        text: `Back image description: ${altText.back}`,
-      });
-    }
-    segments.push({ type: "input_text", text: "Back of card" });
-    segments.push({ type: "input_image", image_url: backImage });
-  } else {
-    segments.push({ type: "input_text", text: "Back image not provided." });
+  const userContent = [];
+  if (altText) {
+    userContent.push({
+      type: "input_text",
+      text: `${label} description: ${altText}`,
+    });
   }
+  userContent.push({ type: "input_text", text: label || "Card image" });
+  userContent.push({ type: "input_image", image_url: imageUrl });
 
-  return segments;
+  console.log("[cardIntel] OpenAI OCR start", {
+    label,
+    requestId,
+  });
+  const response = await client.responses.create({
+    model: "gpt-4o",
+    input: [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: userContent },
+    ],
+  });
+  console.log("[cardIntel] OpenAI OCR completed", {
+    label,
+    requestId,
+  });
+  const raw = response.output_text || "";
+  const logLabelSafe = logLabel || "OCR FULL CARD";
+  console.log(`[cardIntel][${logLabelSafe}] rawText="%s"`, raw);
+  const parsed = parseJsonSafe(raw);
+  const lines = extractOcrLines(parsed);
+  return { lines, raw };
 }
 
 function parseJsonSafe(text) {
@@ -424,35 +502,55 @@ export function deriveFieldsFromOcr(lines = [], hints = {}) {
   const confidence = { ...EMPTY_RESPONSE.confidence };
   const manualSuggestions = { ...EMPTY_RESPONSE.manualSuggestions };
 
-  const playerEntry = findPlayerCandidate(lines);
-  const player = playerEntry ? titleCase(playerEntry.text) : "";
-  if (playerEntry) {
-    evidence.push(buildEvidenceLine("player", playerEntry));
+  const verifiedPlayerEntry = findVerifiedPlayerFromOcr(lines);
+  const fallbackPlayerEntry = findPlayerCandidate(lines);
+  const player = verifiedPlayerEntry ? verifiedPlayerEntry.matchedName : "";
+  if (verifiedPlayerEntry) {
+    evidence.push(buildEvidenceLine("player", verifiedPlayerEntry));
     sources.player = "ocr";
     isTextVerified.player = true;
     confidence.player = "high";
   }
-  manualSuggestions.player = player;
+  manualSuggestions.player = fallbackPlayerEntry
+    ? titleCase(fallbackPlayerEntry.text)
+    : "";
 
-  const teamEntry = findTeamCandidate(lines);
-  const team = teamEntry ? titleCaseTeam(teamEntry.text) : "";
-  if (teamEntry) {
-    evidence.push(buildEvidenceLine("team", teamEntry));
+  const verifiedTeamEntry = findVerifiedTeamFromOcr(lines);
+  const fallbackTeamEntry = findTeamCandidate(lines);
+  const team = verifiedTeamEntry ? verifiedTeamEntry.matchedTeam : "";
+  if (verifiedTeamEntry) {
+    evidence.push(buildEvidenceLine("team", verifiedTeamEntry));
     sources.team = "ocr";
     isTextVerified.team = true;
     confidence.team = "high";
   }
-  manualSuggestions.team = team;
+  manualSuggestions.team = fallbackTeamEntry
+    ? titleCaseTeam(fallbackTeamEntry.text)
+    : "";
 
-  const yearEntry = findYearCandidate(lines);
-  const year = yearEntry ? yearEntry.match : "";
-  if (yearEntry) {
-    evidence.push(buildEvidenceLine("year", yearEntry));
+  const verifiedYearEntry = findVerifiedYearFromOcr(lines);
+  const fallbackYearEntry = findYearCandidate(lines);
+  const year = verifiedYearEntry ? verifiedYearEntry.matchedYear : "";
+  if (verifiedYearEntry) {
+    evidence.push(buildEvidenceLine("year", verifiedYearEntry));
     sources.year = "ocr";
     isTextVerified.year = true;
     confidence.year = "high";
   }
-  manualSuggestions.year = year;
+  manualSuggestions.year = fallbackYearEntry ? fallbackYearEntry.match : "";
+
+  const verifiedCardNumberEntry = findVerifiedCardNumberFromOcr(lines);
+  const fallbackCardNumberEntry = findCardNumberSuggestion(lines);
+  const cardNumber = verifiedCardNumberEntry ? verifiedCardNumberEntry.matchedNumber : "";
+  if (verifiedCardNumberEntry) {
+    evidence.push(buildEvidenceLine("cardNumber", verifiedCardNumberEntry));
+    sources.cardNumber = "ocr";
+    confidence.cardNumber = "high";
+    isTextVerified.cardNumber = true;
+  }
+  manualSuggestions.cardNumber = fallbackCardNumberEntry
+    ? fallbackCardNumberEntry.matchedNumber
+    : "";
 
   const setEntry = findSetCandidate(lines);
   const setName = setEntry ? titleCase(setEntry.brand) : "";
@@ -478,15 +576,15 @@ export function deriveFieldsFromOcr(lines = [], hints = {}) {
   });
 
   if (!player) {
-    evidence.push("No readable player text detected in OCR.");
+    evidence.push("No verified player name detected in OCR.");
     confidence.player = "low";
   }
   if (!team) {
-    evidence.push("No MLB team name detected in OCR text.");
+    evidence.push("No verified MLB team detected in OCR.");
     confidence.team = "low";
   }
   if (!year) {
-    evidence.push("No printed year detected in OCR text.");
+    evidence.push("No verified year detected in OCR.");
     confidence.year = "low";
   }
   if (!setName) {
@@ -499,7 +597,7 @@ export function deriveFieldsFromOcr(lines = [], hints = {}) {
     sport: hints?.sport || "",
     year,
     setName,
-    cardNumber: "",
+    cardNumber,
     brand,
     notes: "",
     confidence,
@@ -513,6 +611,196 @@ export function deriveFieldsFromOcr(lines = [], hints = {}) {
 
 function normalizeTextLine(text) {
   return text.replace(/\s+/g, " ").trim();
+}
+
+function normalizePlayerName(text = "") {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function isExactKnownPlayer(text = "") {
+  const normalized = normalizePlayerName(text);
+  if (!normalized) return null;
+  if (!/^[A-Za-z.'\-\s]+$/.test(normalized)) return null;
+  return KNOWN_PLAYER_SET.has(normalized.toLowerCase()) ? normalized : null;
+}
+
+function findVerifiedPlayerFromOcr(lines = []) {
+  if (!Array.isArray(lines)) return null;
+  for (const entry of lines) {
+    const confidence =
+      typeof entry?.confidence === "number" ? entry.confidence : null;
+    if (confidence === null || confidence < PLAYER_OCR_CONFIDENCE_THRESHOLD) {
+      continue;
+    }
+    const matched = isExactKnownPlayer(entry?.text || "");
+    if (matched) {
+      return {
+        ...entry,
+        matchedName: matched,
+      };
+    }
+  }
+  return null;
+}
+
+function findVerifiedYearFromOcr(lines = []) {
+  if (!Array.isArray(lines)) return null;
+  const currentYear = new Date().getFullYear();
+  for (const entry of lines) {
+    const confidence =
+      typeof entry?.confidence === "number" ? entry.confidence : null;
+    if (confidence === null || confidence < YEAR_OCR_CONFIDENCE_THRESHOLD) {
+      continue;
+    }
+    const raw = String(entry?.text || "").trim();
+    if (!/^\d{4}$/.test(raw)) continue;
+    const yearValue = Number(raw);
+    if (Number.isNaN(yearValue)) continue;
+    if (yearValue < MIN_YEAR || yearValue > currentYear) continue;
+    return {
+      ...entry,
+      matchedYear: String(yearValue),
+    };
+  }
+  return null;
+}
+
+function extractCardNumberMatch(text = "") {
+  const normalized = normalizeTextLine(text);
+  if (!normalized) return null;
+  const prefixPatterns = [
+    { regex: /^#\s*(\d{1,4})$/i, type: "prefix" },
+    { regex: /^No\.?\s*#?\s*(\d{1,4})$/i, type: "prefix" },
+    { regex: /^Card\s*#?\s*(\d{1,4})$/i, type: "prefix" },
+  ];
+  for (const pattern of prefixPatterns) {
+    const match = normalized.match(pattern.regex);
+    if (match) {
+      return { number: match[1], type: "prefix" };
+    }
+  }
+  if (/^\d{1,4}$/.test(normalized)) {
+    return { number: normalized, type: "plain" };
+  }
+  return null;
+}
+
+function hasNearbyContext(lines = [], targetIndex = 0, range = 2) {
+  for (
+    let i = Math.max(0, targetIndex - range);
+    i <= Math.min(lines.length - 1, targetIndex + range);
+    i += 1
+  ) {
+    if (i === targetIndex) continue;
+    const text = String(lines[i]?.text || "").toLowerCase();
+    if (!text) continue;
+    if (/\b(18|19|20)\d{2}\b/.test(text)) return true;
+    for (const brand of CARD_BRAND_SET) {
+      if (text.includes(brand)) return true;
+    }
+  }
+  return false;
+}
+
+function findCardNumberSuggestion(lines = []) {
+  if (!Array.isArray(lines)) return null;
+  for (const entry of lines) {
+    const match = extractCardNumberMatch(entry?.text || "");
+    if (!match) continue;
+    if (match.type === "plain" && !hasNearbyContext(lines, entry.index)) continue;
+    return { ...entry, matchedNumber: match.number };
+  }
+  return null;
+}
+
+function findVerifiedCardNumberFromOcr(lines = []) {
+  if (!Array.isArray(lines)) return null;
+  const matches = [];
+  lines.forEach((entry) => {
+    const confidence =
+      typeof entry?.confidence === "number" ? entry.confidence : null;
+    if (confidence === null || confidence < CARD_NUMBER_OCR_CONFIDENCE_THRESHOLD) {
+      return;
+    }
+    const match = extractCardNumberMatch(entry?.text || "");
+    if (!match) return;
+    if (match.type === "plain" && !hasNearbyContext(lines, entry.index)) return;
+    matches.push({
+      entry,
+      matchedNumber: match.number,
+    });
+  });
+  if (matches.length === 1) {
+    const { entry, matchedNumber } = matches[0];
+    return { ...entry, matchedNumber };
+  }
+  return null;
+}
+
+function findPositionFromLines(lines = []) {
+  for (const entry of lines) {
+    const text = String(entry?.text || "");
+    if (!text) continue;
+    for (const keyword of POSITION_KEYWORDS) {
+      const regex = new RegExp(`\\b${keyword}\\b`, "i");
+      if (regex.test(text)) {
+        return keyword;
+      }
+    }
+  }
+  return "";
+}
+
+function buildBackDetailsFromOcr(lines = []) {
+  if (!Array.isArray(lines) || !lines.length) return null;
+  const teamEntry = findVerifiedTeamFromOcr(lines);
+  const position = findPositionFromLines(lines);
+  const consumedTexts = new Set();
+  if (teamEntry?.text) consumedTexts.add(teamEntry.text.trim());
+
+  const uniqueLines = [];
+  lines.forEach((entry) => {
+    const text = String(entry?.text || "").trim();
+    if (!text) return;
+    if (consumedTexts.has(text)) return;
+    if (uniqueLines.includes(text)) return;
+    uniqueLines.push(text);
+  });
+
+  const supportingLines = uniqueLines.slice(0, 4);
+
+  if (!teamEntry && !position && !supportingLines.length) {
+    return null;
+  }
+
+  return {
+    team: teamEntry?.matchedTeam || "",
+    position: position || "",
+    lines: supportingLines,
+  };
+}
+
+function findVerifiedTeamFromOcr(lines = []) {
+  if (!Array.isArray(lines)) return null;
+  for (const entry of lines) {
+    const confidence =
+      typeof entry?.confidence === "number" ? entry.confidence : null;
+    if (confidence === null || confidence < TEAM_OCR_CONFIDENCE_THRESHOLD) {
+      continue;
+    }
+    const normalized = normalizePlayerName(entry?.text || "").toLowerCase();
+    if (!normalized) continue;
+    if (!MLB_TEAM_SET.has(normalized)) continue;
+    const canonical = MLB_TEAMS.find(
+      (team) => team.toLowerCase() === normalized
+    );
+    if (!canonical) continue;
+    return {
+      ...entry,
+      matchedTeam: canonical,
+    };
+  }
+  return null;
 }
 
 function titleCase(value = "") {
@@ -594,6 +882,8 @@ function buildEvidenceLine(field, entry) {
       ? entry.text
       : typeof entry?.match === "string"
       ? entry.match
+      : typeof entry?.matchedName === "string"
+      ? entry.matchedName
       : "";
   return text
     ? `OCR line ${entry.index + 1 || 0}: "${text}" -> ${field}`

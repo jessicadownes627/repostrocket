@@ -442,7 +442,7 @@ export default function TrendSenseDashboard() {
         </p>
         {hasAccess === false && (
           <div className="text-xs uppercase tracking-[0.35em] text-center text-white/60 bg-black/30 border border-white/10 rounded-full py-2 mb-6">
-            Preview mode — upgrade to Premium for live TrendSense data.
+            Preview mode = accurate snapshot. Premium unlocks unlimited live TrendSense + pro workflows.
           </div>
         )}
 

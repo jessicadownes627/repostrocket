@@ -234,6 +234,7 @@ export default function SingleListing() {
   const [autoScrollDone, setAutoScrollDone] = useState(false);
   const [manualCardField, setManualCardField] = useState(null);
   const [manualCardValue, setManualCardValue] = useState("");
+  const [openEvidenceField, setOpenEvidenceField] = useState(null);
   const lastPhotoSignatureRef = useRef("");
 
   useEffect(() => {
@@ -327,6 +328,35 @@ export default function SingleListing() {
       return acc;
     }, {});
   }, [cardAttributes, cardIntel, manualSuggestions]);
+  const verifiedIdentityFields = useMemo(() => {
+    return CARD_IDENTITY_FIELDS.filter((field) => cardIdentityStatuses[field.key]?.verified);
+  }, [cardIdentityStatuses]);
+  const hasVerifiedIdentity = verifiedIdentityFields.length > 0;
+  const cardBackDetails = cardIntel?.cardBackDetails || null;
+  const hasBackDetails =
+    Boolean(cardBackDetails?.team) ||
+    Boolean(cardBackDetails?.position) ||
+    (Array.isArray(cardBackDetails?.lines) && cardBackDetails.lines.length > 0);
+  const identityEvidenceByField = useMemo(() => {
+    const map = {};
+    CARD_IDENTITY_FIELDS.forEach(({ key }) => {
+      map[key] = [];
+    });
+    if (Array.isArray(cardIntel?.sourceEvidence)) {
+      cardIntel.sourceEvidence.forEach((line) => {
+        if (typeof line !== "string") return;
+        CARD_IDENTITY_FIELDS.forEach(({ key }) => {
+          if (line.toLowerCase().includes(`-> ${key.toLowerCase()}`)) {
+            map[key].push(line);
+          }
+        });
+      });
+    }
+    return map;
+  }, [cardIntel?.sourceEvidence]);
+  useEffect(() => {
+    setOpenEvidenceField(null);
+  }, [cardIntel?.imageHash]);
 
   const computeNeedsUserConfirmation = useCallback(
     (manualOverrides = {}) => {
@@ -1625,7 +1655,7 @@ useEffect(() => {
         <>
           <HeaderBar label="Card Details" />
 
-          {showCardVerificationWarning && (
+          {showCardVerificationWarning && !hasVerifiedIdentity && (
             <div className="relative overflow-hidden rounded-3xl border border-[#f6d48f]/30 bg-gradient-to-br from-[#3a2317] via-[#2b1a12] to-[#1a0f0a] p-5 mb-6 text-sm text-[#FBEACC] shadow-[0_20px_45px_rgba(0,0,0,0.55)]">
               <div className="absolute -top-10 -right-6 h-32 w-32 bg-[#f6d48f]/20 blur-3xl pointer-events-none" />
               <div className="flex items-start gap-3 relative z-10">
@@ -1654,6 +1684,33 @@ useEffect(() => {
             </div>
           )}
 
+          {showCardVerificationWarning && hasVerifiedIdentity && (
+            <div className="relative overflow-hidden rounded-3xl border border-[#8FF0C5]/25 bg-gradient-to-br from-[#0e201a] via-[#0d1a16] to-[#0a1211] p-5 mb-6 text-sm text-white/85 shadow-[0_20px_45px_rgba(0,0,0,0.45)]">
+              <div className="absolute -top-10 -right-6 h-32 w-32 bg-[#8FF0C5]/15 blur-3xl pointer-events-none" />
+              <div className="flex flex-col gap-3 relative z-10">
+                <div>
+                  <p className="font-semibold text-[#8FF0C5]">
+                    Here’s what we verified from your card
+                  </p>
+                  <p className="text-xs text-white/70 mt-1">
+                    Some details may still need manual confirmation below.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {verifiedIdentityFields.map((field) => (
+                    <span
+                      key={field.key}
+                      className="inline-flex items-center gap-2 rounded-2xl border border-[#8FF0C5]/40 bg-[#0a1c16]/60 px-3 py-1 text-[11px] uppercase tracking-[0.3em] text-[#8FF0C5]"
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#8FF0C5]" />
+                      {field.label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="lux-card mb-8">
             <div className="text-xs uppercase opacity-70 tracking-wide mb-3">
               Detected Attributes
@@ -1667,13 +1724,19 @@ useEffect(() => {
                   ? status.manualValue
                   : "";
                 const manualTag = !status.verified && status.hasManual;
+                const isVerified = Boolean(status.verified);
+                const isSuggested = !isVerified && !status.hasManual && status.hasSuggestion;
+                const isBlank = !isVerified && !status.hasManual && !status.hasSuggestion;
+                const hasEvidence =
+                  isVerified && identityEvidenceByField[key]?.length > 0;
+                const showEvidence = hasEvidence && openEvidenceField === key;
                 return (
                   <div key={key}>
                     <div className="flex items-center gap-2">
                       <span className="opacity-60">{label}:</span>
-                      {status.verified && (
-                        <span className="text-[10px] uppercase tracking-[0.35em] text-emerald-300/80 border border-emerald-300/40 rounded-full px-2 py-0.5">
-                          OCR VERIFIED
+                      {isVerified && (
+                        <span className="text-[10px] uppercase tracking-[0.35em] text-emerald-200 border border-emerald-300/40 rounded-full px-2 py-0.5 bg-[#103425] text-[#8FF0C5]">
+                          Verified from card
                         </span>
                       )}
                       {manualTag && (
@@ -1688,11 +1751,63 @@ useEffect(() => {
                       )}
                     </div>
                     <div className="pl-4 mt-1 space-y-2">
-                      {displayValue ? (
-                        <div>{displayValue}</div>
-                      ) : (
-                          <span className="opacity-40">—</span>
-                        )}
+                      {isVerified && (
+                        <div className="rounded-2xl border border-[#1F4B37] bg-[#061711] px-4 py-3 text-white/90">
+                          <div className="text-base font-semibold text-white">{displayValue}</div>
+                          {hasEvidence && (
+                            <>
+                              <button
+                                type="button"
+                                className="mt-2 inline-flex items-center gap-2 text-xs text-[#8FF0C5] hover:text-white transition"
+                                onClick={() =>
+                                  setOpenEvidenceField((prev) => (prev === key ? null : key))
+                                }
+                              >
+                                {showEvidence ? "Hide evidence" : "Show evidence"}
+                              </button>
+                              {showEvidence && (
+                                <ul className="mt-2 space-y-1 text-xs text-white/70">
+                                  {identityEvidenceByField[key].slice(0, 3).map((line, idx) => (
+                                    <li key={`${key}-evidence-${idx}`} className="flex gap-2">
+                                      <span className="h-1.5 w-1.5 rounded-full bg-[#8FF0C5] mt-1" />
+                                      <span>{line}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
+
+                      {!isVerified && status.hasManual && (
+                        <div className="rounded-2xl border border-[#E8D5A8]/40 bg-[#1C1610] px-4 py-3 text-white/85">
+                          <div className="text-xs uppercase tracking-[0.3em] text-[#E8D5A8]/80 mb-1">
+                            Manual entry
+                          </div>
+                          <div>{displayValue}</div>
+                        </div>
+                      )}
+
+                      {isSuggested && (
+                        <div className="rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-white/80">
+                          <div className="text-xs uppercase tracking-[0.3em] text-white/60 mb-1">
+                            Suggested
+                          </div>
+                          <div>{status.suggestion}</div>
+                        </div>
+                      )}
+
+                      {isBlank && (
+                        <div className="rounded-2xl border border-dashed border-white/20 px-4 py-3 text-white/40 italic">
+                          Not confirmed yet
+                        </div>
+                      )}
+
+                      {!isVerified && status.hasManual && !status.manualValue && (
+                        <span className="opacity-40">—</span>
+                      )}
+
                       {status.needsManual && (
                         <div className="text-xs text-[#F6D48F] space-y-2">
                           <div>Couldn’t verify from visible card text.</div>
@@ -1762,6 +1877,51 @@ useEffect(() => {
               </div>
           </div>
         </div>
+
+        {hasBackDetails && (
+          <div className="lux-card mb-8">
+            <div className="flex items-center justify-between text-xs uppercase tracking-[0.35em] opacity-70 mb-2">
+              <span>Card Details</span>
+              <span className="text-[10px] text-white/60">Verified from card</span>
+            </div>
+            <p className="text-[11px] text-white/60 mb-3">
+              Supporting info captured from printed card text. These do not auto-fill identity fields.
+            </p>
+            <div className="space-y-3 text-sm">
+              {cardBackDetails?.team && (
+                <div className="flex items-center gap-2">
+                  <span className="opacity-60 text-xs uppercase tracking-[0.3em]">Team</span>
+                  <div className="px-3 py-1 rounded-full border border-white/15 bg-black/30 text-white/85">
+                    {cardBackDetails.team}
+                  </div>
+                </div>
+              )}
+              {cardBackDetails?.position && (
+                <div className="flex items-center gap-2">
+                  <span className="opacity-60 text-xs uppercase tracking-[0.3em]">Position</span>
+                  <div className="px-3 py-1 rounded-full border border-white/15 bg-black/30 text-white/85">
+                    {cardBackDetails.position}
+                  </div>
+                </div>
+              )}
+              {Array.isArray(cardBackDetails?.lines) && cardBackDetails.lines.length > 0 && (
+                <div>
+                  <div className="text-xs uppercase tracking-[0.3em] opacity-60 mb-1">
+                    Additional lines verified from card
+                  </div>
+                  <ul className="space-y-1 text-sm text-white/75">
+                    {cardBackDetails.lines.slice(0, 4).map((line, idx) => (
+                      <li key={`back-line-${idx}`} className="flex gap-2">
+                        <span className="h-1.5 w-1.5 rounded-full bg-white/40 mt-1" />
+                        <span>{line}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {showOcrDebugPanel && (
           <div className="lux-card mb-8 border border-[#7BDFF2]/30 bg-[#04121F]/70">

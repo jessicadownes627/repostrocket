@@ -98,7 +98,7 @@ export default function Dashboard() {
         onClick={() => navigate("/settings")}
       >
         <div className="lux-upgrade-text">
-          Unlock unlimited Magic + Batch Mode → Upgrade to Premium
+          Premium = Unlimited + Batch + Pro workflows. Free = accurate but single-use.
         </div>
       </div>
 

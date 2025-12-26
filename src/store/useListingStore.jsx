@@ -300,7 +300,7 @@ export function ListingProvider({ children }) {
           photos: photoBundle,
           onHash: onHashDecision,
           requestId: sessionId,
-          includeBackImage: false,
+          includeBackImage: true,
           disableCrops: true,
           includeNameZones: false,
         });
@@ -322,10 +322,10 @@ export function ListingProvider({ children }) {
         });
         const minimalPayload = {
           frontImage: prep.payload?.frontImage || null,
-          backImage: null,
+          backImage: prep.payload?.backImage || null,
           altText: {
             front: prep.payload?.altText?.front || "",
-            back: null,
+            back: prep.payload?.altText?.back || "",
           },
           hints: prep.payload?.hints || {},
           requestId: prep.payload?.requestId,

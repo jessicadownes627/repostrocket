@@ -3,40 +3,56 @@ import { motion, AnimatePresence } from "framer-motion";
 
 const featureCopy = {
   magicFill: {
-    title: "Daily Magic Listing Limit",
-    subtitle: "You’ve used today’s free Magic listing.",
+    title: "Magic Listing Limit",
+    subtitle: "Free tier is accurate but single-use.",
     description:
-      "Free users get 1 premium Magic listing per day. Magic listings auto-extract brand, color, size, and write beautiful descriptions for you.",
-    free: ["1 Magic listing per day"],
-    premium: ["Unlimited Magic listings", "Full description suite", "Faster workflow"],
+      "Magic listings still run on the free tier, but you only get one precise pass a day. Premium unlocks unlimited Magic runs plus batch-ready workflows.",
+    free: ["1 accurate Magic listing per day"],
+    premium: [
+      "Unlimited Magic listings",
+      "Batch + pro workflows",
+      "Faster listing flow",
+    ],
   },
 
   batchMode: {
     title: "Batch Mode is Premium",
-    subtitle: "Prep multiple items at once.",
+    subtitle: "Unlimited + pro prep lives here.",
     description:
-      "Batch Mode lets you prep entire collections in one flow — photos, titles, descriptions, tags, all in bulk. Serious sellers use Batch Mode to save hours every week.",
-    free: ["Single listing flow only"],
-    premium: ["Unlimited Batch Mode", "Bulk editing", "Multi-photo smart extraction"],
+      "Free keeps you accurate in single-item mode. Premium unlocks unlimited Batch Mode, bulk edits, and pro-grade time savings.",
+    free: ["Accurate single listing flow"],
+    premium: [
+      "Unlimited Batch Mode",
+      "Bulk photo + detail extraction",
+      "Designed for pro workflows",
+    ],
   },
 
   launches: {
     title: "Daily Launch Limit",
-    subtitle: "You've reached today's launch quota.",
+    subtitle: "Free tier caps out quickly.",
     description:
-      "Premium unlocks unlimited launches across all platforms — Poshmark, Mercari, eBay, Depop, Etsy, and more.",
-    free: ["2 launches per day"],
-    premium: ["Unlimited launches", "Market-optimized price suggestions"],
+      "Free accounts get two precise launches per day. Premium opens unlimited launches, batch routing, and pro marketplace workflows.",
+    free: ["2 accurate launches per day"],
+    premium: [
+      "Unlimited launches everywhere",
+      "Batch routing + price assists",
+      "Pro workflow priority",
+    ],
   },
 
   // fallback for unknown keys
   default: {
     title: "Premium Feature",
-    subtitle: "Unlock the full Repost Rocket experience.",
+    subtitle: "Unlimited + Batch + Pro workflows.",
     description:
-      "Premium gives you unlimited access to advanced tools, Magic listings, Batch Mode, and more.",
-    free: ["Basic usage only"],
-    premium: ["Unlimited access", "All premium features", "Batch Mode", "Premium updates"],
+      "Free stays accurate but limited. Premium unlocks unlimited usage, Batch Mode, and every pro workflow we build.",
+    free: ["Precise single-use access"],
+    premium: [
+      "Unlimited everything",
+      "Batch + automation tools",
+      "Pro workflow updates",
+    ],
   },
 };
 
