@@ -236,6 +236,8 @@ export default function SingleListing() {
   const [manualCardValue, setManualCardValue] = useState("");
   const [openEvidenceField, setOpenEvidenceField] = useState(null);
   const lastPhotoSignatureRef = useRef("");
+  const mainContainerRef = useRef(null);
+  const analysisStageRef = useRef(analysisInFlight);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -573,11 +575,57 @@ export default function SingleListing() {
     if (typeof document === "undefined") return;
     if (!(isMobileViewport && showMobileResumePrompt)) return;
     const previousOverflow = document.body.style.overflow;
+    console.log("[scroll-lock] locking body (mobile resume prompt)");
     document.body.style.overflow = "hidden";
     return () => {
+      console.log("[scroll-lock] restoring body overflow");
       document.body.style.overflow = previousOverflow;
     };
   }, [isMobileViewport, showMobileResumePrompt]);
+  useEffect(() => {
+    if (!isMobileViewport) return;
+    console.log("[mobile-overlay] resume prompt visible:", showMobileResumePrompt);
+  }, [isMobileViewport, showMobileResumePrompt]);
+  useEffect(() => {
+    if (!isMobileViewport) return;
+    console.log("[mobile-overlay] magic results visible:", showMagicResults);
+  }, [isMobileViewport, showMagicResults]);
+  useEffect(() => {
+    if (!isMobileViewport) return;
+    console.log("[mobile-overlay] usage modal visible:", showUsageModal);
+  }, [isMobileViewport, showUsageModal]);
+  useEffect(() => {
+    if (!isSportsAnalysisMode) return;
+    const prev = analysisStageRef.current;
+    if (prev !== analysisInFlight) {
+      const viewport = typeof window !== "undefined" ? window.innerHeight : null;
+      const containerHeight = mainContainerRef.current?.offsetHeight || null;
+      console.log("[analysis-height]", {
+        stage: analysisInFlight ? "analysis-start" : "analysis-complete",
+        viewport,
+        containerHeight,
+      });
+    }
+    analysisStageRef.current = analysisInFlight;
+  }, [analysisInFlight, isSportsAnalysisMode]);
+  useEffect(() => {
+    if (!isSportsAnalysisMode || analysisInFlight) return;
+    const viewport = typeof window !== "undefined" ? window.innerHeight : null;
+    const containerHeight = mainContainerRef.current?.offsetHeight || null;
+    console.log("[analysis-overlay-check]", {
+      resumePrompt: showMobileResumePrompt,
+      magicResultsVisible: showMagicResults,
+      usageModalVisible: showUsageModal,
+      viewport,
+      containerHeight,
+    });
+  }, [
+    analysisInFlight,
+    isSportsAnalysisMode,
+    showMobileResumePrompt,
+    showMagicResults,
+    showUsageModal,
+  ]);
   const clearDraftState = useCallback(() => {
     const nextMode = batchMode === "sports_cards" ? "sports_cards" : "general";
     resetListing(nextMode);
@@ -1529,7 +1577,10 @@ useEffect(() => {
   console.log("🔁 SingleListing re-render");
 
   return (
-    <div className="app-wrapper px-6 py-10 max-w-2xl mx-auto">
+    <div
+      ref={mainContainerRef}
+      className="app-wrapper px-6 py-10 max-w-2xl mx-auto"
+    >
 
       <button
         onClick={() => navigate(-1)}
@@ -2827,7 +2878,10 @@ useEffect(() => {
       {/*  MAGIC FILL DRAWER     */}
       {/* ---------------------- */}
       {!isCardMode && showMagicResults && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-end justify-center px-4">
+        <div
+          className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-end justify-center px-4"
+          style={isMobileViewport ? { outline: "2px solid red" } : undefined}
+        >
           <div className="lux-drawer w-full max-w-xl pb-8 pt-5 px-5 space-y-4">
             <div className="text-center">
               <h2 className="text-[22px] font-semibold text-[#F4E9D5]">
@@ -2957,7 +3011,10 @@ useEffect(() => {
       {/*  MAGIC USAGE MODAL     */}
       {/* ---------------------- */}
       {!isCardMode && showUsageModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center px-4">
+        <div
+          className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center px-4"
+          style={isMobileViewport ? { outline: "2px solid red" } : undefined}
+        >
           <div className="bg-[#0A0A0A] border border-[rgba(232,213,168,0.65)] rounded-2xl p-6 max-w-sm w-full text-center">
             <h2 className="text-[18px] font-semibold text-[#F4E9D5] mb-2">
               You’ve used today’s Magic Fill
@@ -2984,6 +3041,7 @@ useEffect(() => {
             aria-modal="true"
             aria-labelledby="mobile-resume-title"
             aria-describedby="mobile-resume-copy"
+            style={isMobileViewport ? { outline: "2px solid red" } : undefined}
           >
             <div className="text-[11px] uppercase tracking-[0.4em] text-white/45 mb-3">
               Draft Resume
