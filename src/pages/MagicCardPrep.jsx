@@ -563,7 +563,7 @@ export default function MagicCardPrep({ analysisActive = false }) {
                             <div className="text-center uppercase tracking-[0.3em] text-white/60">
                               Adjust Corner
                             </div>
-                            <div className="grid grid-cols-3 gap-1 text-xs font-semibold">
+                          <div className="adjust-controls grid grid-cols-3 gap-1 text-xs font-semibold sm:gap-2">
                               <span />
                               <button
                                 type="button"

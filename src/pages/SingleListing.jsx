@@ -238,6 +238,25 @@ export default function SingleListing() {
   const lastPhotoSignatureRef = useRef("");
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const ack = window.sessionStorage.getItem("rr_mobile_resume_ack") === "true";
+      mobileResumeHandledRef.current = ack;
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 720px)");
+    const handleChange = (event) => setIsMobileViewport(event.matches);
+    handleChange(mq);
+    mq.addEventListener("change", handleChange);
+    return () => mq.removeEventListener("change", handleChange);
+  }, []);
+
+  useEffect(() => {
     const id = listingData?.libraryId;
     if (!id) {
       setIsTrackedForTrends(Boolean(listingData?.trackForTrends));
@@ -337,6 +356,8 @@ export default function SingleListing() {
     Boolean(cardBackDetails?.team) ||
     Boolean(cardBackDetails?.position) ||
     (Array.isArray(cardBackDetails?.lines) && cardBackDetails.lines.length > 0);
+  const shouldShowResumeNotice =
+    showResumeNotice && (!isMobileViewport || !showMobileResumePrompt);
   const identityEvidenceByField = useMemo(() => {
     const map = {};
     CARD_IDENTITY_FIELDS.forEach(({ key }) => {
@@ -357,6 +378,25 @@ export default function SingleListing() {
   useEffect(() => {
     setOpenEvidenceField(null);
   }, [cardIntel?.imageHash]);
+  const acknowledgeMobilePrompt = useCallback(() => {
+    mobileResumeHandledRef.current = true;
+    try {
+      window.sessionStorage.setItem("rr_mobile_resume_ack", "true");
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const handleMobileResumeContinue = useCallback(() => {
+    acknowledgeMobilePrompt();
+    setShowMobileResumePrompt(false);
+  }, [acknowledgeMobilePrompt]);
+
+  const handleMobileResumeStartNew = useCallback(() => {
+    acknowledgeMobilePrompt();
+    setShowMobileResumePrompt(false);
+    clearDraftState();
+  }, [acknowledgeMobilePrompt, clearDraftState]);
 
   const computeNeedsUserConfirmation = useCallback(
     (manualOverrides = {}) => {
@@ -485,19 +525,48 @@ export default function SingleListing() {
     [listingData]
   );
   const [showResumeNotice, setShowResumeNotice] = useState(() => hasResumableDraft);
+  const [isMobileViewport, setIsMobileViewport] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia("(max-width: 720px)").matches;
+  });
+  const [showMobileResumePrompt, setShowMobileResumePrompt] = useState(false);
+  const mobileResumeHandledRef = useRef(false);
   useEffect(() => {
     if (!hasResumableDraft) {
       setShowResumeNotice(false);
     }
   }, [hasResumableDraft]);
-  const handleStartFreshDraft = useCallback(() => {
+  useEffect(() => {
+    if (!isMobileViewport) {
+      setShowMobileResumePrompt(false);
+      return;
+    }
+    if (hasResumableDraft && !mobileResumeHandledRef.current) {
+      setShowMobileResumePrompt(true);
+    }
+  }, [isMobileViewport, hasResumableDraft]);
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (!(isMobileViewport && showMobileResumePrompt)) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isMobileViewport, showMobileResumePrompt]);
+  const clearDraftState = useCallback(() => {
     const nextMode = batchMode === "sports_cards" ? "sports_cards" : "general";
     resetListing(nextMode);
     setShowResumeNotice(false);
+  }, [batchMode, resetListing]);
+
+  const handleStartFreshDraft = useCallback(() => {
+    const nextMode = batchMode === "sports_cards" ? "sports_cards" : "general";
+    clearDraftState();
     if (nextMode === "sports_cards") {
       navigate("/card-prep");
     }
-  }, [batchMode, resetListing, navigate]);
+  }, [batchMode, clearDraftState, navigate]);
 
   const CATEGORY_OPTIONS = [
     "Tops",
@@ -1453,7 +1522,7 @@ useEffect(() => {
       <p className="text-center lux-soft-text text-sm mb-8">
         Make your listing shine
       </p>
-      {showResumeNotice && (
+      {shouldShowResumeNotice && (
         <div className="bg-black/40 border border-white/15 rounded-2xl p-4 mb-6 text-sm text-white/80">
           <div className="text-[11px] uppercase tracking-[0.35em] text-white/60 mb-1">
             Resuming your last listing
@@ -2878,6 +2947,48 @@ useEffect(() => {
             >
               Close
             </button>
+          </div>
+        </div>
+      )}
+
+      {isMobileViewport && showMobileResumePrompt && hasResumableDraft && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center px-5">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+          <div
+            className="relative z-10 w-full max-w-sm rounded-[28px] border border-white/15 bg-[#0B0B0B] p-6 shadow-[0_25px_120px_rgba(0,0,0,0.65)] text-center"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mobile-resume-title"
+            aria-describedby="mobile-resume-copy"
+          >
+            <div className="text-[11px] uppercase tracking-[0.4em] text-white/45 mb-3">
+              Draft Resume
+            </div>
+            <h2 id="mobile-resume-title" className="text-2xl font-semibold text-white mb-2">
+              Continue your last draft?
+            </h2>
+            <p id="mobile-resume-copy" className="text-sm text-white/70 mb-6">
+              We saved the card you were working on. Continue to pick up where you left off or start new to clear this workspace.
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                type="button"
+                className="w-full rounded-2xl border border-white/20 py-3 text-[11px] uppercase tracking-[0.35em] text-white/80 hover:border-white/60 transition"
+                onClick={handleMobileResumeContinue}
+              >
+                Continue
+              </button>
+              <button
+                type="button"
+                className="w-full rounded-2xl bg-[#F5C08A] text-black font-semibold py-3 text-[11px] uppercase tracking-[0.35em] hover:bg-[#FFD5A7] transition"
+                onClick={handleMobileResumeStartNew}
+              >
+                Start new
+              </button>
+            </div>
+            <p className="mt-4 text-[11px] text-white/45">
+              You can still save drafts manually from the menu later.
+            </p>
           </div>
         </div>
       )}

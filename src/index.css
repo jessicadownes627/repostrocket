@@ -714,3 +714,20 @@ body::after {
   box-shadow: 0 0 14px rgba(255, 255, 255, 0.35);
   border-color: rgba(255, 255, 255, 0.8);
 }
+
+@media (max-width: 640px) {
+  .adjust-controls {
+    display: flex !important;
+    flex-direction: column;
+    gap: 0.75rem;
+    width: 100%;
+  }
+  .adjust-controls span {
+    display: none;
+  }
+  .adjust-controls .adjust-arrow {
+    width: 100%;
+    max-width: none;
+    height: 56px;
+  }
+}
