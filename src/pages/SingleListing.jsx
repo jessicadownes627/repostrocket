@@ -250,10 +250,34 @@ export default function SingleListing() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const mq = window.matchMedia("(max-width: 720px)");
-    const handleChange = (event) => setIsMobileViewport(event.matches);
+    const handleChange = (event) => {
+      const matches =
+        typeof event?.matches === "boolean" ? event.matches : mq.matches;
+      setIsMobileViewport(matches);
+    };
     handleChange(mq);
-    mq.addEventListener("change", handleChange);
-    return () => mq.removeEventListener("change", handleChange);
+    const cleanupFns = [];
+    if (typeof mq.addEventListener === "function") {
+      mq.addEventListener("change", handleChange);
+      cleanupFns.push(() => mq.removeEventListener("change", handleChange));
+    } else if (typeof mq.addListener === "function") {
+      mq.addListener(handleChange);
+      cleanupFns.push(() => mq.removeListener(handleChange));
+    }
+    if (!cleanupFns.length) {
+      const resizeHandler = () => setIsMobileViewport(window.innerWidth <= 720);
+      window.addEventListener("resize", resizeHandler);
+      cleanupFns.push(() => window.removeEventListener("resize", resizeHandler));
+    }
+    return () => {
+      cleanupFns.forEach((fn) => {
+        try {
+          fn();
+        } catch {
+          // ignore
+        }
+      });
+    };
   }, []);
 
   useEffect(() => {
