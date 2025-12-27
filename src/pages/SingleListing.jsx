@@ -257,6 +257,7 @@ export default function SingleListing() {
   const [marketplaceGenerating, setMarketplaceGenerating] = useState(false);
   const [marketplaceError, setMarketplaceError] = useState("");
   const [marketplaceCopyFlash, setMarketplaceCopyFlash] = useState(false);
+  const [identityExpanded, setIdentityExpanded] = useState(false);
 
   useEffect(() => {
     const id = listingData?.libraryId;
@@ -394,15 +395,29 @@ export default function SingleListing() {
       return acc;
     }, {});
   }, [cardAttributes, cardIntel, manualSuggestions]);
+  const playerStatus = cardIdentityStatuses.player || {};
   const verifiedIdentityFields = useMemo(() => {
     return CARD_IDENTITY_FIELDS.filter((field) => cardIdentityStatuses[field.key]?.verified);
   }, [cardIdentityStatuses]);
   const hasVerifiedIdentity = verifiedIdentityFields.length > 0;
+  useEffect(() => {
+    if (hasVerifiedIdentity) {
+      setIdentityExpanded(true);
+    }
+  }, [hasVerifiedIdentity]);
   const cardBackDetails = cardIntel?.cardBackDetails || null;
   const hasBackDetails =
     Boolean(cardBackDetails?.team) ||
     Boolean(cardBackDetails?.position) ||
     (Array.isArray(cardBackDetails?.lines) && cardBackDetails.lines.length > 0);
+  const playerDisplayValue = playerStatus.verified
+    ? playerStatus.baseValue
+    : playerStatus.hasManual
+    ? playerStatus.manualValue
+    : playerStatus.suggestion || "";
+  const playerSuggested = !playerStatus.verified && Boolean(playerDisplayValue);
+  const identityCollapsed = !identityExpanded && !hasVerifiedIdentity;
+  const marketplaceMuted = !hasVerifiedIdentity;
   const gradeDisplayValue =
     cardAttributes?.grade ||
     (cardAttributes?.scoreRating ? `Score ${cardAttributes.scoreRating}` : "");
@@ -1990,87 +2005,81 @@ useEffect(() => {
         {/* ---------------------- */}
         {isCardMode ? (
         <>
-          {(mainPhotoEntry || backPhotoEntry) && (
-            <div className="lux-card mb-8">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-xs uppercase tracking-[0.35em] text-white/50">
-                  Marketplace Photos
-                </div>
-                <div className="text-[11px] uppercase tracking-[0.3em] text-white/45">
-                  {MARKETPLACE_READY_NOTE}
-                </div>
-              </div>
-              <p className="text-sm text-white/70 mt-2 mb-4">
-                One download includes square + 4:5 versions prepared for listings.
-              </p>
-              {marketplaceError && (
-                <div className="mb-3 text-xs text-[#F6BDB2]">{marketplaceError}</div>
-              )}
-              <div className="grid gap-6 md:grid-cols-2">
-                {renderMarketplacePreview("front", "Front photo")}
-                {renderMarketplacePreview("back", "Back photo")}
-              </div>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <button
-                  type="button"
-                  className="flex-1 rounded-2xl py-3 text-base font-semibold uppercase tracking-[0.3em] bg-white text-black disabled:opacity-40 disabled:cursor-not-allowed"
-                  onClick={handleDownloadMarketplacePhotos}
-                  disabled={!marketplaceReady || marketplaceGenerating}
-                >
-                  {marketplaceGenerating ? "Preparing photos…" : "Download ZIP"}
-                </button>
-                <button
-                  type="button"
-                  className="flex-1 rounded-2xl border border-white/20 py-3 text-sm uppercase tracking-[0.3em] text-white/70 hover:border-white/50 transition disabled:opacity-40 disabled:cursor-not-allowed"
-                  onClick={handleCopyMarketplaceReady}
-                  disabled={!marketplaceReady}
-                >
-                  {marketplaceCopyFlash ? "Copied" : "Copy “Photos prepared” note"}
-                </button>
-              </div>
-            </div>
-          )}
-
           <HeaderBar label="Card Details" />
 
-          {showCardVerificationWarning && !hasVerifiedIdentity && (
-            <div className="relative overflow-hidden rounded-3xl border border-[#f6d48f]/30 bg-gradient-to-br from-[#3a2317] via-[#2b1a12] to-[#1a0f0a] p-5 mb-6 text-sm text-[#FBEACC] shadow-[0_20px_45px_rgba(0,0,0,0.55)]">
-              <div className="absolute -top-10 -right-6 h-32 w-32 bg-[#f6d48f]/20 blur-3xl pointer-events-none" />
-              <div className="relative z-10">
-                <p className="font-semibold text-[#FBEACC]">Confirm the core card details</p>
-                <p className="text-xs text-white/70 mt-1">
-                  We couldn’t read every field from the current photo. Fill in what you know so the listing reflects the card text.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {hasVerifiedIdentity && (
-            <div className="relative overflow-hidden rounded-3xl border border-[#8FF0C5]/25 bg-gradient-to-br from-[#0e201a] via-[#0d1a16] to-[#0a1211] p-5 mb-6 text-sm text-white/85 shadow-[0_20px_45px_rgba(0,0,0,0.45)]">
-              <div className="absolute -top-10 -right-6 h-32 w-32 bg-[#8FF0C5]/15 blur-3xl pointer-events-none" />
-              <div className="relative z-10">
-                <p className="font-semibold text-[#8FF0C5] mb-2">
-                  Here’s what we verified from visible card text
-                </p>
-                <div className="flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.3em] text-[#8FF0C5]">
-                  {verifiedIdentityFields.map((field) => (
-                    <span
-                      key={field.key}
-                      className="inline-flex items-center gap-2 rounded-2xl border border-[#8FF0C5]/40 bg-[#0a1c16]/60 px-3 py-1"
-                    >
-                      <span className="h-1.5 w-1.5 rounded-full bg-[#8FF0C5]" />
-                      {field.label}
-                    </span>
-                  ))}
+          {identityCollapsed && (
+            <div className="lux-card mb-8 space-y-4">
+              <div>
+                <div className="text-xs uppercase tracking-[0.35em] text-white/45">
+                  Card identity
                 </div>
-                <p className="text-[11px] text-white/55 mt-3">
-                  Only printed text that was visible in this photo appears here.
-                </p>
+                <div className="text-2xl font-semibold text-white mt-1">
+                  {playerDisplayValue || "Add player name"}
+                </div>
+                {playerSuggested && (
+                  <span className="mt-1 inline-flex items-center text-xs uppercase tracking-[0.35em] text-white/60">
+                    Suggested — tap to confirm
+                  </span>
+                )}
+                {!playerDisplayValue && (
+                  <p className="text-[12px] text-white/55 mt-2">
+                    We couldn’t read the player name yet. Open identity to confirm player, team, year, and set.
+                  </p>
+                )}
               </div>
+              <button
+                type="button"
+                className="w-full sm:w-auto px-4 py-2 rounded-2xl bg-white/90 text-black text-xs font-semibold uppercase tracking-[0.3em]"
+                onClick={() => setIdentityExpanded(true)}
+              >
+                Confirm card details
+              </button>
             </div>
           )}
 
-          <div className="lux-card mb-8 space-y-6">
+          {identityExpanded && (
+            <>
+              {showCardVerificationWarning && !hasVerifiedIdentity && (
+                <div className="relative overflow-hidden rounded-3xl border border-[#f6d48f]/30 bg-gradient-to-br from-[#3a2317] via-[#2b1a12] to-[#1a0f0a] p-5 mb-6 text-sm text-[#FBEACC] shadow-[0_20px_45px_rgba(0,0,0,0.55)]">
+                  <div className="absolute -top-10 -right-6 h-32 w-32 bg-[#f6d48f]/20 blur-3xl pointer-events-none" />
+                  <div className="relative z-10">
+                    <p className="font-semibold text-[#FBEACC]">Confirm the core card details</p>
+                    <p className="text-xs text-white/70 mt-1">
+                      We couldn’t read every field from the current photo. Fill in what you know so the listing reflects the card text.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {hasVerifiedIdentity && (
+                <div className="relative overflow-hidden rounded-3xl border border-[#8FF0C5]/25 bg-gradient-to-br from-[#0e201a] via-[#0d1a16] to-[#0a1211] p-5 mb-6 text-sm text-white/85 shadow-[0_20px_45px_rgba(0,0,0,0.45)]">
+                  <div className="absolute -top-10 -right-6 h-32 w-32 bg-[#8FF0C5]/15 blur-3xl pointer-events-none" />
+                  <div className="relative z-10">
+                    <p className="font-semibold text-[#8FF0C5] mb-2">
+                      Here’s what we verified from visible card text
+                    </p>
+                    <div className="flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.3em] text-[#8FF0C5]">
+                      {verifiedIdentityFields.map((field) => (
+                        <span
+                          key={field.key}
+                          className="inline-flex items-center gap-2 rounded-2xl border border-[#8FF0C5]/40 bg-[#0a1c16]/60 px-3 py-1"
+                        >
+                          <span className="h-1.5 w-1.5 rounded-full bg-[#8FF0C5]" />
+                          {field.label}
+                        </span>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-white/55 mt-3">
+                      Only printed text that was visible in this photo appears here.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {identityExpanded && (
+            <div className="lux-card mb-8 space-y-6">
             <div>
               <div className="text-xs uppercase tracking-[0.35em] text-white/45">Card Title</div>
               <div className="mt-2">
@@ -2134,8 +2143,9 @@ useEffect(() => {
                   : isSuggested
                   ? "text-white/70 border-white/20 bg-white/5"
                   : "text-white/40 border-white/15 bg-black/30";
-                const actionButton = isVerified
-                  ? hasEvidence && (
+                const actionButton = identityExpanded
+                  ? isVerified
+                    ? hasEvidence && (
                       <button
                         type="button"
                         className="text-xs text-[#8FF0C5] hover:text-white transition"
@@ -2146,7 +2156,7 @@ useEffect(() => {
                         {showEvidence ? "Hide proof" : "Show proof"}
                       </button>
                     )
-                  : !isOptionalField && (
+                    : !isOptionalField && (
                       <button
                         type="button"
                         className="text-xs uppercase tracking-[0.3em] text-white/80 border border-white/20 rounded-full px-3 py-1 hover:border-white/60 transition"
@@ -2154,7 +2164,8 @@ useEffect(() => {
                       >
                         Confirm
                       </button>
-                    );
+                    )
+                  : null;
                 return (
                   <div
                     key={key}
@@ -2224,7 +2235,55 @@ useEffect(() => {
                 );
               })}
             </div>
-          </div>
+            </div>
+          )}
+
+          {(mainPhotoEntry || backPhotoEntry) && (
+            <div
+              className={`lux-card mb-8 transition ${
+                marketplaceMuted ? "opacity-70" : ""
+              }`}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs uppercase tracking-[0.35em] text-white/50">
+                  Marketplace Photos
+                </div>
+                <div className="text-[11px] uppercase tracking-[0.3em] text-white/45">
+                  {marketplaceMuted
+                    ? "Photos ready — finalize card details to continue"
+                    : MARKETPLACE_READY_NOTE}
+                </div>
+              </div>
+              <p className="text-sm text-white/70 mt-2 mb-4">
+                One download includes square + 4:5 versions prepared for listings.
+              </p>
+              {marketplaceError && (
+                <div className="mb-3 text-xs text-[#F6BDB2]">{marketplaceError}</div>
+              )}
+              <div className="grid gap-6 md:grid-cols-2">
+                {renderMarketplacePreview("front", "Front photo")}
+                {renderMarketplacePreview("back", "Back photo")}
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  type="button"
+                  className="flex-1 rounded-2xl py-3 text-base font-semibold uppercase tracking-[0.3em] bg-white text-black disabled:opacity-40 disabled:cursor-not-allowed"
+                  onClick={handleDownloadMarketplacePhotos}
+                  disabled={!marketplaceReady || marketplaceGenerating}
+                >
+                  {marketplaceGenerating ? "Preparing photos…" : "Download ZIP"}
+                </button>
+                <button
+                  type="button"
+                  className="flex-1 rounded-2xl border border-white/20 py-3 text-sm uppercase tracking-[0.3em] text-white/70 hover:border-white/50 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                  onClick={handleCopyMarketplaceReady}
+                  disabled={!marketplaceReady}
+                >
+                  {marketplaceCopyFlash ? "Copied" : "Copy “Photos prepared” note"}
+                </button>
+              </div>
+            </div>
+          )}
 
         <div className="lux-card mb-8">
           <div className="flex items-center justify-between">
@@ -2384,72 +2443,75 @@ useEffect(() => {
             <div className="flex items-center gap-2 text-xs uppercase opacity-70 tracking-wide mb-2">
               Corner Inspection
             </div>
-              <p className="text-xs text-white/55 mb-4">
-                Confidence only reflects image clarity (High = clearly framed, Medium = visible but slightly angled). It is not a grading score.
-              </p>
-              <div className="space-y-4">
-                {["front", "back"].map((side) => {
-                  const cornerSet = cardAttributes.corners?.[side];
-                  if (!cornerSet) return null;
-                  const condition = cardAttributes.cornerCondition?.[side];
-                  const prettySide = side === "front" ? "Front" : "Back";
-                  return (
-                    <div key={side}>
-                      <div className="flex items-center gap-2 text-xs uppercase tracking-[0.35em] opacity-70">
-                        {prettySide} Corners
-                        {renderCornerBadge(condition?.confidence)}
-                      </div>
-                      {condition?.description && (
-                        <div className="text-xs opacity-60 mt-1">
-                          Looks {condition.description}.
-                        </div>
-                      )}
-                      <div className="grid grid-cols-2 gap-3 mt-3">
-                        {Object.entries(CORNER_LABELS).map(([key, label]) => {
-                          const entry = cornerSet[key];
-                          return (
-                            <div key={`${side}-${key}`} className="text-center text-[11px] uppercase tracking-[0.25em]">
-                              <div className="mb-2 rounded-2xl border border-white/10 bg-black/30 overflow-hidden">
-                                {entry?.image ? (
-                                  <img
-                                    src={entry.image}
-                                    alt={`${prettySide} ${label}`}
-                                    className={`w-full h-24 object-cover ${
-                                      entry?.manualOverride ? "ring-1 ring-[#E8D5A8]" : ""
-                                    }`}
-                                  />
-                                ) : (
-                                  <div className="h-24 flex items-center justify-center text-[10px] opacity-40">
-                                    No data
-                                  </div>
-                                )}
-                              </div>
-                              <div className="flex items-center justify-center gap-2 text-[10px] tracking-[0.3em]">
-                                {label}
-                                {renderCornerBadge(entry?.confidence)}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
+            <p className="text-xs text-white/55 mb-4">
+              Confidence only reflects image clarity (High = clearly framed, Medium = visible but slightly angled). It is not a grading score.
+            </p>
+            <div className="space-y-4">
+              {["front", "back"].map((side) => {
+                const cornerSet = cardAttributes.corners?.[side];
+                if (!cornerSet) return null;
+                const condition = cardAttributes.cornerCondition?.[side];
+                const prettySide = side === "front" ? "Front" : "Back";
+                return (
+                  <div key={side}>
+                    <div className="flex items-center gap-2 text-xs uppercase tracking-[0.35em] opacity-70">
+                      {prettySide} Corners
+                      {renderCornerBadge(condition?.confidence)}
                     </div>
-                  );
-                })}
-              </div>
-              <p className="mt-4 text-xs text-white/55">
-                Corners are auto-detected for condition analysis. Retake if alignment looks off.
-              </p>
-              {cornerPhotos.length > 0 && (
-                <button
-                  type="button"
-                  onClick={handleSaveCornerImages}
-                  className="mt-4 w-full text-center border border-white/20 rounded-2xl py-2 text-[11px] uppercase tracking-[0.35em] text-white/80 hover:bg-white/5 transition"
-                >
-                  Save Corner Images
-                </button>
-              )}
+                    {condition?.description && (
+                      <div className="text-xs opacity-60 mt-1">
+                        Looks {condition.description}.
+                      </div>
+                    )}
+                    <div className="grid grid-cols-2 gap-3 mt-3">
+                      {Object.entries(CORNER_LABELS).map(([key, label]) => {
+                        const entry = cornerSet[key];
+                        return (
+                          <div
+                            key={`${side}-${key}`}
+                            className="text-center text-[11px] uppercase tracking-[0.25em]"
+                          >
+                            <div className="mb-2 rounded-2xl border border-white/10 bg-black/30 overflow-hidden">
+                              {entry?.image ? (
+                                <img
+                                  src={entry.image}
+                                  alt={`${prettySide} ${label}`}
+                                  className={`w-full h-24 object-cover ${
+                                    entry?.manualOverride ? "ring-1 ring-[#E8D5A8]" : ""
+                                  }`}
+                                />
+                              ) : (
+                                <div className="h-24 flex items-center justify-center text-[10px] opacity-40">
+                                  No data
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex items-center justify-center gap-2 text-[10px] tracking-[0.3em]">
+                              {label}
+                              {renderCornerBadge(entry?.confidence)}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          )}
+            <p className="mt-4 text-xs text-white/55">
+              Corners are auto-detected for condition analysis. Retake if alignment looks off.
+            </p>
+            {cornerPhotos.length > 0 && (
+              <button
+                type="button"
+                onClick={handleSaveCornerImages}
+                className="mt-4 w-full text-center border border-white/20 rounded-2xl py-2 text-[11px] uppercase tracking-[0.35em] text-white/80 hover:bg-white/5 transition"
+              >
+                Save Corner Images
+              </button>
+            )}
+          </div>
+        )}
 
           {(cardAttributes?.corners || GRADING_PATHS.featured) && (
             <div className="lux-card mb-8">
