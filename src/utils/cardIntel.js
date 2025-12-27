@@ -10,6 +10,8 @@ const EMPTY_INTEL = {
   setName: "",
   cardNumber: "",
   brand: "",
+  grade: "",
+  scoreRating: "",
   notes: "",
   confidence: {},
   sources: {},
@@ -18,7 +20,16 @@ const EMPTY_INTEL = {
   needsUserConfirmation: true,
 };
 
-const CONFIDENCE_DEFAULTS = ["player", "team", "year", "setName", "cardNumber", "brand"];
+const CONFIDENCE_DEFAULTS = [
+  "player",
+  "team",
+  "year",
+  "setName",
+  "cardNumber",
+  "brand",
+  "grade",
+  "scoreRating",
+];
 const CORNER_NAME_MAP = {
   topLeft: "Top Left",
   topRight: "Top Right",
@@ -315,10 +326,14 @@ export function buildCardAttributesFromIntel(intel) {
     team: intel.team || "",
     sport: intel.sport || "",
     year: intel.year || "",
-    set: intel.setName || intel.set || "",
-    setName: intel.setName || intel.set || "",
+    setBrand: intel.setBrand || intel.setName || "",
+    setName: intel.setName || intel.setBrand || "",
     cardNumber: intel.cardNumber || "",
     brand: intel.brand || "",
+    grade: intel.grade || "",
+    gradingAuthority: intel.gradingAuthority || "",
+    gradeValue: intel.gradeValue || "",
+    scoreRating: intel.scoreRating || "",
     parallel: intel.parallel || "",
     notes: intel.notes || "",
     confidence: ensureConfidence(intel.confidence || {}),
@@ -647,6 +662,21 @@ async function buildNameZoneCrops(dataUrl) {
         };
       }
     });
+    const slabRect = buildSlabLabelRect(baseImage, cardBounds);
+    if (slabRect) {
+      const cropped = cropAndPreprocessZone(baseImage, slabRect);
+      if (cropped) {
+        results.slabLabel = {
+          image: cropped,
+          rect: slabRect,
+          meta: {
+            imageWidth: baseImage.width,
+            imageHeight: baseImage.height,
+            cardBounds,
+          },
+        };
+      }
+    }
     return results;
   } catch (err) {
     console.error("Card intel: failed to build name zone crops", err);
@@ -682,6 +712,21 @@ function cropAndPreprocessZone(image, rect) {
     console.error("Card intel: failed to crop OCR zone", err);
     return null;
   }
+}
+
+function buildSlabLabelRect(image, cardBounds) {
+  if (!image || !cardBounds) return null;
+  const marginX = Math.round(cardBounds.width * 0.1);
+  const slabWidth = Math.min(image.width, cardBounds.width + marginX * 2);
+  const slabHeight = Math.round(cardBounds.height * 0.18);
+  const x = Math.max(0, Math.round(cardBounds.x - marginX));
+  const y = Math.max(0, Math.round(cardBounds.y - slabHeight - cardBounds.height * 0.02));
+  return {
+    x,
+    y,
+    width: slabWidth,
+    height: Math.min(slabHeight, cardBounds.y + cardBounds.height),
+  };
 }
 
 function preprocessForOcr(ctx, width, height) {

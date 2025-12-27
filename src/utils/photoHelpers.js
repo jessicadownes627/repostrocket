@@ -70,3 +70,26 @@ export function fileToDataUrl(file) {
     reader.readAsDataURL(file);
   });
 }
+
+export async function photoEntryToDataUrl(entry) {
+  if (!entry) return "";
+  if (entry.file instanceof File || entry.file instanceof Blob) {
+    try {
+      return await fileToDataUrl(entry.file);
+    } catch (err) {
+      console.error("photoEntryToDataUrl: failed to read local file", err);
+    }
+  }
+  const src = getPhotoUrl(entry);
+  if (!src) return "";
+  if (src.startsWith("data:")) return src;
+  try {
+    const response = await fetch(src, { mode: "cors" });
+    const blob = await response.blob();
+    if (!blob) return "";
+    return await fileToDataUrl(new File([blob], entry.altText || "card-photo", { type: blob.type || "image/jpeg" }));
+  } catch (err) {
+    console.error("photoEntryToDataUrl: unable to fetch remote image", err);
+    return "";
+  }
+}

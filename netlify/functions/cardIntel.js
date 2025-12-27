@@ -123,6 +123,36 @@ const YEAR_OCR_CONFIDENCE_THRESHOLD = 0.85;
 const MIN_YEAR = 1970;
 const TEAM_OCR_CONFIDENCE_THRESHOLD = 0.85;
 const CARD_NUMBER_OCR_CONFIDENCE_THRESHOLD = 0.85;
+const GRADE_CONFIDENCE_THRESHOLD = 0.85;
+const GRADE_KEYWORDS = ["psa", "bgs", "sgc"];
+const SCORE_RATING_CONTEXT_CUES = [
+  "rating",
+  "graded",
+  "grade",
+  "overall score",
+  "overall rating",
+  "pts",
+  "points",
+  "out of",
+  "/10",
+  "/100",
+  "score rating",
+  "score grade",
+];
+const SLAB_NAME_BLACKLIST = [
+  "psa",
+  "bgs",
+  "sgc",
+  "mint",
+  "gem",
+  "grade",
+  "grading",
+  "centering",
+  "edges",
+  "surface",
+  "corners",
+  "card",
+];
 
 const EMPTY_RESPONSE = {
   player: "",
@@ -130,9 +160,14 @@ const EMPTY_RESPONSE = {
   sport: "",
   year: "",
   setName: "",
+  setBrand: "",
   cardNumber: "",
   brand: "",
   notes: "",
+  grade: "",
+  gradingAuthority: "",
+  gradeValue: "",
+  scoreRating: "",
   confidence: {
     player: "low",
     team: "low",
@@ -140,6 +175,8 @@ const EMPTY_RESPONSE = {
     setName: "low",
     cardNumber: "low",
     brand: "low",
+    grade: "low",
+    scoreRating: "low",
   },
   sources: {
     player: "infer",
@@ -148,6 +185,8 @@ const EMPTY_RESPONSE = {
     setName: "infer",
     cardNumber: "infer",
     brand: "infer",
+    grade: "infer",
+    scoreRating: "infer",
   },
   sourceEvidence: [],
   isTextVerified: {
@@ -156,6 +195,8 @@ const EMPTY_RESPONSE = {
     year: false,
     setName: false,
     cardNumber: false,
+    grade: false,
+    scoreRating: false,
   },
   needsUserConfirmation: true,
   ocr: {
@@ -285,10 +326,21 @@ export async function handler(event) {
         0
       ),
     };
-    const zoneOcrResults = {};
-    const zoneSuggestions = {};
-    const zoneUsage = {};
-  const derived = deriveFieldsFromOcr(ocrLines, hints);
+    let zoneOcrResults = {};
+    let zoneSuggestions = {};
+    let zoneUsage = {};
+    if (nameZoneCrops && Object.keys(nameZoneCrops).length) {
+      zoneOcrResults = await runNameZoneOcr(client, nameZoneCrops);
+      const manualFromZones = buildManualSuggestionsFromZones(zoneOcrResults);
+      zoneSuggestions = manualFromZones.suggestions || {};
+      zoneUsage = manualFromZones.zoneUsage || {};
+    }
+    const slabLines = zoneOcrResults?.slabLabel?.lines || [];
+    const slabIdentity = deriveSlabIdentity(slabLines);
+    const combinedOcrLines =
+      slabLines && slabLines.length ? [...ocrLines, ...slabLines] : ocrLines;
+    const derived = deriveFieldsFromOcr(combinedOcrLines, hints);
+    applySlabIdentityOverrides(derived, slabIdentity);
     const formattedZones = Object.entries(zoneOcrResults || {}).reduce(
       (acc, [zoneKey, zoneData]) => {
         const lines = Array.isArray(zoneData?.lines) ? zoneData.lines : [];
@@ -495,6 +547,108 @@ function buildManualSuggestionsFromZones(zones = {}) {
   return { suggestions, zoneUsage };
 }
 
+function deriveSlabIdentity(lines = []) {
+  if (!Array.isArray(lines) || !lines.length) return null;
+  const hasAuthority = lines.some((entry) => {
+    const text = String(entry?.text || "").toLowerCase();
+    if (!text) return false;
+    return GRADE_KEYWORDS.some((kw) => text.includes(kw));
+  });
+  if (!hasAuthority) return null;
+  const boostedLines = lines.map((entry, idx) => ({
+    ...entry,
+    index: typeof entry?.index === "number" ? entry.index : idx,
+    confidence:
+      typeof entry?.confidence === "number" && entry.confidence > 0
+        ? entry.confidence
+        : 0.97,
+  }));
+  const fallbackPlayer = promotePlayerCandidate(findPlayerCandidate(boostedLines));
+  const slabPlayerEntry = findSlabPlayerEntry(boostedLines);
+  const fallbackTeam = promoteTeamCandidate(findTeamCandidate(boostedLines));
+  const fallbackYear = promoteYearCandidate(findYearCandidate(boostedLines));
+  const fallbackSet = findSetCandidate(boostedLines);
+  const fallbackNumber = promoteCardNumberCandidate(
+    findCardNumberSuggestion(boostedLines)
+  );
+  return {
+    playerEntry: slabPlayerEntry || findVerifiedPlayerFromOcr(boostedLines) || fallbackPlayer,
+    teamEntry: findVerifiedTeamFromOcr(boostedLines) || fallbackTeam,
+    yearEntry: findVerifiedYearFromOcr(boostedLines) || fallbackYear,
+    cardNumberEntry: findVerifiedCardNumberFromOcr(boostedLines) || fallbackNumber,
+    setEntry: findSetCandidate(boostedLines) || fallbackSet,
+  };
+}
+
+function applySlabIdentityOverrides(derived, slabIdentity) {
+  if (!derived || !slabIdentity) return;
+  const overrides = [
+    {
+      key: "player",
+      entry: slabIdentity.playerEntry,
+      getValue: (entry) => entry?.matchedName || titleCase(entry?.text || ""),
+    },
+    {
+      key: "team",
+      entry: slabIdentity.teamEntry,
+      getValue: (entry) => entry?.matchedTeam || titleCaseTeam(entry?.text || ""),
+    },
+    {
+      key: "year",
+      entry: slabIdentity.yearEntry,
+      getValue: (entry) => entry?.matchedYear || "",
+    },
+    {
+      key: "setName",
+      entry: slabIdentity.setEntry,
+      getValue: (entry) => titleCase(entry?.brand || entry?.text || ""),
+    },
+    {
+      key: "cardNumber",
+      entry: slabIdentity.cardNumberEntry,
+      getValue: (entry) => entry?.matchedNumber || "",
+    },
+  ];
+
+  let updated = false;
+  overrides.forEach(({ key, entry, getValue }) => {
+    if (!entry) return;
+    const value = getValue(entry);
+    if (!value) return;
+    derived[key] = value;
+    if (key === "setName") {
+      derived.setBrand = value;
+      derived.brand = value;
+    }
+    derived.sources[key] = "ocr";
+    derived.isTextVerified[key] = true;
+    derived.confidence[key] = "high";
+    if (derived.manualSuggestions && typeof derived.manualSuggestions === "object") {
+      derived.manualSuggestions[key] = value;
+    }
+    if (!Array.isArray(derived.sourceEvidence)) {
+      derived.sourceEvidence = [];
+    }
+    derived.sourceEvidence.push(
+      buildEvidenceLine(key, {
+        ...entry,
+        text: entry.text || value,
+      })
+    );
+    updated = true;
+  });
+
+  if (updated) {
+    derived.needsUserConfirmation = REQUIRED_IDENTITY_FIELDS.some((field) => {
+      if (field === "setName") return !derived.setName;
+      if (field === "player") return !derived.player;
+      if (field === "team") return !derived.team;
+      if (field === "year") return !derived.year;
+      return false;
+    });
+  }
+}
+
 export function deriveFieldsFromOcr(lines = [], hints = {}) {
   const evidence = [];
   const sources = { ...EMPTY_RESPONSE.sources };
@@ -567,6 +721,26 @@ export function deriveFieldsFromOcr(lines = [], hints = {}) {
   }
   manualSuggestions.setName = setName;
 
+  const verifiedGradeEntry = findVerifiedGradeOrScore(lines);
+  let grade = "";
+  let scoreRating = "";
+  let gradingAuthority = "";
+  let gradeValue = "";
+  if (verifiedGradeEntry) {
+    const targetField = verifiedGradeEntry.type === "score" ? "scoreRating" : "grade";
+    if (targetField === "grade") {
+      grade = verifiedGradeEntry.label;
+      gradingAuthority = verifiedGradeEntry.authority || "";
+      gradeValue = verifiedGradeEntry.gradeValue || "";
+    } else {
+      scoreRating = String(verifiedGradeEntry.scoreValue);
+    }
+    evidence.push(buildEvidenceLine(targetField, verifiedGradeEntry));
+    sources[targetField] = "ocr";
+    confidence[targetField] = "high";
+    isTextVerified[targetField] = true;
+  }
+
   const needsUserConfirmation = REQUIRED_IDENTITY_FIELDS.some((field) => {
     if (field === "setName") return !setName;
     if (field === "player") return !player;
@@ -597,8 +771,13 @@ export function deriveFieldsFromOcr(lines = [], hints = {}) {
     sport: hints?.sport || "",
     year,
     setName,
+    setBrand: setName,
     cardNumber,
     brand,
+    grade,
+    gradingAuthority,
+    gradeValue,
+    scoreRating,
     notes: "",
     confidence,
     sources,
@@ -637,6 +816,12 @@ function findVerifiedPlayerFromOcr(lines = []) {
       return {
         ...entry,
         matchedName: matched,
+      };
+    }
+    if (looksLikeHeaderPlayerEntry(entry?.text || "")) {
+      return {
+        ...entry,
+        matchedName: titleCase(entry.text),
       };
     }
   }
@@ -832,6 +1017,114 @@ function findPlayerCandidate(lines) {
   });
 }
 
+function promotePlayerCandidate(entry) {
+  if (!entry || !entry.text) return null;
+  return {
+    ...entry,
+    matchedName: titleCase(entry.text),
+    confidence: entry.confidence ?? 0.97,
+  };
+}
+
+function promoteTeamCandidate(entry) {
+  if (!entry || !entry.text) return null;
+  return {
+    ...entry,
+    matchedTeam: titleCaseTeam(entry.text),
+    confidence: entry.confidence ?? 0.97,
+  };
+}
+
+function promoteYearCandidate(entry) {
+  if (!entry) return null;
+  const source = entry.match || entry.text;
+  if (!source) return null;
+  const match = String(source).match(/\b(18|19|20)\d{2}\b/);
+  if (!match) return null;
+  return {
+    ...entry,
+    matchedYear: match[0],
+    confidence: entry.confidence ?? 0.97,
+  };
+}
+
+function promoteCardNumberCandidate(entry) {
+  if (!entry || !entry.matchedNumber) return null;
+  return {
+    ...entry,
+    matchedNumber: entry.matchedNumber,
+    confidence: entry.confidence ?? 0.97,
+  };
+}
+
+function findSlabPlayerEntry(lines = []) {
+  if (!Array.isArray(lines)) return null;
+  for (const entry of lines) {
+    const text = String(entry?.text || "").trim();
+    if (!text) continue;
+    const confidence =
+      typeof entry?.confidence === "number" ? entry.confidence : 0.97;
+    if (confidence < 0.6) continue;
+    if (!looksLikeSlabPlayerName(text)) continue;
+    const normalized = normalizeSlabPlayerName(text);
+    if (!normalized) continue;
+    return {
+      ...entry,
+      text: normalized,
+      matchedName: normalized,
+      confidence,
+    };
+  }
+  return null;
+}
+
+function looksLikeSlabPlayerName(text = "") {
+  if (!text) return false;
+  if (/\d/.test(text)) return false;
+  const cleaned = text.replace(/[^\w\s,.'-]/g, "").trim();
+  if (!cleaned) return false;
+  const lower = cleaned.toLowerCase();
+  if (SLAB_NAME_BLACKLIST.some((word) => lower.includes(word))) {
+    return false;
+  }
+  const words = cleaned
+    .replace(/,/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  if (words.length < 1 || words.length > 3) return false;
+  const lettersOnly = cleaned.replace(/[^A-Za-z]/g, "");
+  if (lettersOnly.length < 3) return false;
+  const uppercaseRatio =
+    lettersOnly.replace(/[^A-Z]/g, "").length / lettersOnly.length;
+  return uppercaseRatio >= 0.5;
+}
+
+function normalizeSlabPlayerName(text = "") {
+  if (!text) return "";
+  const cleaned = text.replace(/[^\w\s,.'-]/g, " ").replace(/\s+/g, " ").trim();
+  if (!cleaned) return "";
+  const hasComma = cleaned.includes(",");
+  let parts = cleaned
+    .split(hasComma ? "," : " ")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (hasComma && parts.length >= 2) {
+    parts = [parts[1], parts[0], ...parts.slice(2)];
+  }
+  return parts
+    .map((token, idx) => {
+      if (token.length === 2 && token.endsWith(".")) {
+        return token.toUpperCase();
+      }
+      if (idx === 0 && token.length === 1) {
+        return token.toUpperCase();
+      }
+      return titleCase(token);
+    })
+    .filter(Boolean)
+    .join(" ");
+}
+
 function findTeamCandidate(lines) {
   for (const entry of lines) {
     const normalized = entry.text.toLowerCase();
@@ -876,6 +1169,20 @@ function isLikelyPlayer(text = "") {
   return uppercaseRatio > 0.7;
 }
 
+function looksLikeHeaderPlayerEntry(text = "") {
+  if (!text) return false;
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  if (trimmed.length > 26) return false;
+  if (/[0-9,:]/.test(trimmed)) return false;
+  const words = trimmed.split(/\s+/);
+  if (words.length < 2 || words.length > 3) return false;
+  const lettersOnly = trimmed.replace(/[^A-Za-z]/g, "");
+  if (!lettersOnly.length) return false;
+  const uppercaseRatio = lettersOnly.replace(/[^A-Z]/g, "").length / lettersOnly.length;
+  return uppercaseRatio >= 0.85;
+}
+
 function buildEvidenceLine(field, entry) {
   const text =
     typeof entry?.text === "string"
@@ -884,8 +1191,127 @@ function buildEvidenceLine(field, entry) {
       ? entry.match
       : typeof entry?.matchedName === "string"
       ? entry.matchedName
+      : typeof entry?.label === "string"
+      ? entry.label
       : "";
   return text
     ? `OCR line ${entry.index + 1 || 0}: "${text}" -> ${field}`
     : `OCR mapping for ${field}`;
+}
+
+function findVerifiedGradeOrScore(lines = []) {
+  if (!Array.isArray(lines)) return null;
+  const sameLineMatch = findGradeSameLine(lines);
+  if (sameLineMatch) return sameLineMatch;
+  return findPairedGradeOrScore(lines);
+}
+
+function findGradeSameLine(lines = []) {
+  const combinedGradeRegex = /\b(PSA|BGS|SGC)\s*-?\s*(\d+(?:\.\d+)?)/i;
+  const combinedScoreRegex = /\bscore\s*(\d+)\b/i;
+  for (let index = 0; index < lines.length; index += 1) {
+    const entry = lines[index];
+    if (!entry?.text) continue;
+    const text = entry.text;
+    const confidence =
+      typeof entry?.confidence === "number" ? entry.confidence : null;
+    if (confidence === null || confidence < GRADE_CONFIDENCE_THRESHOLD) continue;
+    const gradeMatch = text.match(combinedGradeRegex);
+    if (gradeMatch) {
+      return {
+        ...entry,
+        index,
+        type: "grade",
+        authority: gradeMatch[1].toUpperCase(),
+        gradeValue: gradeMatch[2],
+        label: `${gradeMatch[1].toUpperCase()} ${gradeMatch[2]}`,
+      };
+    }
+    const scoreMatch = text.match(combinedScoreRegex);
+    if (scoreMatch && isScoreRatingContext(text)) {
+      return {
+        ...entry,
+        index,
+        type: "score",
+        scoreValue: parseInt(scoreMatch[1], 10),
+        label: `Score ${scoreMatch[1]}`,
+      };
+    }
+  }
+  return null;
+}
+
+function findPairedGradeOrScore(lines = []) {
+  const keywordEntries = [];
+  const numberEntries = [];
+  lines.forEach((entry, idx) => {
+    if (!entry?.text) return;
+    const confidence =
+      typeof entry?.confidence === "number" ? entry.confidence : null;
+    if (confidence === null || confidence < GRADE_CONFIDENCE_THRESHOLD) return;
+    const lower = entry.text.toLowerCase();
+    if (GRADE_KEYWORDS.some((kw) => lower.includes(kw))) {
+      keywordEntries.push({ entry: { ...entry, index: idx }, idx, kind: "grade" });
+    } else if (lower.includes("score")) {
+      keywordEntries.push({ entry: { ...entry, index: idx }, idx, kind: "score" });
+    }
+    const numberMatch = entry.text.match(/\b(\d+(?:\.\d+)?)\b/);
+    if (numberMatch) {
+      const value = parseFloat(numberMatch[1]);
+      if (!Number.isNaN(value) && value <= 200) {
+        numberEntries.push({ entry: { ...entry, index: idx }, idx, value });
+      }
+    }
+  });
+
+  for (const keyword of keywordEntries) {
+    const partner = numberEntries.find((candidate) => {
+      if (keyword.kind === "score") {
+        return Math.abs(candidate.idx - keyword.idx) <= 1;
+      }
+      return Math.abs(candidate.idx - keyword.idx) <= 1;
+    });
+    if (!partner) continue;
+    if (keyword.kind === "score") {
+      if (
+        !isScoreRatingContext(
+          keyword.entry?.text || "",
+          partner.entry?.text || ""
+        )
+      ) {
+        continue;
+      }
+      return {
+        ...keyword.entry,
+        type: "score",
+        scoreValue: partner.value,
+        label: `Score ${partner.value}`,
+      };
+    }
+    const matchedKeyword = GRADE_KEYWORDS.find((kw) =>
+      keyword.entry.text.toLowerCase().includes(kw)
+    );
+    if (!matchedKeyword) {
+      continue;
+    }
+    const keywordLabel = matchedKeyword.toUpperCase();
+    return {
+      ...keyword.entry,
+      type: "grade",
+      authority: keywordLabel,
+      gradeValue: String(partner.value),
+      label: `${keywordLabel} ${partner.value}`,
+    };
+  }
+
+  return null;
+}
+
+function isScoreRatingContext(...segments) {
+  const combined = segments
+    .filter((segment) => typeof segment === "string" && segment.trim())
+    .join(" ")
+    .toLowerCase();
+  if (!combined || !combined.includes("score")) return false;
+  return SCORE_RATING_CONTEXT_CUES.some((cue) => combined.includes(cue));
 }

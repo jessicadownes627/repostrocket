@@ -98,7 +98,7 @@ export default function Dashboard() {
         onClick={() => navigate("/settings")}
       >
         <div className="lux-upgrade-text">
-          Premium = Unlimited + Batch + Pro workflows. Free = accurate but single-use.
+          Premium = Unlimited + Batch + Pro workflows
         </div>
       </div>
 

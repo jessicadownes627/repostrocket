@@ -37,6 +37,11 @@ import {
   loadListingLibrary,
 } from "../utils/savedListings";
 import { shareImage, getImageSaveLabel } from "../utils/saveImage";
+import {
+  buildMarketplaceExportSet,
+  downloadMarketplaceZip,
+  getPhotoSignature as getMarketplacePhotoSignature,
+} from "../utils/marketplacePhotoExports";
 import "../styles/overrides.css";
 import AnalysisProgress from "../components/AnalysisProgress";
 
@@ -59,7 +64,12 @@ const CARD_IDENTITY_FIELDS = [
   { key: "team", label: "Team" },
   { key: "year", label: "Year" },
   { key: "setName", label: "Set" },
+  { key: "grade", label: "Grading" },
 ];
+const OPTIONAL_IDENTITY_FIELDS = new Set(["grade"]);
+const MARKETPLACE_READY_NOTE = "Prepared for listings.";
+
+const buildPhotoSignature = (entry) => getMarketplacePhotoSignature(entry);
 const OCR_ZONE_LABELS = {
   bottomCenter: "Bottom Center Nameplate",
   bottomLeft: "Bottom Left Accent",
@@ -233,12 +243,20 @@ export default function SingleListing() {
     return window.matchMedia("(max-width: 720px)").matches;
   });
   const [showMobileResumePrompt, setShowMobileResumePrompt] = useState(false);
+  const [showCardTextDrawer, setShowCardTextDrawer] = useState(false);
   const [photoProcessing, setPhotoProcessing] = useState(null);
   const [autoAnalysisTriggered, setAutoAnalysisTriggered] = useState(false);
   const [autoScrollDone, setAutoScrollDone] = useState(false);
   const [manualCardField, setManualCardField] = useState(null);
   const [manualCardValue, setManualCardValue] = useState("");
   const [openEvidenceField, setOpenEvidenceField] = useState(null);
+  const [marketplaceExports, setMarketplaceExports] = useState({
+    front: null,
+    back: null,
+  });
+  const [marketplaceGenerating, setMarketplaceGenerating] = useState(false);
+  const [marketplaceError, setMarketplaceError] = useState("");
+  const [marketplaceCopyFlash, setMarketplaceCopyFlash] = useState(false);
 
   useEffect(() => {
     const id = listingData?.libraryId;
@@ -266,6 +284,14 @@ export default function SingleListing() {
       ? listingData.secondaryPhotos[0]
       : null;
   const backPhoto = getPhotoUrl(backPhotoEntry);
+  const frontMarketplaceSignature = useMemo(
+    () => buildPhotoSignature(mainPhotoEntry),
+    [mainPhotoEntry]
+  );
+  const backMarketplaceSignature = useMemo(
+    () => buildPhotoSignature(backPhotoEntry),
+    [backPhotoEntry]
+  );
 
   const cardIntel = listingData?.cardIntel || null;
   const cardAttributes = listingData?.cardAttributes || null;
@@ -343,7 +369,7 @@ export default function SingleListing() {
         cardIntel?.isTextVerified?.[field.key];
       const baseValue =
         field.key === "setName"
-          ? cardAttributes?.set || cardAttributes?.setName || ""
+          ? cardAttributes?.setBrand || cardAttributes?.setName || ""
           : cardAttributes?.[field.key] || "";
       const manualValue =
         typeof manualOverrides[field.key] === "string"
@@ -353,6 +379,9 @@ export default function SingleListing() {
         typeof manualSuggestions[field.key] === "string"
           ? manualSuggestions[field.key]
           : "";
+      const needsManual = OPTIONAL_IDENTITY_FIELDS.has(field.key)
+        ? false
+        : !verified && !manualValue;
       acc[field.key] = {
         verified,
         manualValue,
@@ -360,7 +389,7 @@ export default function SingleListing() {
         baseValue,
         suggestion: suggestion || "",
         hasSuggestion: Boolean(suggestion),
-        needsManual: !verified && !manualValue,
+        needsManual,
       };
       return acc;
     }, {});
@@ -374,6 +403,76 @@ export default function SingleListing() {
     Boolean(cardBackDetails?.team) ||
     Boolean(cardBackDetails?.position) ||
     (Array.isArray(cardBackDetails?.lines) && cardBackDetails.lines.length > 0);
+  const gradeDisplayValue =
+    cardAttributes?.grade ||
+    (cardAttributes?.scoreRating ? `Score ${cardAttributes.scoreRating}` : "");
+  const hasGradeOrScore = Boolean(gradeDisplayValue);
+  const gradeVerified = Boolean(cardAttributes?.isTextVerified?.grade);
+  const generatedCardTitle = useMemo(() => {
+    if (!cardAttributes) return "";
+    return buildCardTitle(cardAttributes);
+  }, [cardAttributes]);
+  const cardTitlePlaceholder =
+    generatedCardTitle || "Add card title so buyers see it immediately";
+  const cardHighlights = useMemo(() => {
+    const chips = new Set();
+    const addChip = (label) => {
+      if (label) chips.add(label);
+    };
+    if (cardAttributes?.parallel) {
+      addChip(cardAttributes.parallel);
+    }
+    const notesBlob = `${cardAttributes?.notes || ""} ${cardIntel?.notes || ""}`.toLowerCase();
+    if (notesBlob.includes("rookie")) addChip("Rookie");
+    if (notesBlob.includes("insert")) addChip("Insert");
+    if (notesBlob.includes("draft pick") || /1st round|first round/.test(notesBlob)) {
+      addChip("1st Round Draft Pick");
+    }
+    const ocrTexts = [];
+    const collectLines = (lines) => {
+      if (!Array.isArray(lines)) return;
+      lines.forEach((entry) => {
+        if (typeof entry === "string" && entry.trim()) {
+          ocrTexts.push(entry.trim());
+          return;
+        }
+        if (entry && typeof entry.text === "string" && entry.text.trim()) {
+          ocrTexts.push(entry.text.trim());
+        }
+      });
+    };
+    collectLines(cardIntel?.ocrFull?.lines);
+    collectLines(cardIntel?.cardBackDetails?.lines);
+    const ocrBlob = ocrTexts.join(" ").toLowerCase();
+    if (ocrBlob.includes("rookie")) addChip("Rookie");
+    if (ocrBlob.includes("draft pick") || /1st round|first round/.test(ocrBlob)) {
+      addChip("1st Round Draft Pick");
+    }
+    if (ocrBlob.includes("insert")) addChip("Insert");
+    if (ocrBlob.includes("parallel") && !cardAttributes?.parallel) {
+      addChip("Parallel");
+    }
+    return Array.from(chips);
+  }, [cardAttributes, cardIntel]);
+  const cardTextReferenceLines = useMemo(() => {
+    const lines = [];
+    const pushLines = (entries) => {
+      if (!Array.isArray(entries)) return;
+      entries.forEach((entry) => {
+        if (typeof entry === "string" && entry.trim()) {
+          lines.push(entry.trim());
+          return;
+        }
+        if (entry && typeof entry.text === "string" && entry.text.trim()) {
+          lines.push(entry.text.trim());
+        }
+      });
+    };
+    pushLines(cardIntel?.ocrFull?.lines);
+    pushLines(cardIntel?.ocr?.lines);
+    pushLines(cardIntel?.cardBackDetails?.lines);
+    return lines;
+  }, [cardIntel]);
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
@@ -417,11 +516,43 @@ export default function SingleListing() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!frontMarketplaceSignature && !backMarketplaceSignature) {
+      setMarketplaceExports({ front: null, back: null });
+      setMarketplaceError("");
+      setMarketplaceGenerating(false);
+      return;
+    }
+    let cancelled = false;
+    setMarketplaceGenerating(true);
+    setMarketplaceError("");
+    buildMarketplaceExportSet(mainPhotoEntry, backPhotoEntry)
+      .then((result) => {
+        if (cancelled) return;
+        setMarketplaceExports(result);
+      })
+      .catch((err) => {
+        console.error("Marketplace photo prep failed:", err);
+        if (cancelled) return;
+        setMarketplaceExports({ front: null, back: null });
+        setMarketplaceError("Unable to prep marketplace photos right now.");
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setMarketplaceGenerating(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [frontMarketplaceSignature, backMarketplaceSignature, mainPhotoEntry, backPhotoEntry]);
+
   const identityEvidenceByField = useMemo(() => {
     const map = {};
     CARD_IDENTITY_FIELDS.forEach(({ key }) => {
       map[key] = [];
     });
+    map.grade = [];
     if (Array.isArray(cardIntel?.sourceEvidence)) {
       cardIntel.sourceEvidence.forEach((line) => {
         if (typeof line !== "string") return;
@@ -430,10 +561,14 @@ export default function SingleListing() {
             map[key].push(line);
           }
         });
+        if (line.toLowerCase().includes("-> grade")) {
+          map.grade.push(line);
+        }
       });
     }
     return map;
   }, [cardIntel?.sourceEvidence]);
+  const gradeEvidence = identityEvidenceByField.grade || [];
   useEffect(() => {
     setOpenEvidenceField(null);
   }, [cardIntel?.imageHash]);
@@ -461,7 +596,7 @@ export default function SingleListing() {
         manualOverrides[fieldKey] ||
         manualSuggestions[fieldKey] ||
         (fieldKey === "setName"
-          ? cardAttributes?.set || cardAttributes?.setName || ""
+          ? cardAttributes?.setBrand || cardAttributes?.setName || ""
           : cardAttributes?.[fieldKey] || "");
       setManualCardField(fieldKey);
       setManualCardValue(fallback || "");
@@ -491,7 +626,7 @@ export default function SingleListing() {
     };
     if (manualCardField === "setName") {
       nextAttributes.setName = trimmed;
-      nextAttributes.set = trimmed;
+      nextAttributes.setBrand = trimmed;
     } else {
       nextAttributes[manualCardField] = trimmed;
     }
@@ -1041,30 +1176,6 @@ useEffect(() => {
     return /\b(onesie|romper|bodysuit|nb|newborn|3m|6m|toddler)\b/.test(text);
   }, [category, title, description]);
 
-  const renderCardConfidence = useCallback(
-    (field) => {
-      if (field === "player" || field === "team" || field === "year" || field === "setName") {
-        return null;
-      }
-      const level = cardIntel?.confidence?.[field];
-      if (!level) return null;
-      const tone =
-        level === "high"
-          ? "text-emerald-300 border-emerald-300/40"
-          : level === "medium"
-          ? "text-[#CBB78A] border-[#CBB78A]/50"
-          : "text-white/60 border-white/20";
-      return (
-        <span
-          className={`ml-2 text-[9px] uppercase tracking-[0.3em] px-2 py-0.5 rounded-full border ${tone}`}
-        >
-          {level}
-        </span>
-      );
-    },
-    [cardIntel]
-  );
-
   const renderApparelConfidence = useCallback(
     (field) => {
       const level = apparelIntel?.confidence?.[field];
@@ -1085,6 +1196,85 @@ useEffect(() => {
     },
     [apparelIntel]
   );
+
+  const marketplaceReady =
+    (marketplaceExports.front?.variants?.length || 0) +
+      (marketplaceExports.back?.variants?.length || 0) >
+    0;
+
+  const handleDownloadMarketplacePhotos = useCallback(() => {
+    if (!marketplaceReady) return;
+    const label =
+      (listingData?.title?.trim() || "card-photos").slice(0, 80) || "card-photos";
+    downloadMarketplaceZip(marketplaceExports, label);
+  }, [marketplaceReady, marketplaceExports, listingData?.title]);
+
+  const handleCopyMarketplaceReady = useCallback(async () => {
+    if (!marketplaceReady) return;
+    const title = listingData?.title?.trim() || "Sports card listing";
+    const message = `${title} photos are prepared for listings (Square + 4:5). Generated via Repost Rocket on ${new Date().toLocaleDateString()}.`;
+    try {
+      await navigator?.clipboard?.writeText?.(message);
+      setMarketplaceCopyFlash(true);
+      window.setTimeout(() => setMarketplaceCopyFlash(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy marketplace confirmation:", err);
+    }
+  }, [marketplaceReady, listingData?.title]);
+
+  const renderMarketplacePreview = (side, label) => {
+    const entry = marketplaceExports?.[side];
+    if (!entry && marketplaceGenerating) {
+      return (
+        <div key={side}>
+          <div className="text-xs uppercase tracking-[0.35em] text-white/50">
+            {label}
+          </div>
+          <div className="mt-2 rounded-2xl border border-white/10 bg-black/25 px-4 py-6 text-sm text-white/60">
+            Generating ready-to-list sizes…
+          </div>
+        </div>
+      );
+    }
+    if (!entry) {
+      return (
+        <div key={side}>
+          <div className="text-xs uppercase tracking-[0.35em] text-white/50">
+            {label}
+          </div>
+          <div className="mt-2 rounded-2xl border border-dashed border-white/20 px-4 py-6 text-sm text-white/50">
+            Add this photo to unlock exports.
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div key={side}>
+        <div className="text-xs uppercase tracking-[0.35em] text-white/50">
+          {label}
+        </div>
+        <div className="grid grid-cols-2 gap-3 mt-3">
+          {entry.variants?.map((variant) => (
+            <div
+              key={`${side}-${variant.key}`}
+              className="rounded-2xl border border-white/10 bg-black/30 p-2 text-center"
+            >
+              <div className="rounded-xl overflow-hidden border border-white/5">
+                <img
+                  src={variant.dataUrl}
+                  alt={`${label} ${variant.label}`}
+                  className="w-full h-28 object-cover"
+                />
+              </div>
+              <div className="mt-2 text-[11px] uppercase tracking-[0.3em] text-white/70">
+                {variant.label.replace("Square", "Square safe").replace("Vertical", "Vertical ready")}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   const describeCornerConfidence = (level) => {
     if (!level) return "";
@@ -1800,285 +1990,324 @@ useEffect(() => {
         {/* ---------------------- */}
         {isCardMode ? (
         <>
+          {(mainPhotoEntry || backPhotoEntry) && (
+            <div className="lux-card mb-8">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs uppercase tracking-[0.35em] text-white/50">
+                  Marketplace Photos
+                </div>
+                <div className="text-[11px] uppercase tracking-[0.3em] text-white/45">
+                  {MARKETPLACE_READY_NOTE}
+                </div>
+              </div>
+              <p className="text-sm text-white/70 mt-2 mb-4">
+                One download includes square + 4:5 versions prepared for listings.
+              </p>
+              {marketplaceError && (
+                <div className="mb-3 text-xs text-[#F6BDB2]">{marketplaceError}</div>
+              )}
+              <div className="grid gap-6 md:grid-cols-2">
+                {renderMarketplacePreview("front", "Front photo")}
+                {renderMarketplacePreview("back", "Back photo")}
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  type="button"
+                  className="flex-1 rounded-2xl py-3 text-base font-semibold uppercase tracking-[0.3em] bg-white text-black disabled:opacity-40 disabled:cursor-not-allowed"
+                  onClick={handleDownloadMarketplacePhotos}
+                  disabled={!marketplaceReady || marketplaceGenerating}
+                >
+                  {marketplaceGenerating ? "Preparing photos…" : "Download ZIP"}
+                </button>
+                <button
+                  type="button"
+                  className="flex-1 rounded-2xl border border-white/20 py-3 text-sm uppercase tracking-[0.3em] text-white/70 hover:border-white/50 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                  onClick={handleCopyMarketplaceReady}
+                  disabled={!marketplaceReady}
+                >
+                  {marketplaceCopyFlash ? "Copied" : "Copy “Photos prepared” note"}
+                </button>
+              </div>
+            </div>
+          )}
+
           <HeaderBar label="Card Details" />
 
           {showCardVerificationWarning && !hasVerifiedIdentity && (
             <div className="relative overflow-hidden rounded-3xl border border-[#f6d48f]/30 bg-gradient-to-br from-[#3a2317] via-[#2b1a12] to-[#1a0f0a] p-5 mb-6 text-sm text-[#FBEACC] shadow-[0_20px_45px_rgba(0,0,0,0.55)]">
               <div className="absolute -top-10 -right-6 h-32 w-32 bg-[#f6d48f]/20 blur-3xl pointer-events-none" />
-              <div className="flex items-start gap-3 relative z-10">
-                <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[#F6D48F]/15 border border-[#F6D48F]/40 text-[#F6D48F] text-lg">
-                  !
-                </div>
-                <div>
-                  <p className="font-semibold text-[#FBEACC]">
-                    Couldn’t verify identity from card text
-                  </p>
-                  <p className="text-xs text-white/70 mt-1">
-                    Confirm the fields below so buyers see the correct player, team, year, and set.
-                  </p>
-                  {Array.isArray(cardIntel?.sourceEvidence) && cardIntel.sourceEvidence.length > 0 && (
-                    <ul className="mt-3 space-y-1 text-[11px] text-white/65">
-                      {cardIntel.sourceEvidence.slice(0, 3).map((item, idx) => (
-                        <li key={`${item}-${idx}`} className="flex items-start gap-2">
-                          <span className="mt-0.5 h-1.5 w-1.5 rounded-full bg-[#F6D48F]/70" />
-                          <span>{item}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
+              <div className="relative z-10">
+                <p className="font-semibold text-[#FBEACC]">Confirm the core card details</p>
+                <p className="text-xs text-white/70 mt-1">
+                  We couldn’t read every field from the current photo. Fill in what you know so the listing reflects the card text.
+                </p>
               </div>
             </div>
           )}
 
-          {showCardVerificationWarning && hasVerifiedIdentity && (
+          {hasVerifiedIdentity && (
             <div className="relative overflow-hidden rounded-3xl border border-[#8FF0C5]/25 bg-gradient-to-br from-[#0e201a] via-[#0d1a16] to-[#0a1211] p-5 mb-6 text-sm text-white/85 shadow-[0_20px_45px_rgba(0,0,0,0.45)]">
               <div className="absolute -top-10 -right-6 h-32 w-32 bg-[#8FF0C5]/15 blur-3xl pointer-events-none" />
-              <div className="flex flex-col gap-3 relative z-10">
-                <div>
-                  <p className="font-semibold text-[#8FF0C5]">
-                    Here’s what we verified from your card
-                  </p>
-                  <p className="text-xs text-white/70 mt-1">
-                    Some details may still need manual confirmation below.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
+              <div className="relative z-10">
+                <p className="font-semibold text-[#8FF0C5] mb-2">
+                  Here’s what we verified from visible card text
+                </p>
+                <div className="flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.3em] text-[#8FF0C5]">
                   {verifiedIdentityFields.map((field) => (
                     <span
                       key={field.key}
-                      className="inline-flex items-center gap-2 rounded-2xl border border-[#8FF0C5]/40 bg-[#0a1c16]/60 px-3 py-1 text-[11px] uppercase tracking-[0.3em] text-[#8FF0C5]"
+                      className="inline-flex items-center gap-2 rounded-2xl border border-[#8FF0C5]/40 bg-[#0a1c16]/60 px-3 py-1"
                     >
                       <span className="h-1.5 w-1.5 rounded-full bg-[#8FF0C5]" />
                       {field.label}
                     </span>
                   ))}
                 </div>
+                <p className="text-[11px] text-white/55 mt-3">
+                  Only printed text that was visible in this photo appears here.
+                </p>
               </div>
             </div>
           )}
 
-          <div className="lux-card mb-8">
-            <div className="text-xs uppercase opacity-70 tracking-wide mb-3">
-              Detected Attributes
+          <div className="lux-card mb-8 space-y-6">
+            <div>
+              <div className="text-xs uppercase tracking-[0.35em] text-white/45">Card Title</div>
+              <div className="mt-2">
+                <input
+                  type="text"
+                  value={localTitle}
+                  onChange={(event) => handleTitleChange(event.target.value)}
+                  onBlur={commitTitleToStore}
+                  placeholder={cardTitlePlaceholder}
+                  className="w-full rounded-2xl border border-white/15 bg-black/20 px-4 py-3 text-lg font-semibold text-white focus:border-white/50 focus:outline-none"
+                />
+                <p className="text-[11px] text-white/50 mt-2">Buyers see this first — copy-ready in one tap.</p>
+              </div>
             </div>
-            <div className="space-y-4 text-sm opacity-85">
+
+            {cardHighlights.length > 0 && (
+              <div>
+                <div className="text-xs uppercase tracking-[0.35em] text-white/45 mb-2">Card Highlights</div>
+                <div className="flex flex-wrap gap-2">
+                  {cardHighlights.map((chip) => (
+                    <span
+                      key={chip}
+                      className="inline-flex items-center rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-white/85"
+                    >
+                      {chip}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="grid gap-4">
               {CARD_IDENTITY_FIELDS.map(({ key, label }) => {
                 const status = cardIdentityStatuses[key] || {};
-                const displayValue = status.verified
-                  ? status.baseValue
-                  : status.hasManual
-                  ? status.manualValue
-                  : "";
-                const manualTag = !status.verified && status.hasManual;
                 const isVerified = Boolean(status.verified);
-                const isSuggested = !isVerified && !status.hasManual && status.hasSuggestion;
-                const isBlank = !isVerified && !status.hasManual && !status.hasSuggestion;
+                const hasManual = status.hasManual;
+                const isSuggested = !isVerified && !hasManual && status.hasSuggestion;
+                const isBlank = !isVerified && !hasManual && !status.hasSuggestion;
+                const isOptionalField = OPTIONAL_IDENTITY_FIELDS.has(key);
+                const displayValue = isVerified
+                  ? status.baseValue
+                  : hasManual
+                  ? status.manualValue
+                  : status.suggestion || "";
                 const hasEvidence =
                   isVerified && identityEvidenceByField[key]?.length > 0;
                 const showEvidence = hasEvidence && openEvidenceField === key;
+                const indicator = isVerified
+                  ? "Verified from card"
+                  : hasManual
+                  ? "Entered by you"
+                  : isSuggested
+                  ? "Suggested"
+                  : isOptionalField
+                  ? "Optional"
+                  : "Needs confirmation";
+                const indicatorTone = isVerified
+                  ? "text-[#8FF0C5] border-[#8FF0C5]/40 bg-[#0f2d22]"
+                  : hasManual
+                  ? "text-[#E8D5A8] border-[#E8D5A8]/40 bg-white/5"
+                  : isSuggested
+                  ? "text-white/70 border-white/20 bg-white/5"
+                  : "text-white/40 border-white/15 bg-black/30";
+                const actionButton = isVerified
+                  ? hasEvidence && (
+                      <button
+                        type="button"
+                        className="text-xs text-[#8FF0C5] hover:text-white transition"
+                        onClick={() =>
+                          setOpenEvidenceField((prev) => (prev === key ? null : key))
+                        }
+                      >
+                        {showEvidence ? "Hide proof" : "Show proof"}
+                      </button>
+                    )
+                  : !isOptionalField && (
+                      <button
+                        type="button"
+                        className="text-xs uppercase tracking-[0.3em] text-white/80 border border-white/20 rounded-full px-3 py-1 hover:border-white/60 transition"
+                        onClick={() => startManualCardField(key)}
+                      >
+                        Confirm
+                      </button>
+                    );
                 return (
-                  <div key={key}>
-                    <div className="flex items-center gap-2">
-                      <span className="opacity-60">{label}:</span>
-                      {isVerified && (
-                        <span className="text-[10px] uppercase tracking-[0.35em] text-emerald-200 border border-emerald-300/40 rounded-full px-2 py-0.5 bg-[#103425] text-[#8FF0C5]">
-                          Verified from card
+                  <div
+                    key={key}
+                    className="rounded-2xl border border-white/10 bg-black/25 p-4 flex flex-col gap-3"
+                  >
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <div className="text-xs uppercase tracking-[0.35em] text-white/40">{label}</div>
+                        <div className="text-lg font-semibold text-white">{displayValue || "—"}</div>
+                      </div>
+                      <div className="flex flex-col items-start sm:items-end gap-2">
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.35em] ${indicatorTone}`}
+                        >
+                          {indicator}
                         </span>
-                      )}
-                      {manualTag && (
-                        <span className="text-[10px] uppercase tracking-[0.35em] text-[#E8D5A8] border border-[#E8D5A8]/60 rounded-full px-2 py-0.5">
-                          MANUAL
-                        </span>
-                      )}
-                      {!status.verified && !status.hasManual && status.hasSuggestion && (
-                        <span className="text-[10px] uppercase tracking-[0.35em] text-white/70 border border-white/30 rounded-full px-2 py-0.5">
-                          SUGGESTED
-                        </span>
-                      )}
+                        {actionButton}
+                      </div>
                     </div>
-                    <div className="pl-4 mt-1 space-y-2">
-                      {isVerified && (
-                        <div className="rounded-2xl border border-[#1F4B37] bg-[#061711] px-4 py-3 text-white/90">
-                          <div className="flex items-start gap-3">
-                            <div className="px-2 py-0.5 text-xs uppercase tracking-[0.3em] text-[#8FF0C5] border border-[#1F4B37] rounded-full">
-                              Verified from card
-                            </div>
-                            <div className="text-base font-semibold text-white">{displayValue}</div>
-                          </div>
-                          {hasEvidence && (
-                            <>
-                              <button
-                                type="button"
-                                className="mt-2 inline-flex items-center gap-2 text-xs text-[#8FF0C5] hover:text-white transition"
-                                onClick={() =>
-                                  setOpenEvidenceField((prev) => (prev === key ? null : key))
-                                }
-                              >
-                                {showEvidence ? "Hide proof" : "Show proof"}
-                              </button>
-                              {showEvidence && (
-                                <ul className="mt-2 space-y-1 text-xs text-white/70">
-                                  {identityEvidenceByField[key].slice(0, 3).map((line, idx) => (
-                                    <li key={`${key}-evidence-${idx}`} className="flex gap-2">
-                                      <span className="h-1.5 w-1.5 rounded-full bg-[#8FF0C5] mt-1" />
-                                      <span>{line}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      )}
 
-                      {!isVerified && status.hasManual && (
-                        <div className="rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-white/85">
-                          <div className="flex items-start gap-3">
-                            <div className="px-2 py-0.5 text-xs uppercase tracking-[0.3em] text-white/70 border border-white/20 rounded-full">
-                              Entered by you
-                            </div>
-                            <div>
-                              <div className="text-xs text-white/60 mb-1">Manual entry</div>
-                              <div>{displayValue}</div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
+                    {showEvidence && (
+                      <ul className="rounded-2xl border border-emerald-200/30 bg-[#061711] p-3 space-y-1 text-xs text-white/80">
+                        {identityEvidenceByField[key].slice(0, 3).map((line, idx) => (
+                          <li key={`${key}-evidence-${idx}`} className="flex gap-2">
+                            <span className="h-1.5 w-1.5 rounded-full bg-[#8FF0C5] mt-1" />
+                            <span>{line}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
 
-                      {isSuggested && (
-                        <div className="rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-white/80">
-                          <div className="flex items-start gap-3">
-                            <div className="px-2 py-0.5 text-xs uppercase tracking-[0.3em] text-white/60 border border-white/20 rounded-full">
-                              Suggested
-                            </div>
-                            <div>
-                              <div className="text-xs text-white/60 mb-1">Looks like:</div>
-                              <div>{status.suggestion}</div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {isBlank && (
-                        <div className="rounded-2xl border border-dashed border-white/20 px-4 py-3 text-white/40">
-                          <div className="text-2xl leading-none">—</div>
-                          <div className="text-xs uppercase tracking-[0.3em] mt-1">Not verified yet</div>
-                        </div>
-                      )}
-
-                      {status.needsManual && (
-                        <div className="text-xs text-[#F6D48F] space-y-2">
-                          <div>Please confirm this detail manually.</div>
+                    {manualCardField === key && (
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <input
+                          type="text"
+                          autoFocus
+                          value={manualCardValue}
+                          onChange={(event) => setManualCardValue(event.target.value)}
+                          className="flex-1 rounded-2xl border border-white/20 bg-black/40 px-3 py-2 text-sm focus:border-white/60 focus:outline-none"
+                          placeholder={`Enter ${label}`}
+                        />
+                        <div className="flex gap-2">
                           <button
                             type="button"
-                            className="inline-flex items-center gap-2 text-[10px] uppercase tracking-[0.3em] text-white/80 border border-white/25 rounded-full px-3 py-1 hover:border-white/60 transition"
-                            onClick={() => startManualCardField(key)}
+                            onClick={saveManualCardField}
+                            className="px-4 py-2 rounded-2xl bg-[#E8D5A8] text-black text-xs uppercase tracking-[0.3em]"
                           >
-                            Confirm manually
+                            Save
                           </button>
-                          {!status.hasManual && status.suggestion && (
-                            <div className="text-[11px] text-white/60">
-                              Suggested: {status.suggestion}
-                            </div>
-                          )}
+                          <button
+                            type="button"
+                            onClick={cancelManualCardField}
+                            className="px-4 py-2 rounded-2xl border border-white/25 text-white/70 text-xs uppercase tracking-[0.3em]"
+                          >
+                            Cancel
+                          </button>
                         </div>
-                      )}
-                      {manualCardField === key && (
-                        <div className="flex flex-col sm:flex-row gap-2">
-                          <input
-                            type="text"
-                            autoFocus
-                            value={manualCardValue}
-                            onChange={(event) => setManualCardValue(event.target.value)}
-                            className="flex-1 rounded-2xl border border-white/20 bg-black/40 px-3 py-2 text-sm focus:border-white/60 focus:outline-none"
-                            placeholder={`Enter ${label}`}
-                          />
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={saveManualCardField}
-                              className="px-4 py-2 rounded-2xl bg-[#E8D5A8] text-black text-xs uppercase tracking-[0.3em]"
-                            >
-                              Save
-                            </button>
-                            <button
-                              type="button"
-                              onClick={cancelManualCardField}
-                              className="px-4 py-2 rounded-2xl border border-white/25 text-white/70 text-xs uppercase tracking-[0.3em]"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
+
+                    {isBlank && manualCardField !== key && (
+                      <div className="text-xs text-white/50">
+                        We couldn’t see this detail in the current photo — tap Confirm to fill it once.
+                      </div>
+                    )}
                   </div>
                 );
               })}
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="opacity-60">Parallel:</span>
-                  {renderCardConfidence("parallel")}
-                </div>
-                <div className="pl-4">
-                  {cardAttributes?.parallel || <span className="opacity-40">—</span>}
-                </div>
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="opacity-60">Card #:</span>
-                  {renderCardConfidence("cardNumber")}
-                </div>
-                <div className="pl-4">
-                  {cardAttributes?.cardNumber || <span className="opacity-40">—</span>}
-                </div>
-              </div>
+            </div>
           </div>
+
+        <div className="lux-card mb-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs uppercase tracking-[0.35em] text-white/45">Grade / Score</div>
+              <div className="text-lg font-semibold text-white mt-2">
+                {gradeDisplayValue || "Ungraded"}
+              </div>
+            </div>
+            {gradeVerified && (
+              <span className="text-[10px] uppercase tracking-[0.35em] text-[#8FF0C5] border border-[#8FF0C5]/40 rounded-full px-3 py-1">
+                Verified from card
+              </span>
+            )}
+          </div>
+          {gradeVerified && gradeEvidence.length > 0 && (
+            <div className="mt-3">
+              <button
+                type="button"
+                className="text-xs text-[#8FF0C5] hover:text-white transition"
+                onClick={() => setOpenEvidenceField((prev) => (prev === "grade" ? null : "grade"))}
+              >
+                {openEvidenceField === "grade" ? "Hide proof" : "Show proof"}
+              </button>
+              {openEvidenceField === "grade" && (
+                <ul className="mt-2 space-y-1 text-xs text-white/70">
+                  {gradeEvidence.slice(0, 3).map((line, idx) => (
+                    <li key={`grade-evidence-${idx}`} className="flex gap-2">
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#8FF0C5] mt-1" />
+                      <span>{line}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
 
-        {hasBackDetails && (
+        {(cardTextReferenceLines.length > 0 || hasBackDetails) && (
           <div className="lux-card mb-8">
-            <div className="flex items-center justify-between text-xs uppercase tracking-[0.35em] opacity-70 mb-2">
-              <span>Card Details</span>
-              <span className="text-[10px] text-white/60">Verified from card</span>
+            <div className="flex items-center justify-between text-xs uppercase tracking-[0.35em] text-white/50 mb-2">
+              <span>Card text reference</span>
+              <button
+                type="button"
+                className="text-[10px] tracking-[0.3em] text-white/60 underline-offset-2"
+                onClick={() => setShowCardTextDrawer((prev) => !prev)}
+              >
+                {showCardTextDrawer ? "Hide details" : "See full card text"}
+              </button>
             </div>
-            <p className="text-[11px] text-white/60 mb-3">
-              Supporting info captured from printed card text. These do not auto-fill identity fields.
-            </p>
-            <div className="space-y-3 text-sm">
-              {cardBackDetails?.team && (
-                <div className="flex items-center gap-2">
-                  <span className="opacity-60 text-xs uppercase tracking-[0.3em]">Team</span>
-                  <div className="px-3 py-1 rounded-full border border-white/15 bg-black/30 text-white/85">
-                    {cardBackDetails.team}
+            {showCardTextDrawer && (
+              <div className="space-y-3 text-sm text-white/75">
+                <p className="text-[11px] text-white/55">
+                  Pulled directly from the card for record keeping — no action needed unless you want to double-check.
+                </p>
+                {cardBackDetails?.team && (
+                  <div className="flex items-center gap-2">
+                    <span className="opacity-60 text-xs uppercase tracking-[0.3em]">Team</span>
+                    <div className="px-3 py-1 rounded-full border border-white/15 bg-black/30 text-white/85">
+                      {cardBackDetails.team}
+                    </div>
                   </div>
-                </div>
-              )}
-              {cardBackDetails?.position && (
-                <div className="flex items-center gap-2">
-                  <span className="opacity-60 text-xs uppercase tracking-[0.3em]">Position</span>
-                  <div className="px-3 py-1 rounded-full border border-white/15 bg-black/30 text-white/85">
-                    {cardBackDetails.position}
+                )}
+                {cardBackDetails?.position && (
+                  <div className="flex items-center gap-2">
+                    <span className="opacity-60 text-xs uppercase tracking-[0.3em]">Position</span>
+                    <div className="px-3 py-1 rounded-full border border-white/15 bg-black/30 text-white/85">
+                      {cardBackDetails.position}
+                    </div>
                   </div>
-                </div>
-              )}
-              {Array.isArray(cardBackDetails?.lines) && cardBackDetails.lines.length > 0 && (
-                <div>
-                  <div className="text-xs uppercase tracking-[0.3em] opacity-60 mb-1">
-                    Additional lines verified from card
-                  </div>
-                  <ul className="space-y-1 text-sm text-white/75">
-                    {cardBackDetails.lines.slice(0, 4).map((line, idx) => (
-                      <li key={`back-line-${idx}`} className="flex gap-2">
-                        <span className="h-1.5 w-1.5 rounded-full bg-white/40 mt-1" />
+                )}
+                {cardTextReferenceLines.length > 0 && (
+                  <ul className="space-y-1">
+                    {cardTextReferenceLines.slice(0, 8).map((line, idx) => (
+                      <li key={`text-line-${idx}`} className="flex gap-2">
+                        <span className="h-1.5 w-1.5 rounded-full bg-white/30 mt-1" />
                         <span>{line}</span>
                       </li>
                     ))}
                   </ul>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -2310,13 +2539,15 @@ useEffect(() => {
             )}
           </div>
 
-          {/* MARKET VALUE ASSIST — Sports Card Mode Only */}
+          {/* Pricing insights — Sports Card Mode Only */}
           {cardAttributes?.pricing && (
             <div className="lux-card mb-8">
-              <div className="text-xs uppercase opacity-70 tracking-wide mb-3">
-                Market Value Assist
+              <div className="text-xs uppercase opacity-70 tracking-wide mb-1">
+                Pricing insights (beta)
               </div>
-
+              <p className="text-[11px] text-white/55 mb-2">
+                Approximate ranges pulled from recent sales when data is available.
+              </p>
               <div className="space-y-1 text-sm opacity-85">
                 <div>
                   <span className="opacity-60">Recent Low:</span>{" "}
@@ -2391,14 +2622,6 @@ useEffect(() => {
               </div>
             </div>
           )}
-
-          <LuxeInput
-            label="Card Title"
-            value={localTitle}
-            onChange={handleTitleChange}
-            onBlur={commitTitleToStore}
-            placeholder="e.g., 2023 Prizm Shohei Ohtani #25 Silver"
-          />
 
           <LuxeInput
             label="Card Notes"

@@ -8,6 +8,7 @@ import {
   regenerateCornerImage,
   MAX_CORNER_NUDGE_RATIO,
 } from "../utils/cardIntel";
+import { evaluatePhotoPreflight } from "../utils/photoPreflight";
 import "../styles/createListing.css";
 
 const CORNER_POSITIONS = [
@@ -70,6 +71,18 @@ export default function MagicCardPrep({ analysisActive = false }) {
   );
   const [prepError, setPrepError] = useState("");
   const [dragging, setDragging] = useState({ front: false, back: false });
+  const [photoPreflight, setPhotoPreflight] = useState({ front: null, back: null });
+  const [preflightDismissed, setPreflightDismissed] = useState({
+    front: false,
+    back: false,
+  });
+  const preflightTargetRef = useRef({ front: null, back: null });
+  const [capturePrimerSeen, setCapturePrimerSeen] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.sessionStorage.getItem("rr_capture_primer_seen") === "true";
+  });
+  const [showCapturePrimer, setShowCapturePrimer] = useState(false);
+  const [pendingPickerSide, setPendingPickerSide] = useState(null);
   const [cornerEntries, setCornerEntries] = useState(
     Array.isArray(listingData?.cornerPhotos)
       ? listingData.cornerPhotos.map(normalizeCornerEntry)
@@ -123,6 +136,15 @@ export default function MagicCardPrep({ analysisActive = false }) {
       setShowResumeBanner(false);
     }
   }, [hasExistingCardDraft]);
+
+  useEffect(() => {
+    if (!capturePrimerSeen) return;
+    try {
+      window.sessionStorage.setItem("rr_capture_primer_seen", "true");
+    } catch {
+      // ignore storage failures
+    }
+  }, [capturePrimerSeen]);
 
   const cornerMap = useMemo(() => {
     const map = {
@@ -196,6 +218,41 @@ export default function MagicCardPrep({ analysisActive = false }) {
     setAdjustBusyKey("");
   }, [syncCornerEntries]);
 
+  const evaluatePhotoForSide = useCallback((entry, side) => {
+    if (!entry?.url) {
+      preflightTargetRef.current[side] = null;
+      setPhotoPreflight((prev) => ({ ...prev, [side]: null }));
+      return;
+    }
+    const sourceKey = entry.url;
+    preflightTargetRef.current[side] = sourceKey;
+    evaluatePhotoPreflight(sourceKey)
+      .then((result) => {
+        if (preflightTargetRef.current[side] !== sourceKey) return;
+        setPhotoPreflight((prev) => ({
+          ...prev,
+          [side]: result ? { ...result, source: sourceKey } : null,
+        }));
+        setPreflightDismissed((prev) => ({ ...prev, [side]: false }));
+      })
+      .catch(() => {
+        if (preflightTargetRef.current[side] !== sourceKey) return;
+        setPhotoPreflight((prev) => ({ ...prev, [side]: null }));
+      });
+  }, []);
+
+  useEffect(() => {
+    evaluatePhotoForSide(frontPhoto, "front");
+  }, [frontPhoto, evaluatePhotoForSide]);
+
+  useEffect(() => {
+    evaluatePhotoForSide(backPhoto, "back");
+  }, [backPhoto, evaluatePhotoForSide]);
+
+  const dismissPreflight = useCallback((position) => {
+    setPreflightDismissed((prev) => ({ ...prev, [position]: true }));
+  }, []);
+
   const resetCardIntel = useCallback(() => {
     setListingField("cardIntel", null);
     setListingField("cardAttributes", null);
@@ -257,12 +314,36 @@ export default function MagicCardPrep({ analysisActive = false }) {
     setDragging((prev) => ({ ...prev, [position]: false }));
   };
 
-  const handleBrowse = (position) => {
+  const openFilePickerImmediate = useCallback((position) => {
     if (position === "front") {
       frontInputRef.current?.click();
     } else {
       backInputRef.current?.click();
     }
+  }, []);
+
+  const handleBrowse = (position) => {
+    if (!capturePrimerSeen) {
+      setPendingPickerSide(position);
+      setShowCapturePrimer(true);
+      return;
+    }
+    openFilePickerImmediate(position);
+  };
+
+  const handleCapturePrimerContinue = () => {
+    setCapturePrimerSeen(true);
+    setShowCapturePrimer(false);
+    const target = pendingPickerSide;
+    setPendingPickerSide(null);
+    if (target) {
+      requestAnimationFrame(() => openFilePickerImmediate(target));
+    }
+  };
+
+  const handleCapturePrimerDismiss = () => {
+    setShowCapturePrimer(false);
+    setPendingPickerSide(null);
   };
 
   const handleRetakeAll = () => {
@@ -278,7 +359,7 @@ export default function MagicCardPrep({ analysisActive = false }) {
     clearCorners();
     setPrepError("");
     setShowResumeBanner(false);
-    frontInputRef.current?.click();
+    handleBrowse("front");
   };
 
   const handleRemovePhoto = useCallback(
@@ -337,6 +418,47 @@ export default function MagicCardPrep({ analysisActive = false }) {
     };
   }, [frontPhoto, backPhoto, cornerEntries.length, syncCornerEntries]);
 
+  const renderPreflightNotice = (position, label) => {
+    const result = photoPreflight[position];
+    if (!result || preflightDismissed[position]) return null;
+    const warnings = Array.isArray(result.warnings) ? result.warnings : [];
+    if (!warnings.length) return null;
+    return (
+      <div className="mt-3 rounded-2xl border border-[#F6D48F]/35 bg-black/40 p-3 text-sm text-white/85">
+        <div className="text-[11px] uppercase tracking-[0.35em] text-[#F6D48F] mb-1">
+          Quick check
+        </div>
+        <p className="text-xs text-white/70">
+          This photo may be hard to read — want to retake?
+        </p>
+        <ul className="space-y-1 text-xs text-white/75 mt-2">
+          {warnings.map((warning, idx) => (
+            <li key={`${position}-warn-${idx}`} className="flex items-start gap-2">
+              <span className="mt-1 h-1.5 w-1.5 rounded-full bg-[#F6D48F]/80" />
+              <span>{warning.message}</span>
+            </li>
+          ))}
+        </ul>
+        <div className="flex flex-col sm:flex-row gap-2 mt-3">
+          <button
+            type="button"
+            className="flex-1 rounded-2xl border border-white/20 px-3 py-2 text-[11px] uppercase tracking-[0.3em] text-white/80 hover:border-white/45 transition"
+            onClick={() => handleBrowse(position)}
+          >
+            Retake {label}
+          </button>
+          <button
+            type="button"
+            className="flex-1 rounded-2xl border border-transparent px-3 py-2 text-[11px] uppercase tracking-[0.3em] text-white/50 hover:text-white/80 transition"
+            onClick={() => dismissPreflight(position)}
+          >
+            Continue anyway
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   const renderUploadSlot = (position, label, photo) => (
     <div>
       <div className="text-xs uppercase tracking-[0.4em] text-white/60 mb-2">
@@ -375,6 +497,7 @@ export default function MagicCardPrep({ analysisActive = false }) {
           Remove {label}
         </button>
       )}
+      {renderPreflightNotice(position, label)}
     </div>
   );
 
@@ -470,6 +593,11 @@ export default function MagicCardPrep({ analysisActive = false }) {
       <div className="grid gap-6 md:grid-cols-2 relative z-20">
         {renderConfirmedPhoto("front", "Front of card", frontPhoto)}
         {renderConfirmedPhoto("back", "Back of card", backPhoto)}
+      </div>
+
+      <div className="mt-4 text-xs text-white/60 flex items-center gap-2">
+        <span className="h-1.5 w-1.5 rounded-full bg-[#E8D5A8]/80"></span>
+        We balanced lighting for analysis.
       </div>
 
       <div className="mt-10 rounded-2xl border border-[#E8DCC0]/30 bg-black/40 p-6 relative z-20">
@@ -1081,6 +1209,61 @@ export default function MagicCardPrep({ analysisActive = false }) {
         ref={backInputRef}
         onChange={(e) => handleSelect("back", e.target.files)}
       />
+
+      {showCapturePrimer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur">
+          <div className="w-[min(520px,90vw)] rounded-3xl border border-white/15 bg-[#050505] p-6 text-white shadow-[0_25px_80px_rgba(0,0,0,0.65)]">
+            <div className="text-[11px] uppercase tracking-[0.35em] text-white/50">
+              Quick capture tip
+            </div>
+            <h2 className="text-2xl font-semibold mt-2">Keep all four corners visible</h2>
+            <p className="text-sm text-white/70 mt-1">
+              Flat surface, centered card. That’s it.
+            </p>
+            <div className="grid grid-cols-2 gap-4 mt-5">
+              <div className="rounded-2xl border border-emerald-400/30 bg-[#081811] p-4">
+                <div className="relative h-36 rounded-xl border border-emerald-300/30 flex items-center justify-center">
+                  <div className="w-24 h-32 rounded-lg border-2 border-emerald-200/80 shadow-[0_10px_20px_rgba(0,0,0,0.45)]"></div>
+                </div>
+                <div className="mt-3 text-xs text-emerald-200 uppercase tracking-[0.3em]">
+                  Looks good
+                </div>
+                <p className="text-xs text-white/60 mt-1">
+                  Corners breathing, card centered.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-[#F27B81]/40 bg-[#2b1416] p-4">
+                <div className="relative h-36 rounded-xl border border-[#F27B81]/30 bg-[#1a0d0e] flex items-center justify-center overflow-hidden">
+                  <div className="absolute -left-4 -top-6 w-28 h-32 rotate-[12deg] rounded-lg border-2 border-[#F27B81]/80 opacity-70"></div>
+                  <div className="absolute -right-4 -bottom-6 w-28 h-32 rotate-[-8deg] rounded-lg border-2 border-[#F27B81]/50 opacity-70"></div>
+                </div>
+                <div className="mt-3 text-xs text-[#F6BDB2] uppercase tracking-[0.3em]">
+                  Needs retake
+                </div>
+                <p className="text-xs text-white/60 mt-1">
+                  Tilted or corners cropped.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3 mt-6">
+              <button
+                type="button"
+                className="flex-1 rounded-2xl bg-white text-black py-3 text-sm font-semibold uppercase tracking-[0.3em]"
+                onClick={handleCapturePrimerContinue}
+              >
+                Start {pendingPickerSide === "back" ? "Back" : "Front"} Photo
+              </button>
+              <button
+                type="button"
+                className="flex-1 rounded-2xl border border-white/25 text-white/80 py-3 text-sm uppercase tracking-[0.3em] hover:border-white/50 transition"
+                onClick={handleCapturePrimerDismiss}
+              >
+                Maybe later
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -68,12 +68,11 @@ export default function SportsCardSuite() {
           Sports Card Suite
         </h1>
         <p className="text-lg text-white/75 mb-10 leading-relaxed max-w-3xl">
-          Built exclusively for high-volume sports card sellers. Batch the entire flow—capture,
-          confirm corners, analyze, and launch listings without ever losing momentum.
+          Built for sellers who need one place to prep, analyze, and launch card listings.
         </p>
 
         {/* CTA Section */}
-        <div className="flex flex-col gap-5 mt-8">
+        <div className="flex flex-col gap-7 mt-8">
           <button
             onClick={() =>
               handleNavigate("/batch", "batchMode", {
@@ -89,18 +88,14 @@ export default function SportsCardSuite() {
               </span>
             </div>
             <div className="text-[17px] text-white leading-relaxed mb-4 max-w-3xl">
-              One guided pipeline: capture → confirm corners → analyze → decide →
-              launch. Every card stays in the same flow until it’s marketplace-ready.
-            </div>
-            <div className="text-sm text-white/60 mb-3">
-              Best for: turning stacks into graded, priced, launch-ready listings.
+              One guided pipeline keeps every card moving from capture to launch.
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-white/70">
               {[
-                "Step 1 — Capture front + back with auto-crop + corner detection.",
-                "Step 2 — Server analysis for player/year/set, grading, and pricing.",
-                "Step 3 — Select cards to launch or send individual cards to polish.",
-                "Step 4 — Launch Deck pre-fills marketplace templates instantly.",
+                "1. Capture front/back with auto-crop + corner checks",
+                "2. Analyze player, year, grading, pricing when visible",
+                "3. Approve, flag, or park cards that need work",
+                "4. Send ready cards straight into Launch Deck",
               ].map((step) => (
                 <div
                   key={step}
@@ -125,9 +120,6 @@ export default function SportsCardSuite() {
             <div className="text-base text-white/80 leading-relaxed mb-3">
               The full-frame editor for one-off cards. Confirm corners, run AI
               polish, and fine-tune titles + tags before sending to Launch Deck.
-            </div>
-            <div className="text-sm text-white/60 mb-2">
-              Best for: grail cards or detail work you want to perfect manually.
             </div>
             <span className="text-xs tracking-[0.3em] uppercase">
               Open Pro Editor →
@@ -160,36 +152,36 @@ export default function SportsCardSuite() {
 
         {/* Features */}
         <div className="mt-16">
-          <h2 className="text-2xl font-cinzel mb-2">Included in Your Suite</h2>
-          <p className="text-sm text-white/55 mb-5">
-            Every batch inherits the same intelligence as our single-card flow — just scaled.
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="border border-white/10 rounded-2xl p-4 bg-white/5">
-              <div className="text-xs uppercase tracking-[0.4em] text-white/50 mb-3">
-                Intelligence
+          <details className="border border-white/10 rounded-2xl bg-white/5 overflow-hidden">
+            <summary className="cursor-pointer px-4 py-3 text-sm uppercase tracking-[0.3em] text-white/60 flex items-center justify-between">
+              <span>Included in your suite</span>
+              <span className="text-[11px] text-white/40">(tap to view)</span>
+            </summary>
+            <div className="px-4 py-4 space-y-4 text-white/80 text-sm leading-relaxed border-t border-white/10">
+              <div>
+                <div className="text-xs uppercase tracking-[0.4em] text-white/50 mb-2">
+                  Intelligence
+                </div>
+                <ul className="space-y-1">
+                  <li>• Automatic player, year, team, and brand extraction</li>
+                  <li>• Parallel/serial hints and corner clarity checks</li>
+                  <li>• Grading + pricing cues when text is visible</li>
+                  <li>• Batch comps and listing-ready keywords</li>
+                </ul>
               </div>
-              <ul className="space-y-2 text-white/80 text-sm leading-relaxed">
-                <li>• Automatic brand, year, player, and team extraction</li>
-                <li>• Parallel + serial detection for modern releases</li>
-                <li>• Grading and corner condition guidance</li>
-                <li>• Pricing ranges with suggested list price</li>
-                <li>• Batch comps + keyword recommendations</li>
-              </ul>
-            </div>
-            <div className="border border-white/10 rounded-2xl p-4 bg-white/5">
-              <div className="text-xs uppercase tracking-[0.4em] text-white/50 mb-3">
-                Speed &amp; Launch
+              <div>
+                <div className="text-xs uppercase tracking-[0.4em] text-white/50 mb-2">
+                  Speed &amp; Launch
+                </div>
+                <ul className="space-y-1">
+                  <li>• Auto-crop, corner prep, and readiness flags</li>
+                  <li>• One tap to move selected cards into Launch Deck</li>
+                  <li>• Marketplace-ready titles and descriptions</li>
+                  <li>• Item specifics + keyword helpers when detected</li>
+                </ul>
               </div>
-              <ul className="space-y-2 text-white/80 text-sm leading-relaxed">
-                <li>• Auto-crop and confirmed corners before analysis</li>
-                <li>• One tap to send selected cards into Launch Deck</li>
-                <li>• Marketplace-ready titles &amp; descriptions</li>
-                <li>• Instant item specifics + SEO keyword builder</li>
-                <li>• Luxe dark + champagne dashboard for clarity</li>
-              </ul>
             </div>
-          </div>
+          </details>
 
           {!hasCards && (
             <p className="text-xs opacity-50 italic mt-4">
