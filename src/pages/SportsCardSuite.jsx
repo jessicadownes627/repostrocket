@@ -72,7 +72,7 @@ export default function SportsCardSuite() {
         </p>
 
         {/* CTA Section */}
-        <div className="flex flex-col gap-7 mt-8">
+        <div className="flex flex-col gap-5 mt-8">
           <button
             onClick={() =>
               handleNavigate("/batch", "batchMode", {
@@ -90,7 +90,7 @@ export default function SportsCardSuite() {
             <div className="text-[17px] text-white leading-relaxed mb-4 max-w-3xl">
               One guided pipeline keeps every card moving from capture to launch.
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-white/70">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-white/70">
               {[
                 "1. Capture front/back with auto-crop + corner checks",
                 "2. Analyze player, year, grading, pricing when visible",
@@ -99,7 +99,7 @@ export default function SportsCardSuite() {
               ].map((step) => (
                 <div
                   key={step}
-                  className="rounded-xl border border-white/10 bg-black/20 px-3 py-2"
+                  className="rounded-xl border border-white/10 bg-black/20 px-3 py-1.5"
                 >
                   {step}
                 </div>
@@ -112,12 +112,12 @@ export default function SportsCardSuite() {
 
           <button
             onClick={() => handleNavigate("/card-prep")}
-            className="w-full text-left px-5 py-5 rounded-2xl border border-white/15 text-white bg-white/5 hover:bg-white/10 transition-all"
+            className="w-full text-left px-5 py-4 rounded-2xl border border-white/15 text-white bg-white/5 hover:bg-white/10 transition-all"
           >
             <div className="text-sm uppercase tracking-[0.35em] opacity-70 mb-2">
               Single Card Pro Editor
             </div>
-            <div className="text-base text-white/80 leading-relaxed mb-3">
+            <div className="text-base text-white/80 leading-relaxed mb-2">
               The full-frame editor for one-off cards. Confirm corners, run AI
               polish, and fine-tune titles + tags before sending to Launch Deck.
             </div>
@@ -151,13 +151,13 @@ export default function SportsCardSuite() {
         </div>
 
         {/* Features */}
-        <div className="mt-16">
-          <details className="border border-white/10 rounded-2xl bg-white/5 overflow-hidden">
-            <summary className="cursor-pointer px-4 py-3 text-sm uppercase tracking-[0.3em] text-white/60 flex items-center justify-between">
+        <div className="mt-24">
+          <details className="border border-white/15 rounded-2xl bg-black/20 overflow-hidden">
+            <summary className="cursor-pointer px-4 py-3 text-sm uppercase tracking-[0.3em] text-white/45 flex items-center justify-between">
               <span>Included in your suite</span>
-              <span className="text-[11px] text-white/40">(tap to view)</span>
+              <span className="text-[11px] text-white/35">(tap to view)</span>
             </summary>
-            <div className="px-4 py-4 space-y-4 text-white/80 text-sm leading-relaxed border-t border-white/10">
+            <div className="px-4 py-4 space-y-4 text-white/75 text-sm leading-relaxed border-t border-white/10">
               <div>
                 <div className="text-xs uppercase tracking-[0.4em] text-white/50 mb-2">
                   Intelligence

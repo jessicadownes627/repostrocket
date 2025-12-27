@@ -108,6 +108,23 @@ const GRADING_PATHS = {
   ],
 };
 const IS_DEV_BUILD = Boolean(import.meta.env.DEV);
+const RESUME_SESSION_KEY = "rr_draft_resume_ack";
+const getResumeSessionFlag = () => {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.sessionStorage.getItem(RESUME_SESSION_KEY) === "true";
+  } catch {
+    return false;
+  }
+};
+const setResumeSessionFlag = () => {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(RESUME_SESSION_KEY, "true");
+  } catch {
+    // ignore
+  }
+};
 
 const hasListingDraftData = (data) => {
   if (!data || typeof data !== "object") return false;
@@ -235,9 +252,13 @@ export default function SingleListing() {
   const [customTag, setCustomTag] = useState("");
   const [isTrackedForTrends, setIsTrackedForTrends] = useState(false);
   const [trackFeedback, setTrackFeedback] = useState("");
-  const [showResumeNotice, setShowResumeNotice] = useState(() =>
-    hasListingDraftData(listingData)
+  const initialResumeAcknowledged = getResumeSessionFlag();
+  const [resumePromptAcknowledged, setResumePromptAcknowledged] = useState(
+    initialResumeAcknowledged
   );
+  const [showResumeNotice, setShowResumeNotice] = useState(() => {
+    return hasListingDraftData(listingData) && !initialResumeAcknowledged;
+  });
   const [isMobileViewport, setIsMobileViewport] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.matchMedia("(max-width: 720px)").matches;
@@ -337,6 +358,13 @@ export default function SingleListing() {
     }
   }, []);
 
+  const markResumeAcknowledged = useCallback(() => {
+    setResumeSessionFlag();
+    setResumePromptAcknowledged(true);
+    setShowResumeNotice(false);
+    setShowMobileResumePrompt(false);
+  }, []);
+
   const clearDraftState = useCallback(() => {
     const nextMode = batchMode === "sports_cards" ? "sports_cards" : "general";
     resetListing(nextMode);
@@ -345,14 +373,14 @@ export default function SingleListing() {
 
   const handleMobileResumeContinue = useCallback(() => {
     acknowledgeMobilePrompt();
-    setShowMobileResumePrompt(false);
-  }, [acknowledgeMobilePrompt]);
+    markResumeAcknowledged();
+  }, [acknowledgeMobilePrompt, markResumeAcknowledged]);
 
   const handleMobileResumeStartNew = useCallback(() => {
     acknowledgeMobilePrompt();
-    setShowMobileResumePrompt(false);
+    markResumeAcknowledged();
     clearDraftState();
-  }, [acknowledgeMobilePrompt, clearDraftState]);
+  }, [acknowledgeMobilePrompt, clearDraftState, markResumeAcknowledged]);
   const magicDiffs = Array.isArray(magicResults?.diffs)
     ? magicResults.diffs
     : [];
@@ -675,33 +703,15 @@ export default function SingleListing() {
   }, [isCardMode, batchMode, setBatchMode, storeHydrated]);
   const isSportsAnalysisMode = batchMode === "sports_cards" && isCardMode;
   const combinedCardError = sportsAnalysisError || cardError;
-  const sportsStatusMessage = useMemo(() => {
+  const sportsHandoffState = useMemo(() => {
     if (!isSportsAnalysisMode) return null;
-    if (combinedCardError) {
+    if (analysisInFlight || (!combinedCardError && !cardAttributes)) {
       return {
-        tone: "text-[#F6BDB2]",
-        text:
-          "We couldn’t finish analyzing this card. Retake photos in Sports Card Studio or continue with manual entry below.",
+        text: "Analyzing confirmed photos…",
       };
     }
-    if (analysisInFlight) {
-      return {
-        tone: "text-[#E8D5A8]",
-        text: "Analyzing your confirmed card photo. No extra action is required here.",
-      };
-    }
-    if (cardAttributes) {
-      return {
-        tone: "text-[#8FF0C5]",
-        text: "Analysis complete — review the detected details below.",
-      };
-    }
-    return {
-      tone: "text-white/70",
-      text: "Card queued for analysis. We’ll move you forward automatically.",
-    };
+    return null;
   }, [isSportsAnalysisMode, combinedCardError, analysisInFlight, cardAttributes]);
-  const showPhotoTools = !isSportsAnalysisMode;
   const analysisActive = isSportsAnalysisMode && analysisInFlight;
   const [viewStage, setViewStage] = useState(
     analysisActive ? VIEW_STAGES.ANALYSIS : VIEW_STAGES.EDIT
@@ -717,19 +727,27 @@ export default function SingleListing() {
   const shouldShowResumeNotice =
     showResumeNotice && (!isMobileViewport || !showMobileResumePrompt);
   useEffect(() => {
-    if (!hasResumableDraft) {
+    if (!hasResumableDraft || resumePromptAcknowledged) {
       setShowResumeNotice(false);
+      return;
     }
-  }, [hasResumableDraft]);
+    setShowResumeNotice(true);
+  }, [hasResumableDraft, resumePromptAcknowledged]);
   useEffect(() => {
     if (!isMobileViewport) {
       setShowMobileResumePrompt(false);
       return;
     }
-    if (hasResumableDraft && !mobileResumeHandledRef.current) {
+    if (
+      hasResumableDraft &&
+      !mobileResumeHandledRef.current &&
+      !resumePromptAcknowledged
+    ) {
       setShowMobileResumePrompt(true);
+    } else {
+      setShowMobileResumePrompt(false);
     }
-  }, [isMobileViewport, hasResumableDraft]);
+  }, [isMobileViewport, hasResumableDraft, resumePromptAcknowledged]);
   useEffect(() => {
     if (typeof document === "undefined") return;
     if (!(isMobileViewport && showMobileResumePrompt)) return;
@@ -786,12 +804,13 @@ export default function SingleListing() {
     showUsageModal,
   ]);
   const handleStartFreshDraft = useCallback(() => {
+    markResumeAcknowledged();
     const nextMode = batchMode === "sports_cards" ? "sports_cards" : "general";
     clearDraftState();
     if (nextMode === "sports_cards") {
       navigate("/card-prep");
     }
-  }, [batchMode, clearDraftState, navigate]);
+  }, [batchMode, clearDraftState, navigate, markResumeAcknowledged]);
 
   const CATEGORY_OPTIONS = [
     "Tops",
@@ -1806,60 +1825,46 @@ useEffect(() => {
         Make your listing shine
       </p>
       {shouldShowResumeNotice && (
-        <div className="bg-black/40 border border-white/15 rounded-2xl p-4 mb-6 text-sm text-white/80">
+        <div className="bg-black/45 border border-white/12 rounded-2xl p-4 mb-6 text-sm text-white/80">
           <div className="text-[11px] uppercase tracking-[0.35em] text-white/60 mb-1">
-            Resuming your last listing
+            Resume your last listing
           </div>
           <p className="text-white/70 text-sm">
-            Your previous draft is still active. Continue editing or start fresh to clear it.
+            Pick up where you left off or start fresh.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 mt-3">
             <button
               type="button"
-              className="flex-1 py-2 rounded-2xl border border-white/25 text-[11px] uppercase tracking-[0.3em] text-white/80 hover:border-white/50 transition"
-              onClick={() => setShowResumeNotice(false)}
+              className="flex-1 py-2 rounded-2xl border border-[#4CC790]/60 bg-[#1F2B24] text-[#9EF1C2] text-[11px] uppercase tracking-[0.3em] font-semibold hover:bg-[#254230] transition"
+              onClick={markResumeAcknowledged}
             >
-              Keep Editing
+              Resume
             </button>
             <button
               type="button"
-              className="flex-1 py-2 rounded-2xl border border-[#F27B81]/50 bg-[#F27B81]/10 text-[#F9B8BC] text-[11px] uppercase tracking-[0.3em] hover:bg-[#F27B81]/20 transition"
+              className="flex-1 py-2 rounded-2xl border border-white/25 text-[11px] uppercase tracking-[0.3em] text-white/80 hover:border-white/50 transition"
               onClick={handleStartFreshDraft}
             >
-              Start Fresh
+              Start new
             </button>
           </div>
+          <p className="text-[11px] text-white/45 mt-3">
+            Drafts are saved automatically and cleared when you publish or start fresh.
+          </p>
         </div>
       )}
       <div className="lux-divider w-2/3 mx-auto mb-10"></div>
 
-      {isSportsAnalysisMode && sportsStatusMessage && (
+      {sportsHandoffState && (
         <div className="bg-black/40 border border-white/10 rounded-2xl p-4 mb-8 text-sm text-white/80">
           <div className="text-[11px] uppercase tracking-[0.35em] text-white/50 mb-2">
             Sports Card Studio Handoff
           </div>
-          <p>
-            We’re analyzing the front/back photos you already confirmed — no additional uploads
-            or edits are needed here.
+          <p className="text-white/70 text-sm">
+            {sportsHandoffState.text}
           </p>
-          <div className={`mt-3 text-xs flex items-center gap-2 ${sportsStatusMessage.tone}`}>
-            <span className={`inline-flex h-2 w-2 rounded-full ${parsingCard ? "bg-[#E8D5A8] animate-pulse" : cardAttributes ? "bg-emerald-400" : "bg-white/50"}`}></span>
-            {sportsStatusMessage.text}
-          </div>
-          <div className="mt-4 flex flex-col sm:flex-row gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                console.log("[FORCE] Run Sports Analysis clicked");
-                handleRunSportsAnalysis();
-              }}
-              disabled={analysisInFlight}
-              className={`flex-1 sm:flex-none px-5 py-2.5 rounded-2xl border border-white/20 text-[11px] uppercase tracking-[0.3em] text-white/85 hover:border-white/50 transition ${
-                analysisInFlight ? "opacity-50 cursor-not-allowed" : ""
-              }`}
-            >
-              {analysisInFlight ? "Analyzing…" : "Run Sports Analysis"}
-            </button>
+          <div className="mt-3">
+            <AnalysisProgress active />
           </div>
         </div>
       )}
@@ -1910,9 +1915,7 @@ useEffect(() => {
               )}
             </div>
             <div className="text-center text-xs opacity-70 mt-3 select-none">
-              {isSportsAnalysisMode
-                ? "Photos stay locked once confirmed in Sports Card Studio."
-                : "Luxe tools keep this photo launch-ready."}
+              This photo will be used for your listing.
             </div>
             {!listingData?.editedPhoto && photoWarnings.length > 0 && (
               <div className="mt-3 space-y-1">
@@ -1935,28 +1938,20 @@ useEffect(() => {
                 {parsingCard ? "Analyzing Card…" : "Analyze Card Details"}
               </button>
             )}
-            {isSportsAnalysisMode && (
-              <div className="mt-4 text-xs text-white/60">
-                {analysisInFlight
-                  ? "Analyzing card details now…"
-                  : cardAttributes
-                  ? "Analysis finished — review the detected details below."
-                  : "Queued for analysis — we’ll move forward automatically."}
-                <AnalysisProgress active={analysisActive} />
-              </div>
-            )}
             {combinedCardError && (
-              <div className="text-xs opacity-60 mt-2">
-                {combinedCardError}
-              </div>
-            )}
-            {showPhotoTools ? (
-              <div class="mt-4 text-xs text-white/60 italic">
-                Photo polish controls are temporarily disabled while we validate sports analysis.
-              </div>
-            ) : (
-              <div className="mt-4 text-xs text-white/50">
-                Photo edits are locked from Sports Card Studio. Head below to see the detected card details.
+              <div className="mt-4 rounded-2xl border border-white/10 bg-black/30 p-3 text-xs text-white/75">
+                We couldn’t analyze this image clearly. You can retake photos or continue manually.
+                {isSportsAnalysisMode && (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    <button
+                      type="button"
+                      className="px-3 py-1.5 rounded-full border border-white/20 text-[10px] uppercase tracking-[0.35em] text-white/80 hover:border-white/50 transition"
+                      onClick={() => navigate("/sports-cards")}
+                    >
+                      Retake photos
+                    </button>
+                  </div>
+                )}
               </div>
             )}
             {glowScore && (
@@ -3324,40 +3319,41 @@ useEffect(() => {
         <div className="fixed inset-0 z-[60] flex items-center justify-center px-5">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
           <div
-            className="relative z-10 w-full max-w-sm rounded-[28px] border border-white/15 bg-[#0B0B0B] p-6 shadow-[0_25px_120px_rgba(0,0,0,0.65)] text-center"
+            className="relative z-10 w-full max-w-sm rounded-[28px] border border-white/12 bg-[#0B0B0B] p-6 shadow-[0_25px_120px_rgba(0,0,0,0.65)] text-center"
             role="dialog"
             aria-modal="true"
             aria-labelledby="mobile-resume-title"
             aria-describedby="mobile-resume-copy"
-            style={isMobileViewport ? { outline: "2px solid red" } : undefined}
           >
             <div className="text-[11px] uppercase tracking-[0.4em] text-white/45 mb-3">
-              Draft Resume
+              Draft available
             </div>
             <h2 id="mobile-resume-title" className="text-2xl font-semibold text-white mb-2">
-              Continue your last draft?
+              Resume your last listing
             </h2>
             <p id="mobile-resume-copy" className="text-sm text-white/70 mb-6">
-              We saved the card you were working on. Continue to pick up where you left off or start new to clear this workspace.
+              Pick up where you left off or start new.
             </p>
             <div className="flex flex-col gap-3">
               <button
                 type="button"
-                className="w-full rounded-2xl border border-white/20 py-3 text-[11px] uppercase tracking-[0.35em] text-white/80 hover:border-white/60 transition"
-                onClick={handleMobileResumeContinue}
+                className="w-full rounded-2xl border border-[#4CC790]/60 bg-[#1F2B24] text-[#9EF1C2] font-semibold py-3 text-[11px] uppercase tracking-[0.35em] hover:bg-[#254230] transition"
+                onClick={() => {
+                  handleMobileResumeContinue();
+                }}
               >
-                Continue
+                Resume
               </button>
               <button
                 type="button"
-                className="w-full rounded-2xl bg-[#F5C08A] text-black font-semibold py-3 text-[11px] uppercase tracking-[0.35em] hover:bg-[#FFD5A7] transition"
+                className="w-full rounded-2xl border border-white/25 text-white/80 py-3 text-[11px] uppercase tracking-[0.35em] hover:border-white/50 transition"
                 onClick={handleMobileResumeStartNew}
               >
                 Start new
               </button>
             </div>
             <p className="mt-4 text-[11px] text-white/45">
-              You can still save drafts manually from the menu later.
+              Drafts are saved automatically and cleared when you publish or start fresh.
             </p>
           </div>
         </div>
