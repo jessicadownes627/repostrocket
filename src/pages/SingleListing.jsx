@@ -109,6 +109,7 @@ const GRADING_PATHS = {
 };
 const IS_DEV_BUILD = Boolean(import.meta.env.DEV);
 const RESUME_SESSION_KEY = "rr_draft_resume_ack";
+const LISTING_SESSION_STARTED_KEY = "rr_listing_session_started";
 const getResumeSessionFlag = () => {
   if (typeof window === "undefined") return false;
   try {
@@ -121,6 +122,22 @@ const setResumeSessionFlag = () => {
   if (typeof window === "undefined") return;
   try {
     window.sessionStorage.setItem(RESUME_SESSION_KEY, "true");
+  } catch {
+    // ignore
+  }
+};
+const getListingSessionStartedFlag = () => {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.sessionStorage.getItem(LISTING_SESSION_STARTED_KEY) === "true";
+  } catch {
+    return false;
+  }
+};
+const setListingSessionStartedFlag = () => {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(LISTING_SESSION_STARTED_KEY, "true");
   } catch {
     // ignore
   }
@@ -279,6 +296,13 @@ export default function SingleListing() {
   const [marketplaceError, setMarketplaceError] = useState("");
   const [marketplaceCopyFlash, setMarketplaceCopyFlash] = useState(false);
   const [identityExpanded, setIdentityExpanded] = useState(false);
+  const [listingSessionStarted, setListingSessionStarted] = useState(() =>
+    getListingSessionStartedFlag()
+  );
+  const markSessionStarted = useCallback(() => {
+    setListingSessionStartedFlag();
+    setListingSessionStarted(true);
+  }, []);
 
   useEffect(() => {
     const id = listingData?.libraryId;
@@ -359,6 +383,7 @@ export default function SingleListing() {
   }, []);
 
   const markResumeAcknowledged = useCallback(() => {
+    markSessionStarted();
     setResumeSessionFlag();
     setResumePromptAcknowledged(true);
     setShowResumeNotice(false);
@@ -724,15 +749,13 @@ export default function SingleListing() {
     () => hasListingDraftData(listingData),
     [listingData]
   );
-  const shouldShowResumeNotice =
-    showResumeNotice && (!isMobileViewport || !showMobileResumePrompt);
   useEffect(() => {
-    if (!hasResumableDraft || resumePromptAcknowledged) {
+    if (!hasResumableDraft || resumePromptAcknowledged || listingSessionStarted) {
       setShowResumeNotice(false);
       return;
     }
     setShowResumeNotice(true);
-  }, [hasResumableDraft, resumePromptAcknowledged]);
+  }, [hasResumableDraft, resumePromptAcknowledged, listingSessionStarted]);
   useEffect(() => {
     if (!isMobileViewport) {
       setShowMobileResumePrompt(false);
@@ -741,13 +764,16 @@ export default function SingleListing() {
     if (
       hasResumableDraft &&
       !mobileResumeHandledRef.current &&
-      !resumePromptAcknowledged
+      !resumePromptAcknowledged &&
+      !listingSessionStarted
     ) {
       setShowMobileResumePrompt(true);
     } else {
       setShowMobileResumePrompt(false);
     }
-  }, [isMobileViewport, hasResumableDraft, resumePromptAcknowledged]);
+  }, [isMobileViewport, hasResumableDraft, resumePromptAcknowledged, listingSessionStarted]);
+  const shouldShowResumeGate =
+    showResumeNotice && (!isMobileViewport || !showMobileResumePrompt);
   useEffect(() => {
     if (typeof document === "undefined") return;
     if (!(isMobileViewport && showMobileResumePrompt)) return;
@@ -1031,6 +1057,10 @@ useEffect(() => {
     const url = URL.createObjectURL(file);
     const altText = deriveAltTextFromFilename(file.name);
     const newEntry = { url, altText, file };
+
+    if (!listingSessionStarted) {
+      markSessionStarted();
+    }
 
     setListingField("photos", [newEntry]);
     setListingField("editedPhoto", null);
@@ -1803,6 +1833,41 @@ useEffect(() => {
   // -------------------------------------------
   console.log("🔁 SingleListing re-render");
 
+  if (shouldShowResumeGate) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4 py-6 bg-[#050505]">
+        <div className="w-full max-w-md rounded-[32px] border border-white/10 bg-black/60 p-8 text-center space-y-6 shadow-[0_30px_80px_rgba(0,0,0,0.65)]">
+          <div className="text-[11px] uppercase tracking-[0.4em] text-white/50">
+            Draft available
+          </div>
+          <h1 className="text-3xl font-semibold text-white">Resume your draft?</h1>
+          <p className="text-sm text-white/60">
+            Pick up where you left off or start fresh.
+          </p>
+          <div className="space-y-3">
+            <button
+              type="button"
+              className="lux-continue-btn w-full py-4 bg-gradient-to-r from-[#2FC98A] to-[#0A6C4C] text-white font-semibold tracking-[0.3em]"
+              onClick={markResumeAcknowledged}
+            >
+              Resume
+            </button>
+            <button
+              type="button"
+              className="lux-quiet-btn w-full py-4 text-[11px] uppercase tracking-[0.35em]"
+              onClick={handleStartFreshDraft}
+            >
+              Start new
+            </button>
+          </div>
+          <p className="text-xs text-white/40">
+            Drafts are saved automatically and cleared when you publish or start fresh.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       ref={mainContainerRef}
@@ -1824,35 +1889,6 @@ useEffect(() => {
       <p className="text-center lux-soft-text text-sm mb-8">
         Make your listing shine
       </p>
-      {shouldShowResumeNotice && (
-        <div className="bg-black/45 border border-white/12 rounded-2xl p-4 mb-6 text-sm text-white/80">
-          <div className="text-[11px] uppercase tracking-[0.35em] text-white/60 mb-1">
-            Resume your last listing
-          </div>
-          <p className="text-white/70 text-sm">
-            Pick up where you left off or start fresh.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-3 mt-3">
-            <button
-              type="button"
-              className="flex-1 py-2 rounded-2xl border border-[#4CC790]/60 bg-[#1F2B24] text-[#9EF1C2] text-[11px] uppercase tracking-[0.3em] font-semibold hover:bg-[#254230] transition"
-              onClick={markResumeAcknowledged}
-            >
-              Resume
-            </button>
-            <button
-              type="button"
-              className="flex-1 py-2 rounded-2xl border border-white/25 text-[11px] uppercase tracking-[0.3em] text-white/80 hover:border-white/50 transition"
-              onClick={handleStartFreshDraft}
-            >
-              Start new
-            </button>
-          </div>
-          <p className="text-[11px] text-white/45 mt-3">
-            Drafts are saved automatically and cleared when you publish or start fresh.
-          </p>
-        </div>
-      )}
       <div className="lux-divider w-2/3 mx-auto mb-10"></div>
 
       {sportsHandoffState && (
