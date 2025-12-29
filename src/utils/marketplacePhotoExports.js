@@ -14,12 +14,19 @@ const VARIANTS = [
   },
 ];
 
-export async function buildMarketplaceExportSet(frontEntry, backEntry) {
+export async function buildMarketplaceExportSet(frontEntry, backEntry, cornerEntries = []) {
   const [front, back] = await Promise.all([
     generateVariantsForEntry(frontEntry, "front"),
     generateVariantsForEntry(backEntry, "back"),
   ]);
-  return { front, back };
+  const corners = (
+    await Promise.all(
+      (cornerEntries || [])
+        .filter(Boolean)
+        .map((entry, idx) => generateVariantsForEntry(entry, `corner-${idx + 1}`))
+    )
+  ).filter(Boolean);
+  return { front, back, corners };
 }
 
 export async function downloadMarketplaceZip(exportSet, filename = "marketplace-photos") {
@@ -128,6 +135,18 @@ function collectExportFiles(exportSet, prefix = "") {
       });
     });
   });
+  if (Array.isArray(exportSet?.corners)) {
+    exportSet.corners.forEach((cornerEntry, index) => {
+      if (!cornerEntry || !Array.isArray(cornerEntry.variants)) return;
+      cornerEntry.variants.forEach((variant) => {
+        if (!variant?.dataUrl) return;
+        files.push({
+          name: `${prefix}corner-${index + 1}-${variant.key}.jpg`,
+          dataUrl: variant.dataUrl,
+        });
+      });
+    });
+  }
   return files;
 }
 

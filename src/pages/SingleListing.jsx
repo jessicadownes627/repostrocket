@@ -37,11 +37,6 @@ import {
   loadListingLibrary,
 } from "../utils/savedListings";
 import { shareImage, getImageSaveLabel } from "../utils/saveImage";
-import {
-  buildMarketplaceExportSet,
-  downloadMarketplaceZip,
-  getPhotoSignature as getMarketplacePhotoSignature,
-} from "../utils/marketplacePhotoExports";
 import "../styles/overrides.css";
 import AnalysisProgress from "../components/AnalysisProgress";
 
@@ -67,9 +62,6 @@ const CARD_IDENTITY_FIELDS = [
   { key: "grade", label: "Grading" },
 ];
 const OPTIONAL_IDENTITY_FIELDS = new Set(["grade"]);
-const MARKETPLACE_READY_NOTE = "Prepared for listings.";
-
-const buildPhotoSignature = (entry) => getMarketplacePhotoSignature(entry);
 const OCR_ZONE_LABELS = {
   bottomCenter: "Bottom Center Nameplate",
   bottomLeft: "Bottom Left Accent",
@@ -277,16 +269,9 @@ export default function SingleListing() {
   const [manualCardField, setManualCardField] = useState(null);
   const [manualCardValue, setManualCardValue] = useState("");
   const [openEvidenceField, setOpenEvidenceField] = useState(null);
-  const [marketplaceExports, setMarketplaceExports] = useState({
-    front: null,
-    back: null,
-    corners: [],
-  });
-  const [marketplaceGenerating, setMarketplaceGenerating] = useState(false);
-  const [marketplaceError, setMarketplaceError] = useState("");
-  const [marketplaceCopyFlash, setMarketplaceCopyFlash] = useState(false);
   const [identityExpanded, setIdentityExpanded] = useState(false);
   const [manualAnalysisOverride, setManualAnalysisOverride] = useState(false);
+  const [analysisStarted, setAnalysisStarted] = useState(false);
   const [resumeDecisionMade, setResumeDecisionMade] = useState(() =>
     getResumeDecisionFlag()
   );
@@ -329,18 +314,23 @@ export default function SingleListing() {
       ? listingData.secondaryPhotos[0]
       : null;
   const backPhoto = getPhotoUrl(backPhotoEntry);
-  const frontMarketplaceSignature = useMemo(
-    () => buildPhotoSignature(mainPhotoEntry),
-    [mainPhotoEntry]
-  );
-  const backMarketplaceSignature = useMemo(
-    () => buildPhotoSignature(backPhotoEntry),
-    [backPhotoEntry]
-  );
+  const [photoStageComplete, setPhotoStageComplete] = useState(() => hasPhoto);
+  const lastDisplayedPhotoRef = useRef(displayedPhoto);
+  useEffect(() => {
+    if (displayedPhoto) {
+      lastDisplayedPhotoRef.current = displayedPhoto;
+      if (!photoStageComplete) {
+        setPhotoStageComplete(true);
+      }
+    }
+  }, [displayedPhoto, photoStageComplete]);
+  const resolvedDisplayedPhoto =
+    displayedPhoto || (photoStageComplete ? lastDisplayedPhotoRef.current : null);
 
   const cardIntel = listingData?.cardIntel || null;
   const cardAttributes = listingData?.cardAttributes || null;
   const manualSuggestions = cardIntel?.manualSuggestions || {};
+  const analysisComplete = Boolean(cardAttributes) || manualAnalysisOverride;
   const ocrZoneRows = useMemo(() => {
     const zones = cardIntel?.ocrZones;
     if (!zones || typeof zones !== "object") return [];
@@ -375,6 +365,10 @@ export default function SingleListing() {
     return [...front, ...back, ...cornerPhotos].filter(Boolean);
   }, [listingData?.photos, listingData?.secondaryPhotos, cornerPhotos]);
   useEffect(() => {
+    if (analysisComplete) return;
+    setAnalysisStarted(false);
+  }, [analysisComplete, mainPhotoEntry?.url, backPhotoEntry?.url]);
+  useEffect(() => {
     if (analysisInFlight || cardAttributes) {
       setManualAnalysisOverride(false);
     }
@@ -384,6 +378,7 @@ export default function SingleListing() {
   const showCardVerificationWarning = Boolean(
     cardIntel?.needsUserConfirmation || cardAttributes?.needsUserConfirmation
   );
+  const identityReady = analysisComplete;
   const clearDraftState = useCallback(() => {
     const nextMode = batchMode === "sports_cards" ? "sports_cards" : "general";
     resetListing(nextMode);
@@ -452,12 +447,17 @@ export default function SingleListing() {
     : playerStatus.suggestion || "";
   const playerSuggested = !playerStatus.verified && Boolean(playerDisplayValue);
   const identityCollapsed = !identityExpanded && !hasVerifiedIdentity;
-  const marketplaceMuted = !hasVerifiedIdentity;
   const gradeDisplayValue =
     cardAttributes?.grade ||
     (cardAttributes?.scoreRating ? `Score ${cardAttributes.scoreRating}` : "");
-  const hasGradeOrScore = Boolean(gradeDisplayValue);
+  const hasGrade = Boolean(gradeDisplayValue);
   const gradeVerified = Boolean(cardAttributes?.isTextVerified?.grade);
+  const cardNotesText = (
+    (cardAttributes?.notes || cardIntel?.notes || "").trim()
+  );
+  const hasCardNotes = Boolean(cardNotesText);
+  const gradingPlaceholder = "Grading insights appear once analysis completes.";
+  const conditionText = condition ? condition : "Condition not set yet";
   const generatedCardTitle = useMemo(() => {
     if (!cardAttributes) return "";
     return buildCardTitle(cardAttributes);
@@ -556,42 +556,6 @@ export default function SingleListing() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!frontMarketplaceSignature && !backMarketplaceSignature) {
-      setMarketplaceExports({ front: null, back: null, corners: [] });
-      setMarketplaceError("");
-      setMarketplaceGenerating(false);
-      return;
-    }
-    let cancelled = false;
-    setMarketplaceGenerating(true);
-    setMarketplaceError("");
-    buildMarketplaceExportSet(mainPhotoEntry, backPhotoEntry, cornerPhotos)
-      .then((result) => {
-        if (cancelled) return;
-        setMarketplaceExports(result);
-      })
-      .catch((err) => {
-        console.error("Marketplace photo prep failed:", err);
-        if (cancelled) return;
-        setMarketplaceExports({ front: null, back: null, corners: [] });
-        setMarketplaceError("Unable to prep marketplace photos right now.");
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setMarketplaceGenerating(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    frontMarketplaceSignature,
-    backMarketplaceSignature,
-    mainPhotoEntry,
-    backPhotoEntry,
-    cornerPhotos,
-  ]);
 
   const identityEvidenceByField = useMemo(() => {
     const map = {};
@@ -729,11 +693,6 @@ export default function SingleListing() {
     !resumeDecisionMade &&
     hasPersistedDraftAvailable &&
     !getResumeDecisionFlag();
-  const shouldBlockForAnalysis =
-    isSportsAnalysisMode &&
-    !manualAnalysisOverride &&
-    !sportsAnalysisError &&
-    (!cardAttributes || analysisInFlight);
   const analysisPendingMessage =
     sportsHandoffState?.text || "Analyzing confirmed photos…";
   useEffect(() => {
@@ -1042,6 +1001,7 @@ useEffect(() => {
 
   useEffect(() => {
     if (!storeHydrated) return;
+    if (analysisComplete) return;
     const frontSignature =
       mainPhotoEntry?.url ||
       mainPhotoEntry?.altText ||
@@ -1067,6 +1027,7 @@ useEffect(() => {
       setListingField("cardIntelHash", null);
     }
   }, [
+    analysisComplete,
     storeHydrated,
     mainPhotoEntry,
     backPhotoEntry,
@@ -1123,7 +1084,7 @@ useEffect(() => {
 
   // Photo warnings based on current active/edited photo
   useEffect(() => {
-    const src = displayedPhoto;
+    const src = resolvedDisplayedPhoto;
     if (!src) {
       setPhotoWarnings([]);
       return;
@@ -1141,7 +1102,7 @@ useEffect(() => {
     return () => {
       cancelled = true;
     };
-  }, [displayedPhoto]);
+  }, [resolvedDisplayedPhoto]);
 
   const runDynamicPricing = useCallback(
     (rawTitle) => {
@@ -1197,83 +1158,11 @@ useEffect(() => {
     [apparelIntel]
   );
 
-  const getVariantCount = (entry) => entry?.variants?.length || 0;
-  const cornerVariantCount = (marketplaceExports.corners || []).reduce(
-    (total, entry) => total + getVariantCount(entry),
-    0
-  );
-  const marketplaceReady =
-    getVariantCount(marketplaceExports.front) +
-      getVariantCount(marketplaceExports.back) +
-      cornerVariantCount >
-    0;
-
-  const handleDownloadMarketplacePhotos = useCallback(() => {
-    if (!marketplaceReady) return;
-    const label =
-      (listingData?.title?.trim() || "card-photos").slice(0, 80) || "card-photos";
-    downloadMarketplaceZip(marketplaceExports, label);
-  }, [marketplaceReady, marketplaceExports, listingData?.title]);
-
-  const handleCopyMarketplaceReady = useCallback(async () => {
-    if (!marketplaceReady) return;
-    const title = listingData?.title?.trim() || "Sports card listing";
-    const message = `${title} photos are prepared for listings (Square + 4:5). Generated via Repost Rocket on ${new Date().toLocaleDateString()}.`;
-    try {
-      await navigator?.clipboard?.writeText?.(message);
-      setMarketplaceCopyFlash(true);
-      window.setTimeout(() => setMarketplaceCopyFlash(false), 2000);
-    } catch (err) {
-      console.error("Failed to copy marketplace confirmation:", err);
-    }
-  }, [marketplaceReady, listingData?.title]);
-
-  const renderMarketplacePreview = (entry, label, options = {}) => {
-    const { allowMissing = true } = options;
-    if (!entry) {
-      if (!allowMissing) return null;
-      return (
-        <div key={label}>
-          <div className="text-xs uppercase tracking-[0.35em] text-white/50">
-            {label}
-          </div>
-          <div className="mt-2 rounded-2xl border border-white/10 bg-black/25 px-4 py-6 text-sm text-white/60">
-            {marketplaceGenerating
-              ? "Generating ready-to-list sizes…"
-              : "Add this photo to unlock exports."}
-          </div>
-        </div>
-      );
-    }
-    return (
-      <div key={label}>
-        <div className="text-xs uppercase tracking-[0.35em] text-white/50">
-          {label}
-        </div>
-        <div className="grid grid-cols-2 gap-3 mt-3">
-          {entry.variants?.map((variant) => (
-            <div
-              key={`${label}-${variant.key}`}
-              className="rounded-2xl border border-white/10 bg-black/30 p-2 text-center"
-            >
-              <div className="rounded-xl overflow-hidden border border-white/5">
-                <img
-                  src={variant.dataUrl}
-                  alt={`${label} ${variant.label}`}
-                  className="w-full h-28 object-cover"
-                />
-              </div>
-              <div className="mt-2 text-[11px] uppercase tracking-[0.3em] text-white/70">
-                {variant.label
-                  .replace("Square", "Square safe")
-                  .replace("Vertical", "Vertical ready")}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
+  const handleContinueToLaunchDeck = useCallback(() => {
+    navigate("/launch", {
+      state: { listingPhotos: listingPhotosForExport },
+    });
+  }, [navigate, listingPhotosForExport]);
 
   const describeCornerConfidence = (level) => {
     if (!level) return "";
@@ -1562,6 +1451,7 @@ useEffect(() => {
   //  CARD ANALYSIS (Sports Card Suite)
   // -------------------------------------------
   const handleAnalyzeCard = useCallback(async () => {
+    setAnalysisStarted(true);
     if (!displayedPhoto) return;
     setCardError("");
     try {
@@ -1803,42 +1693,6 @@ useEffect(() => {
     );
   }
 
-  if (shouldBlockForAnalysis) {
-    return (
-      <div className="min-h-screen flex items-center justify-center px-4 py-6 bg-[#050505]">
-        <div className="w-full max-w-md rounded-[32px] border border-white/10 bg-black/60 p-8 text-center space-y-6 shadow-[0_30px_80px_rgba(0,0,0,0.65)]">
-          <div className="text-[11px] uppercase tracking-[0.4em] text-white/45">
-            Preparing card intel
-          </div>
-          <h1 className="text-3xl font-semibold text-white">Analysis in progress</h1>
-          <p className="text-sm text-white/60">{analysisPendingMessage}</p>
-          <div className="mt-3">
-            <AnalysisProgress active />
-          </div>
-          <div className="space-y-2 mt-6">
-            <button
-              type="button"
-              className="lux-continue-btn w-full py-4 bg-gradient-to-r from-[#2FC98A] to-[#0A6C4C] text-white font-semibold tracking-[0.3em]"
-              onClick={handleRunSportsAnalysis}
-            >
-              Retry analysis
-            </button>
-            <button
-              type="button"
-              className="lux-quiet-btn w-full py-3 text-[11px] uppercase tracking-[0.35em]"
-              onClick={enterManualAnalysisMode}
-            >
-              Continue without auto data
-            </button>
-          </div>
-          <p className="text-xs text-white/40">
-            Once analysis completes your card details will appear here automatically.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div
       ref={mainContainerRef}
@@ -1862,7 +1716,7 @@ useEffect(() => {
       </p>
       <div className="lux-divider w-2/3 mx-auto mb-10"></div>
 
-      {sportsHandoffState && (
+      {sportsHandoffState && identityReady && (
         <div className="bg-black/40 border border-white/10 rounded-2xl p-4 mb-8 text-sm text-white/80">
           <div className="text-[11px] uppercase tracking-[0.35em] text-white/50 mb-2">
             Sports Card Studio Handoff
@@ -1895,7 +1749,7 @@ useEffect(() => {
           onChange={handlePhotoFileChange}
         />
 
-        {displayedPhoto ? (
+        {resolvedDisplayedPhoto ? (
           <>
             <div
               className={`relative analysis-scan-wrapper ${
@@ -1903,7 +1757,7 @@ useEffect(() => {
               }`}
             >
               <img
-                src={displayedPhoto}
+                src={resolvedDisplayedPhoto}
                 alt="Main Photo"
                 className="max-w-[500px] w-full mx-auto rounded-xl shadow-[0_0_40px_rgba(0,0,0,0.4)] object-cover"
               />
@@ -1945,23 +1799,7 @@ useEffect(() => {
                 {parsingCard ? "Analyzing Card…" : "Analyze Card Details"}
               </button>
             )}
-            {combinedCardError && (
-              <div className="mt-4 rounded-2xl border border-white/10 bg-black/30 p-3 text-xs text-white/75">
-                We couldn’t analyze this image clearly. You can retake photos or continue manually.
-                {isSportsAnalysisMode && (
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    <button
-                      type="button"
-                      className="px-3 py-1.5 rounded-full border border-white/20 text-[10px] uppercase tracking-[0.35em] text-white/80 hover:border-white/50 transition"
-                      onClick={() => navigate("/sports-cards")}
-                    >
-                      Retake photos
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-            {glowScore && (
+            {!analysisStarted && glowScore && (
               <div className="mt-6 rounded-2xl border border-[rgba(232,213,168,0.35)] bg-black/30 p-4">
                 <div className="text-xs uppercase tracking-[0.35em] text-white/60 mb-2">
                   Photo Readiness
@@ -2006,38 +1844,39 @@ useEffect(() => {
         {/*  MODE-SPECIFIC FIELDS  */}
         {/* ---------------------- */}
         {isCardMode ? (
-        <>
-          <HeaderBar label="Card Details" />
-
-          {identityCollapsed && (
-            <div className="lux-card mb-8 space-y-4">
-              <div>
-                <div className="text-xs uppercase tracking-[0.35em] text-white/45">
-                  Card identity
-                </div>
-                <div className="text-2xl font-semibold text-white mt-1">
-                  {playerDisplayValue || "Add player name"}
-                </div>
-                {playerSuggested && (
-                  <span className="mt-1 inline-flex items-center text-xs uppercase tracking-[0.35em] text-white/60">
-                    Suggested — tap to confirm
-                  </span>
-                )}
-                {!playerDisplayValue && (
-                  <p className="text-[12px] text-white/55 mt-2">
-                    We couldn’t read the player name yet. Open identity to confirm player, team, year, and set.
-                  </p>
-                )}
+          <>
+            <HeaderBar label="Card Details" />
+          {identityReady ? (
+            <>
+              {identityCollapsed && (
+          <div className="lux-card mb-8 space-y-4">
+            <div>
+              <div className="text-xs uppercase tracking-[0.35em] text-white/45">
+                Card identity
               </div>
-              <button
-                type="button"
-                className="w-full sm:w-auto px-4 py-2 rounded-2xl bg-white/90 text-black text-xs font-semibold uppercase tracking-[0.3em]"
-                onClick={() => setIdentityExpanded(true)}
-              >
-                Confirm card details
-              </button>
+              <div className="text-2xl font-semibold text-white mt-1">
+                {playerDisplayValue || "Add player name"}
+              </div>
+              {playerSuggested && (
+                <span className="mt-1 inline-flex items-center text-xs uppercase tracking-[0.35em] text-white/60">
+                  Suggested — tap to confirm
+                </span>
+              )}
+              {!playerDisplayValue && (
+                <p className="text-[12px] text-white/55 mt-2">
+                  We couldn’t read the player name yet. Open identity to confirm player, team, year, and set.
+                </p>
+              )}
             </div>
-          )}
+            <button
+              type="button"
+              className="w-full sm:w-auto px-4 py-2 rounded-2xl bg-white/90 text-black text-xs font-semibold uppercase tracking-[0.3em]"
+              onClick={() => setIdentityExpanded(true)}
+            >
+              Confirm card details
+            </button>
+          </div>
+        )}
 
           {identityExpanded && (
             <>
@@ -2228,157 +2067,132 @@ useEffect(() => {
                       </div>
                     )}
 
-                    {isBlank && manualCardField !== key && (
-                      <div className="text-xs text-white/50">
-                        We couldn’t see this detail in the current photo — tap Confirm to fill it once.
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            </div>
-          )}
-
-          {(mainPhotoEntry || backPhotoEntry) && (
-            <div
-              className={`lux-card mb-8 transition ${
-                marketplaceMuted ? "opacity-70" : ""
-              }`}
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-xs uppercase tracking-[0.35em] text-white/50">
-                  Marketplace Photos
-                </div>
-                <div className="text-[11px] uppercase tracking-[0.3em] text-white/45">
-                  {marketplaceMuted
-                    ? "Photos ready — finalize card details to continue"
-                    : MARKETPLACE_READY_NOTE}
-                </div>
+            {isBlank && manualCardField !== key && (
+              <div className="text-xs text-white/50">
+                We couldn’t see this detail in the current photo — tap Confirm to fill it once.
               </div>
-              <p className="text-sm text-white/70 mt-2 mb-4">
-                One download includes square + 4:5 versions prepared for listings.
-              </p>
-              {marketplaceError && (
-                <div className="mb-3 text-xs text-[#F6BDB2]">{marketplaceError}</div>
-              )}
-              <div className="grid gap-6 md:grid-cols-2">
-                {renderMarketplacePreview(marketplaceExports.front, "Front photo")}
-                {renderMarketplacePreview(marketplaceExports.back, "Back photo")}
-                {(marketplaceExports.corners || []).map((entry, idx) =>
-                  renderMarketplacePreview(entry, `Corner ${idx + 1}`, {
-                    allowMissing: false,
-                  })
-                )}
-              </div>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <button
-                  type="button"
-                  className="flex-1 rounded-2xl py-3 text-base font-semibold uppercase tracking-[0.3em] bg-white text-black disabled:opacity-40 disabled:cursor-not-allowed"
-                  onClick={handleDownloadMarketplacePhotos}
-                  disabled={!marketplaceReady || marketplaceGenerating}
-                >
-                  {marketplaceGenerating ? "Preparing photos…" : "Download ZIP"}
-                </button>
-                <button
-                  type="button"
-                  className="flex-1 rounded-2xl border border-white/20 py-3 text-sm uppercase tracking-[0.3em] text-white/70 hover:border-white/50 transition disabled:opacity-40 disabled:cursor-not-allowed"
-                  onClick={handleCopyMarketplaceReady}
-                  disabled={!marketplaceReady}
-                >
-                  {marketplaceCopyFlash ? "Copied" : "Copy “Photos prepared” note"}
-                </button>
-              </div>
-            </div>
-          )}
-
-        <div className="lux-card mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs uppercase tracking-[0.35em] text-white/45">Grade / Score</div>
-              <div className="text-lg font-semibold text-white mt-2">
-                {gradeDisplayValue || "Ungraded"}
-              </div>
-            </div>
-            {gradeVerified && (
-              <span className="text-[10px] uppercase tracking-[0.35em] text-[#8FF0C5] border border-[#8FF0C5]/40 rounded-full px-3 py-1">
-                Verified from card
-              </span>
             )}
           </div>
-          {gradeVerified && gradeEvidence.length > 0 && (
-            <div className="mt-3">
-              <button
-                type="button"
-                className="text-xs text-[#8FF0C5] hover:text-white transition"
-                onClick={() => setOpenEvidenceField((prev) => (prev === "grade" ? null : "grade"))}
-              >
-                {openEvidenceField === "grade" ? "Hide proof" : "Show proof"}
-              </button>
-              {openEvidenceField === "grade" && (
-                <ul className="mt-2 space-y-1 text-xs text-white/70">
-                  {gradeEvidence.slice(0, 3).map((line, idx) => (
-                    <li key={`grade-evidence-${idx}`} className="flex gap-2">
-                      <span className="h-1.5 w-1.5 rounded-full bg-[#8FF0C5] mt-1" />
-                      <span>{line}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
+        );
+      })}
+    </div>
             </div>
           )}
-        </div>
-
-        {(cardTextReferenceLines.length > 0 || hasBackDetails) && (
-          <div className="lux-card mb-8">
-            <div className="flex items-center justify-between text-xs uppercase tracking-[0.35em] text-white/50 mb-2">
-              <span>Card text reference</span>
+          <div className="space-y-6">
+            <div className="lux-card mb-8 space-y-3">
+              <div className="flex flex-wrap items-start justify-between gap-6">
+                <div>
+                  <div className="text-xs uppercase tracking-[0.35em] text-white/45">
+                    {hasGrade ? "Grade" : "Card grade"}
+                  </div>
+                  <div
+                    className={`text-2xl font-semibold mt-1 ${
+                      hasGrade ? "text-white" : "text-white/60"
+                    }`}
+                  >
+                    {hasGrade ? gradeDisplayValue : "Awaiting grade"}
+                  </div>
+                  {!hasGrade && (
+                    <div className="text-[10px] uppercase tracking-[0.35em] text-white/40 mt-1">
+                      {gradingPlaceholder}
+                    </div>
+                  )}
+                  {hasGrade && (
+                    <div className="text-[10px] uppercase tracking-[0.35em] text-white/60 mt-1">
+                      {gradeVerified ? "Verified from card" : "Suggested grade"}
+                    </div>
+                  )}
+                </div>
+                <div className="text-right">
+                  <div className="text-xs uppercase tracking-[0.35em] text-white/45">
+                    Condition
+                  </div>
+                  <div className="text-lg font-semibold text-white mt-1">
+                    {conditionText}
+                  </div>
+                </div>
+              </div>
+              <p className="text-sm text-white/70">
+                {hasGrade
+                  ? "Grade details drive the identity you just reviewed."
+                  : gradingPlaceholder}
+              </p>
+            </div>
+            <LuxeInput
+              label="Card Notes"
+              value={localDescription}
+              onChange={handleDescriptionChange}
+              onBlur={commitDescriptionToStore}
+              placeholder="Sharp corners, clean surface, no creases."
+            />
+            <div className="space-y-3">
               <button
                 type="button"
-                className="text-[10px] tracking-[0.3em] text-white/60 underline-offset-2"
-                onClick={() => setShowCardTextDrawer((prev) => !prev)}
+                className="lux-continue-btn w-full py-4 text-sm font-semibold tracking-[0.35em]"
+                onClick={handleContinueToLaunchDeck}
               >
-                {showCardTextDrawer ? "Hide details" : "See full card text"}
+                Continue to Launch Deck
+              </button>
+              <p className="text-xs text-white/60">
+                {listingPhotosForExport.length
+                  ? `Carrying ${listingPhotosForExport.length} listing-ready photos (front, back, corners) into Listing Details.`
+                  : "Add more photos to unlock the listing-ready package."}
+              </p>
+            </div>
+          </div>
+          </>
+        ) : (
+          <div className="lux-card mb-8 space-y-4">
+            <div>
+              <div className="text-xs uppercase tracking-[0.35em] text-white/45">
+                Card Details
+              </div>
+              <h2 className="text-2xl font-semibold text-white mt-1">
+                Awaiting analysis
+              </h2>
+              <p className="text-sm text-white/70 mt-2">
+                {analysisPendingMessage}
+              </p>
+            </div>
+            <div className="mt-3">
+              <AnalysisProgress active={analysisInFlight} />
+            </div>
+            <div className="space-y-2 mt-6">
+              <button
+                type="button"
+                className="lux-continue-btn w-full py-4 bg-gradient-to-r from-[#2FC98A] to-[#0A6C4C] text-white font-semibold tracking-[0.3em]"
+                onClick={handleRunSportsAnalysis}
+              >
+                Retry analysis
+              </button>
+              <button
+                type="button"
+                className="lux-quiet-btn w-full py-3 text-[11px] uppercase tracking-[0.35em]"
+                onClick={enterManualAnalysisMode}
+              >
+                Continue without auto data
               </button>
             </div>
-            {showCardTextDrawer && (
-              <div className="space-y-3 text-sm text-white/75">
-                <p className="text-[11px] text-white/55">
-                  Pulled directly from the card for record keeping — no action needed unless you want to double-check.
-                </p>
-                {cardBackDetails?.team && (
-                  <div className="flex items-center gap-2">
-                    <span className="opacity-60 text-xs uppercase tracking-[0.3em]">Team</span>
-                    <div className="px-3 py-1 rounded-full border border-white/15 bg-black/30 text-white/85">
-                      {cardBackDetails.team}
-                    </div>
-                  </div>
-                )}
-                {cardBackDetails?.position && (
-                  <div className="flex items-center gap-2">
-                    <span className="opacity-60 text-xs uppercase tracking-[0.3em]">Position</span>
-                    <div className="px-3 py-1 rounded-full border border-white/15 bg-black/30 text-white/85">
-                      {cardBackDetails.position}
-                    </div>
-                  </div>
-                )}
-                {cardTextReferenceLines.length > 0 && (
-                  <ul className="space-y-1">
-                    {cardTextReferenceLines.slice(0, 8).map((line, idx) => (
-                      <li key={`text-line-${idx}`} className="flex gap-2">
-                        <span className="h-1.5 w-1.5 rounded-full bg-white/30 mt-1" />
-                        <span>{line}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
+            <p className="text-xs text-white/40">
+              Once analysis completes your card details will appear here automatically.
+            </p>
           </div>
         )}
 
-        {showOcrDebugPanel && (
-          <div className="lux-card mb-8 border border-[#7BDFF2]/30 bg-[#04121F]/70">
+        {identityReady && (
+          <>
+            {cardTextReferenceLines.length > 0 && (
+              <ul className="space-y-1">
+                {cardTextReferenceLines.slice(0, 8).map((line, idx) => (
+                  <li key={`text-line-${idx}`} className="flex gap-2">
+                    <span className="h-1.5 w-1.5 rounded-full bg-white/30 mt-1" />
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {showOcrDebugPanel && (
+              <div className="lux-card mb-8 border border-[#7BDFF2]/30 bg-[#04121F]/70">
             <div className="text-xs uppercase tracking-[0.35em] text-[#7BDFF2]/80 mb-2">
               OCR Debug Panel (Dev Only)
             </div>
@@ -2451,7 +2265,7 @@ useEffect(() => {
               Corner Inspection
             </div>
             <p className="text-xs text-white/55 mb-4">
-              Confidence only reflects image clarity (High = clearly framed, Medium = visible but slightly angled). It is not a grading score.
+              Repost Rocket never judges card condition. Confidence only reflects image clarity and framing for analysis.
             </p>
             <div className="space-y-4">
               {["front", "back"].map((side) => {
@@ -2692,13 +2506,8 @@ useEffect(() => {
             </div>
           )}
 
-          <LuxeInput
-            label="Card Notes"
-            value={localDescription}
-            onChange={handleDescriptionChange}
-            onBlur={commitDescriptionToStore}
-            placeholder="Sharp corners, clean surface, no creases."
-          />
+          </>
+        )}
         </>
       ) : (
         <>

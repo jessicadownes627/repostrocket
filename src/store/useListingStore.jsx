@@ -236,7 +236,13 @@ export function ListingProvider({ children }) {
       setSportsAnalysisError("");
     };
 
-    const requestSportsAnalysis = async (params) => {
+    const requestSportsAnalysisImpl = async (params) => {
+      console.log("[DEV] Skipping cardIntel fetch — frontend stub");
+      setListingField("cardAttributes", {});
+      setAnalysisSessionId(null);
+      setAnalysisInFlight(false);
+      setSportsAnalysisError("");
+      return { stubbed: true };
       const incomingForce = params?.force;
       const incomingBypass = params?.bypassAllGuards;
       console.assert(incomingForce === true, "FORCE FLAG LOST BEFORE STORE");
@@ -494,7 +500,7 @@ export function ListingProvider({ children }) {
       analysisInFlight,
       lastAnalyzedHash,
       sportsAnalysisError,
-      requestSportsAnalysis,
+      requestSportsAnalysis: async (params) => requestSportsAnalysisImpl(params),
       clearSportsAnalysisError,
     };
   }, [

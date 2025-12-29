@@ -1,3 +1,15 @@
+export async function handler(event) {
+  return {
+    statusCode: 200,
+    body: JSON.stringify({
+      analysisComplete: true,
+      cardAttributes: {},
+      flags: {},
+      source: "stub",
+    }),
+  };
+}
+
 import OpenAI from "openai";
 
 const SYSTEM_PROMPT = `
@@ -216,6 +228,14 @@ const EMPTY_RESPONSE = {
 };
 
 export async function handler(event) {
+  console.log("🔥🔥🔥 RUNNING SOURCE cardIntel.js 🔥🔥🔥");
+  return {
+    statusCode: 200,
+    body: JSON.stringify({
+      ok: true,
+      hardStop: true,
+    }),
+  };
   console.log("[cardIntel] handler entered");
   console.log("[cardIntel] function invoked");
   let currentRequestId = `cardIntel-${Date.now()}`;
