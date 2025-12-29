@@ -1121,7 +1121,7 @@ export default function MagicCardPrep({ analysisActive = false }) {
     requestSportsAnalysis({ force: true, bypassAllGuards: true }).catch((err) => {
       console.error("Failed to trigger sports analysis:", err);
     });
-    navigate("/single-listing");
+    navigate("/single-listing", { state: { fromAnalysis: true } });
   };
 
   const getSideConfidence = useCallback(

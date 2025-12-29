@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useListingStore } from "../store/useListingStore";
 import { getPremiumStatus } from "../store/premiumStore";
 import {
@@ -108,36 +108,19 @@ const GRADING_PATHS = {
   ],
 };
 const IS_DEV_BUILD = Boolean(import.meta.env.DEV);
-const RESUME_SESSION_KEY = "rr_draft_resume_ack";
-const LISTING_SESSION_STARTED_KEY = "rr_listing_session_started";
-const getResumeSessionFlag = () => {
+const RESUME_DECISION_KEY = "rr_resume_decision_made";
+const getResumeDecisionFlag = () => {
   if (typeof window === "undefined") return false;
   try {
-    return window.sessionStorage.getItem(RESUME_SESSION_KEY) === "true";
+    return window.sessionStorage.getItem(RESUME_DECISION_KEY) === "true";
   } catch {
     return false;
   }
 };
-const setResumeSessionFlag = () => {
+const setResumeDecisionFlag = () => {
   if (typeof window === "undefined") return;
   try {
-    window.sessionStorage.setItem(RESUME_SESSION_KEY, "true");
-  } catch {
-    // ignore
-  }
-};
-const getListingSessionStartedFlag = () => {
-  if (typeof window === "undefined") return false;
-  try {
-    return window.sessionStorage.getItem(LISTING_SESSION_STARTED_KEY) === "true";
-  } catch {
-    return false;
-  }
-};
-const setListingSessionStartedFlag = () => {
-  if (typeof window === "undefined") return;
-  try {
-    window.sessionStorage.setItem(LISTING_SESSION_STARTED_KEY, "true");
+    window.sessionStorage.setItem(RESUME_DECISION_KEY, "true");
   } catch {
     // ignore
   }
@@ -168,6 +151,19 @@ const hasListingDraftData = (data) => {
     hasTags ||
     hasIntel
   );
+};
+const DRAFT_STORAGE_KEY = "rr_draft_listing";
+const hasPersistedDraft = () => {
+  if (typeof window === "undefined") return false;
+  try {
+    const raw = window.localStorage.getItem(DRAFT_STORAGE_KEY);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.listingData) return false;
+    return hasListingDraftData(parsed.listingData);
+  } catch {
+    return false;
+  }
 };
 
 const CLOTHING_CATEGORY_LIST = [
@@ -204,6 +200,8 @@ const buildTagOptionsForCategory = (category) => {
 
 export default function SingleListing() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const fromAnalysis = location.state?.fromAnalysis === true;
 
   // Pull listing data from global store
   const {
@@ -225,7 +223,6 @@ export default function SingleListing() {
   const chipFlashTimeouts = useRef({});
   const lastPolishedPhotoRef = useRef(null);
   const lastPhotoSignatureRef = useRef("");
-  const mobileResumeHandledRef = useRef(false);
   const mainContainerRef = useRef(null);
   const analysisStageRef = useRef(analysisInFlight);
 
@@ -269,18 +266,10 @@ export default function SingleListing() {
   const [customTag, setCustomTag] = useState("");
   const [isTrackedForTrends, setIsTrackedForTrends] = useState(false);
   const [trackFeedback, setTrackFeedback] = useState("");
-  const initialResumeAcknowledged = getResumeSessionFlag();
-  const [resumePromptAcknowledged, setResumePromptAcknowledged] = useState(
-    initialResumeAcknowledged
-  );
-  const [showResumeNotice, setShowResumeNotice] = useState(() => {
-    return hasListingDraftData(listingData) && !initialResumeAcknowledged;
-  });
   const [isMobileViewport, setIsMobileViewport] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.matchMedia("(max-width: 720px)").matches;
   });
-  const [showMobileResumePrompt, setShowMobileResumePrompt] = useState(false);
   const [showCardTextDrawer, setShowCardTextDrawer] = useState(false);
   const [photoProcessing, setPhotoProcessing] = useState(null);
   const [autoAnalysisTriggered, setAutoAnalysisTriggered] = useState(false);
@@ -296,13 +285,18 @@ export default function SingleListing() {
   const [marketplaceError, setMarketplaceError] = useState("");
   const [marketplaceCopyFlash, setMarketplaceCopyFlash] = useState(false);
   const [identityExpanded, setIdentityExpanded] = useState(false);
-  const [listingSessionStarted, setListingSessionStarted] = useState(() =>
-    getListingSessionStartedFlag()
+  const [resumeDecisionMade, setResumeDecisionMade] = useState(() =>
+    getResumeDecisionFlag()
   );
-  const markSessionStarted = useCallback(() => {
-    setListingSessionStartedFlag();
-    setListingSessionStarted(true);
+  const markResumeDecision = useCallback(() => {
+    setResumeDecisionFlag();
+    setResumeDecisionMade(true);
   }, []);
+
+  useEffect(() => {
+    if (!fromAnalysis) return;
+    markResumeDecision();
+  }, [fromAnalysis, markResumeDecision]);
 
   useEffect(() => {
     const id = listingData?.libraryId;
@@ -373,39 +367,10 @@ export default function SingleListing() {
   const showCardVerificationWarning = Boolean(
     cardIntel?.needsUserConfirmation || cardAttributes?.needsUserConfirmation
   );
-  const acknowledgeMobilePrompt = useCallback(() => {
-    mobileResumeHandledRef.current = true;
-    try {
-      window.sessionStorage.setItem("rr_mobile_resume_ack", "true");
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  const markResumeAcknowledged = useCallback(() => {
-    markSessionStarted();
-    setResumeSessionFlag();
-    setResumePromptAcknowledged(true);
-    setShowResumeNotice(false);
-    setShowMobileResumePrompt(false);
-  }, []);
-
   const clearDraftState = useCallback(() => {
     const nextMode = batchMode === "sports_cards" ? "sports_cards" : "general";
     resetListing(nextMode);
-    setShowResumeNotice(false);
   }, [batchMode, resetListing]);
-
-  const handleMobileResumeContinue = useCallback(() => {
-    acknowledgeMobilePrompt();
-    markResumeAcknowledged();
-  }, [acknowledgeMobilePrompt, markResumeAcknowledged]);
-
-  const handleMobileResumeStartNew = useCallback(() => {
-    acknowledgeMobilePrompt();
-    markResumeAcknowledged();
-    clearDraftState();
-  }, [acknowledgeMobilePrompt, clearDraftState, markResumeAcknowledged]);
   const magicDiffs = Array.isArray(magicResults?.diffs)
     ? magicResults.diffs
     : [];
@@ -541,16 +506,6 @@ export default function SingleListing() {
     pushLines(cardIntel?.cardBackDetails?.lines);
     return lines;
   }, [cardIntel]);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const ack = window.sessionStorage.getItem("rr_mobile_resume_ack") === "true";
-      mobileResumeHandledRef.current = ack;
-    } catch {
-      // ignore
-    }
-  }, []);
-
   useEffect(() => {
     if (typeof window === "undefined") return;
     const mq = window.matchMedia("(max-width: 720px)");
@@ -745,50 +700,12 @@ export default function SingleListing() {
   useEffect(() => {
     setViewStage(analysisActive ? VIEW_STAGES.ANALYSIS : VIEW_STAGES.EDIT);
   }, [analysisActive]);
-  const hasResumableDraft = useMemo(
-    () => hasListingDraftData(listingData),
-    [listingData]
-  );
-  useEffect(() => {
-    if (!hasResumableDraft || resumePromptAcknowledged || listingSessionStarted) {
-      setShowResumeNotice(false);
-      return;
-    }
-    setShowResumeNotice(true);
-  }, [hasResumableDraft, resumePromptAcknowledged, listingSessionStarted]);
-  useEffect(() => {
-    if (!isMobileViewport) {
-      setShowMobileResumePrompt(false);
-      return;
-    }
-    if (
-      hasResumableDraft &&
-      !mobileResumeHandledRef.current &&
-      !resumePromptAcknowledged &&
-      !listingSessionStarted
-    ) {
-      setShowMobileResumePrompt(true);
-    } else {
-      setShowMobileResumePrompt(false);
-    }
-  }, [isMobileViewport, hasResumableDraft, resumePromptAcknowledged, listingSessionStarted]);
+  const hasPersistedDraftAvailable = useMemo(() => hasPersistedDraft(), []);
   const shouldShowResumeGate =
-    showResumeNotice && (!isMobileViewport || !showMobileResumePrompt);
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    if (!(isMobileViewport && showMobileResumePrompt)) return;
-    const previousOverflow = document.body.style.overflow;
-    console.log("[scroll-lock] locking body (mobile resume prompt)");
-    document.body.style.overflow = "hidden";
-    return () => {
-      console.log("[scroll-lock] restoring body overflow");
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [isMobileViewport, showMobileResumePrompt]);
-  useEffect(() => {
-    if (!isMobileViewport) return;
-    console.log("[mobile-overlay] resume prompt visible:", showMobileResumePrompt);
-  }, [isMobileViewport, showMobileResumePrompt]);
+    !fromAnalysis &&
+    !resumeDecisionMade &&
+    hasPersistedDraftAvailable &&
+    !getResumeDecisionFlag();
   useEffect(() => {
     if (!isMobileViewport) return;
     console.log("[mobile-overlay] magic results visible:", showMagicResults);
@@ -816,27 +733,20 @@ export default function SingleListing() {
     const viewport = typeof window !== "undefined" ? window.innerHeight : null;
     const containerHeight = mainContainerRef.current?.offsetHeight || null;
     console.log("[analysis-overlay-check]", {
-      resumePrompt: showMobileResumePrompt,
       magicResultsVisible: showMagicResults,
       usageModalVisible: showUsageModal,
       viewport,
       containerHeight,
     });
-  }, [
-    analysisInFlight,
-    isSportsAnalysisMode,
-    showMobileResumePrompt,
-    showMagicResults,
-    showUsageModal,
-  ]);
+  }, [analysisInFlight, isSportsAnalysisMode, showMagicResults, showUsageModal]);
   const handleStartFreshDraft = useCallback(() => {
-    markResumeAcknowledged();
+    markResumeDecision();
     const nextMode = batchMode === "sports_cards" ? "sports_cards" : "general";
     clearDraftState();
     if (nextMode === "sports_cards") {
       navigate("/card-prep");
     }
-  }, [batchMode, clearDraftState, navigate, markResumeAcknowledged]);
+  }, [batchMode, clearDraftState, navigate, markResumeDecision]);
 
   const CATEGORY_OPTIONS = [
     "Tops",
@@ -1057,10 +967,6 @@ useEffect(() => {
     const url = URL.createObjectURL(file);
     const altText = deriveAltTextFromFilename(file.name);
     const newEntry = { url, altText, file };
-
-    if (!listingSessionStarted) {
-      markSessionStarted();
-    }
 
     setListingField("photos", [newEntry]);
     setListingField("editedPhoto", null);
@@ -1848,9 +1754,9 @@ useEffect(() => {
             <button
               type="button"
               className="lux-continue-btn w-full py-4 bg-gradient-to-r from-[#2FC98A] to-[#0A6C4C] text-white font-semibold tracking-[0.3em]"
-              onClick={markResumeAcknowledged}
+              onClick={markResumeDecision}
             >
-              Resume
+              Continue listing
             </button>
             <button
               type="button"
@@ -3351,49 +3257,6 @@ useEffect(() => {
         </div>
       )}
 
-      {isMobileViewport && showMobileResumePrompt && hasResumableDraft && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center px-5">
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
-          <div
-            className="relative z-10 w-full max-w-sm rounded-[28px] border border-white/12 bg-[#0B0B0B] p-6 shadow-[0_25px_120px_rgba(0,0,0,0.65)] text-center"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="mobile-resume-title"
-            aria-describedby="mobile-resume-copy"
-          >
-            <div className="text-[11px] uppercase tracking-[0.4em] text-white/45 mb-3">
-              Draft available
-            </div>
-            <h2 id="mobile-resume-title" className="text-2xl font-semibold text-white mb-2">
-              Resume your last listing
-            </h2>
-            <p id="mobile-resume-copy" className="text-sm text-white/70 mb-6">
-              Pick up where you left off or start new.
-            </p>
-            <div className="flex flex-col gap-3">
-              <button
-                type="button"
-                className="w-full rounded-2xl border border-[#4CC790]/60 bg-[#1F2B24] text-[#9EF1C2] font-semibold py-3 text-[11px] uppercase tracking-[0.35em] hover:bg-[#254230] transition"
-                onClick={() => {
-                  handleMobileResumeContinue();
-                }}
-              >
-                Resume
-              </button>
-              <button
-                type="button"
-                className="w-full rounded-2xl border border-white/25 text-white/80 py-3 text-[11px] uppercase tracking-[0.35em] hover:border-white/50 transition"
-                onClick={handleMobileResumeStartNew}
-              >
-                Start new
-              </button>
-            </div>
-            <p className="mt-4 text-[11px] text-white/45">
-              Drafts are saved automatically and cleared when you publish or start fresh.
-            </p>
-          </div>
-        </div>
-      )}
     </div>
   );
 

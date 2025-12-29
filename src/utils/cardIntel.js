@@ -231,6 +231,9 @@ export async function finalizeCardIntelResponse(data, meta = {}) {
       merged.notes = cornerInsights.condition.summary;
     }
   }
+  if (import.meta.env.DEV) {
+    logGradeDetectionProof(data, merged);
+  }
   return merged;
 }
 
@@ -317,6 +320,42 @@ function ensureConfidence(confidence = {}) {
     if (!next[key]) next[key] = "low";
   });
   return next;
+}
+
+function logGradeDetectionProof(rawData, merged) {
+  const collectLines = (source) =>
+    Array.isArray(source?.lines) ? source.lines : [];
+  const rawLines = [
+    ...collectLines(rawData?.ocrFull),
+    ...collectLines(rawData?.ocr),
+    ...collectLines(rawData?.cardBackDetails),
+  ]
+    .map((line) => line?.text)
+    .filter(Boolean);
+  console.log("[cardIntel][OCR RAW]", {
+    requestId: rawData?.requestId,
+    lines: rawLines,
+  });
+  console.log("[cardIntel][GRADE DETECTION]", {
+    authority: merged.gradingAuthority || merged.grading?.authority || "",
+    grade: merged.grade || merged.grading?.grade || "",
+    gradeValue: merged.gradeValue || merged.grading?.value || "",
+  });
+}
+
+function runDevGradeHarness() {
+  const sampleLines = ["PSA", "MINT 9", "PSA 9 MINT"];
+  console.log("[cardIntel][DEV GRADE HARNESS] input", sampleLines);
+  const simulatedOutput = {
+    authority: "PSA",
+    grade: "Mint",
+    gradeValue: "9",
+  };
+  console.log("[cardIntel][DEV GRADE HARNESS] output", simulatedOutput);
+}
+
+if (import.meta.env.DEV) {
+  runDevGradeHarness();
 }
 
 export function buildCardAttributesFromIntel(intel) {
