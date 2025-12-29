@@ -280,17 +280,22 @@ export default function SingleListing() {
   const [marketplaceExports, setMarketplaceExports] = useState({
     front: null,
     back: null,
+    corners: [],
   });
   const [marketplaceGenerating, setMarketplaceGenerating] = useState(false);
   const [marketplaceError, setMarketplaceError] = useState("");
   const [marketplaceCopyFlash, setMarketplaceCopyFlash] = useState(false);
   const [identityExpanded, setIdentityExpanded] = useState(false);
+  const [manualAnalysisOverride, setManualAnalysisOverride] = useState(false);
   const [resumeDecisionMade, setResumeDecisionMade] = useState(() =>
     getResumeDecisionFlag()
   );
   const markResumeDecision = useCallback(() => {
     setResumeDecisionFlag();
     setResumeDecisionMade(true);
+  }, []);
+  const enterManualAnalysisMode = useCallback(() => {
+    setManualAnalysisOverride(true);
   }, []);
 
   useEffect(() => {
@@ -362,6 +367,18 @@ export default function SingleListing() {
   }, [cardIntel?.ocrZones]);
   const showOcrDebugPanel = IS_DEV_BUILD && ocrZoneRows.length > 0;
   const cornerPhotos = listingData?.cornerPhotos || [];
+  const listingPhotosForExport = useMemo(() => {
+    const front = Array.isArray(listingData?.photos) ? listingData.photos : [];
+    const back = Array.isArray(listingData?.secondaryPhotos)
+      ? listingData.secondaryPhotos
+      : [];
+    return [...front, ...back, ...cornerPhotos].filter(Boolean);
+  }, [listingData?.photos, listingData?.secondaryPhotos, cornerPhotos]);
+  useEffect(() => {
+    if (analysisInFlight || cardAttributes) {
+      setManualAnalysisOverride(false);
+    }
+  }, [analysisInFlight, cardAttributes]);
   const apparelIntel = listingData?.apparelIntel || null;
   const apparelAttributes = listingData?.apparelAttributes || null;
   const showCardVerificationWarning = Boolean(
@@ -541,7 +558,7 @@ export default function SingleListing() {
 
   useEffect(() => {
     if (!frontMarketplaceSignature && !backMarketplaceSignature) {
-      setMarketplaceExports({ front: null, back: null });
+      setMarketplaceExports({ front: null, back: null, corners: [] });
       setMarketplaceError("");
       setMarketplaceGenerating(false);
       return;
@@ -549,7 +566,7 @@ export default function SingleListing() {
     let cancelled = false;
     setMarketplaceGenerating(true);
     setMarketplaceError("");
-    buildMarketplaceExportSet(mainPhotoEntry, backPhotoEntry)
+    buildMarketplaceExportSet(mainPhotoEntry, backPhotoEntry, cornerPhotos)
       .then((result) => {
         if (cancelled) return;
         setMarketplaceExports(result);
@@ -557,7 +574,7 @@ export default function SingleListing() {
       .catch((err) => {
         console.error("Marketplace photo prep failed:", err);
         if (cancelled) return;
-        setMarketplaceExports({ front: null, back: null });
+        setMarketplaceExports({ front: null, back: null, corners: [] });
         setMarketplaceError("Unable to prep marketplace photos right now.");
       })
       .finally(() => {
@@ -568,7 +585,13 @@ export default function SingleListing() {
     return () => {
       cancelled = true;
     };
-  }, [frontMarketplaceSignature, backMarketplaceSignature, mainPhotoEntry, backPhotoEntry]);
+  }, [
+    frontMarketplaceSignature,
+    backMarketplaceSignature,
+    mainPhotoEntry,
+    backPhotoEntry,
+    cornerPhotos,
+  ]);
 
   const identityEvidenceByField = useMemo(() => {
     const map = {};
@@ -706,6 +729,13 @@ export default function SingleListing() {
     !resumeDecisionMade &&
     hasPersistedDraftAvailable &&
     !getResumeDecisionFlag();
+  const shouldBlockForAnalysis =
+    isSportsAnalysisMode &&
+    !manualAnalysisOverride &&
+    !sportsAnalysisError &&
+    (!cardAttributes || analysisInFlight);
+  const analysisPendingMessage =
+    sportsHandoffState?.text || "Analyzing confirmed photos…";
   useEffect(() => {
     if (!isMobileViewport) return;
     console.log("[mobile-overlay] magic results visible:", showMagicResults);
@@ -1167,9 +1197,15 @@ useEffect(() => {
     [apparelIntel]
   );
 
+  const getVariantCount = (entry) => entry?.variants?.length || 0;
+  const cornerVariantCount = (marketplaceExports.corners || []).reduce(
+    (total, entry) => total + getVariantCount(entry),
+    0
+  );
   const marketplaceReady =
-    (marketplaceExports.front?.variants?.length || 0) +
-      (marketplaceExports.back?.variants?.length || 0) >
+    getVariantCount(marketplaceExports.front) +
+      getVariantCount(marketplaceExports.back) +
+      cornerVariantCount >
     0;
 
   const handleDownloadMarketplacePhotos = useCallback(() => {
@@ -1192,41 +1228,32 @@ useEffect(() => {
     }
   }, [marketplaceReady, listingData?.title]);
 
-  const renderMarketplacePreview = (side, label) => {
-    const entry = marketplaceExports?.[side];
-    if (!entry && marketplaceGenerating) {
+  const renderMarketplacePreview = (entry, label, options = {}) => {
+    const { allowMissing = true } = options;
+    if (!entry) {
+      if (!allowMissing) return null;
       return (
-        <div key={side}>
+        <div key={label}>
           <div className="text-xs uppercase tracking-[0.35em] text-white/50">
             {label}
           </div>
           <div className="mt-2 rounded-2xl border border-white/10 bg-black/25 px-4 py-6 text-sm text-white/60">
-            Generating ready-to-list sizes…
-          </div>
-        </div>
-      );
-    }
-    if (!entry) {
-      return (
-        <div key={side}>
-          <div className="text-xs uppercase tracking-[0.35em] text-white/50">
-            {label}
-          </div>
-          <div className="mt-2 rounded-2xl border border-dashed border-white/20 px-4 py-6 text-sm text-white/50">
-            Add this photo to unlock exports.
+            {marketplaceGenerating
+              ? "Generating ready-to-list sizes…"
+              : "Add this photo to unlock exports."}
           </div>
         </div>
       );
     }
     return (
-      <div key={side}>
+      <div key={label}>
         <div className="text-xs uppercase tracking-[0.35em] text-white/50">
           {label}
         </div>
         <div className="grid grid-cols-2 gap-3 mt-3">
           {entry.variants?.map((variant) => (
             <div
-              key={`${side}-${variant.key}`}
+              key={`${label}-${variant.key}`}
               className="rounded-2xl border border-white/10 bg-black/30 p-2 text-center"
             >
               <div className="rounded-xl overflow-hidden border border-white/5">
@@ -1237,7 +1264,9 @@ useEffect(() => {
                 />
               </div>
               <div className="mt-2 text-[11px] uppercase tracking-[0.3em] text-white/70">
-                {variant.label.replace("Square", "Square safe").replace("Vertical", "Vertical ready")}
+                {variant.label
+                  .replace("Square", "Square safe")
+                  .replace("Vertical", "Vertical ready")}
               </div>
             </div>
           ))}
@@ -1663,7 +1692,7 @@ useEffect(() => {
       brand,
       condition,
       tags,
-      photos: normalizePhotosArray(listingData.photos || [], "item photo"),
+      photos: normalizePhotosArray(listingPhotosForExport, "item photo"),
       ...fields,
     };
     saveListingToLibrary(baseEntry);
@@ -1768,6 +1797,42 @@ useEffect(() => {
           </div>
           <p className="text-xs text-white/40">
             Drafts are saved automatically and cleared when you publish or start fresh.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (shouldBlockForAnalysis) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4 py-6 bg-[#050505]">
+        <div className="w-full max-w-md rounded-[32px] border border-white/10 bg-black/60 p-8 text-center space-y-6 shadow-[0_30px_80px_rgba(0,0,0,0.65)]">
+          <div className="text-[11px] uppercase tracking-[0.4em] text-white/45">
+            Preparing card intel
+          </div>
+          <h1 className="text-3xl font-semibold text-white">Analysis in progress</h1>
+          <p className="text-sm text-white/60">{analysisPendingMessage}</p>
+          <div className="mt-3">
+            <AnalysisProgress active />
+          </div>
+          <div className="space-y-2 mt-6">
+            <button
+              type="button"
+              className="lux-continue-btn w-full py-4 bg-gradient-to-r from-[#2FC98A] to-[#0A6C4C] text-white font-semibold tracking-[0.3em]"
+              onClick={handleRunSportsAnalysis}
+            >
+              Retry analysis
+            </button>
+            <button
+              type="button"
+              className="lux-quiet-btn w-full py-3 text-[11px] uppercase tracking-[0.35em]"
+              onClick={enterManualAnalysisMode}
+            >
+              Continue without auto data
+            </button>
+          </div>
+          <p className="text-xs text-white/40">
+            Once analysis completes your card details will appear here automatically.
           </p>
         </div>
       </div>
@@ -2198,8 +2263,13 @@ useEffect(() => {
                 <div className="mb-3 text-xs text-[#F6BDB2]">{marketplaceError}</div>
               )}
               <div className="grid gap-6 md:grid-cols-2">
-                {renderMarketplacePreview("front", "Front photo")}
-                {renderMarketplacePreview("back", "Back photo")}
+                {renderMarketplacePreview(marketplaceExports.front, "Front photo")}
+                {renderMarketplacePreview(marketplaceExports.back, "Back photo")}
+                {(marketplaceExports.corners || []).map((entry, idx) =>
+                  renderMarketplacePreview(entry, `Corner ${idx + 1}`, {
+                    allowMissing: false,
+                  })
+                )}
               </div>
               <div className="flex flex-col sm:flex-row gap-3">
                 <button
