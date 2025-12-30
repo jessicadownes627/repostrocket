@@ -18,6 +18,7 @@ const EMPTY_INTEL = {
   isTextVerified: {},
   sourceEvidence: [],
   needsUserConfirmation: true,
+  isGradedCard: false,
 };
 
 const CONFIDENCE_DEFAULTS = [
@@ -450,6 +451,7 @@ export function buildCardAttributesFromIntel(intel) {
     cornerCondition: intel.cornerCondition || null,
     grading: intel.grading || null,
     pricing: intel.pricing || null,
+    isGradedCard: Boolean(intel.isGradedCard),
   };
 }
 

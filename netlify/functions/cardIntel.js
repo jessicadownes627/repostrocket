@@ -213,6 +213,7 @@ const EMPTY_RESPONSE = {
     cardNumber: "",
   },
   cardBackDetails: null,
+  isGradedCard: false,
 };
 
 export async function handler(event) {
@@ -333,39 +334,49 @@ export async function handler(event) {
         0
       ),
     };
+    const allOcrLines = [...ocrLines, ...backOcrLines];
+    const isGradedCard = detectGradedCard(allOcrLines);
     let zoneOcrResults = {};
     let zoneSuggestions = {};
     let zoneUsage = {};
-    if (nameZoneCrops && Object.keys(nameZoneCrops).length) {
+    if (!isGradedCard && nameZoneCrops && Object.keys(nameZoneCrops).length) {
       zoneOcrResults = await runNameZoneOcr(client, nameZoneCrops);
       const manualFromZones = buildManualSuggestionsFromZones(zoneOcrResults);
       zoneSuggestions = manualFromZones.suggestions || {};
       zoneUsage = manualFromZones.zoneUsage || {};
     }
-    const slabLines = zoneOcrResults?.slabLabel?.lines || [];
-    const slabIdentity = deriveSlabIdentity(slabLines);
-    const combinedOcrLines =
-      slabLines && slabLines.length ? [...ocrLines, ...slabLines] : ocrLines;
-    const derived = deriveFieldsFromOcr(combinedOcrLines, hints);
-    applySlabIdentityOverrides(derived, slabIdentity);
-    const formattedZones = Object.entries(zoneOcrResults || {}).reduce(
-      (acc, [zoneKey, zoneData]) => {
-        const lines = Array.isArray(zoneData?.lines) ? zoneData.lines : [];
-        const bestConfidence = lines.reduce(
-          (max, line) => Math.max(max, line.confidence || 0),
-          0
-        );
-        acc[zoneKey] = {
-          lines,
-          bestConfidence,
-          usedForSuggestion: Boolean(zoneUsage?.[zoneKey]),
-          image: nameZoneCrops?.[zoneKey]?.image || null,
-        };
-        return acc;
-      },
-      {}
-    );
-    const cardBackDetails = buildBackDetailsFromOcr(backOcrLines);
+    let derived = null;
+    let slabIdentity = null;
+    let formattedZones = {};
+    let cardBackDetails = null;
+    if (isGradedCard) {
+      derived = buildGradedCardResponse(allOcrLines);
+    } else {
+      const slabLines = zoneOcrResults?.slabLabel?.lines || [];
+      slabIdentity = deriveSlabIdentity(slabLines);
+      const combinedOcrLines =
+        slabLines && slabLines.length ? [...ocrLines, ...slabLines] : ocrLines;
+      derived = deriveFieldsFromOcr(combinedOcrLines, hints);
+      applySlabIdentityOverrides(derived, slabIdentity);
+      formattedZones = Object.entries(zoneOcrResults || {}).reduce(
+        (acc, [zoneKey, zoneData]) => {
+          const lines = Array.isArray(zoneData?.lines) ? zoneData.lines : [];
+          const bestConfidence = lines.reduce(
+            (max, line) => Math.max(max, line.confidence || 0),
+            0
+          );
+          acc[zoneKey] = {
+            lines,
+            bestConfidence,
+            usedForSuggestion: Boolean(zoneUsage?.[zoneKey]),
+            image: nameZoneCrops?.[zoneKey]?.image || null,
+          };
+          return acc;
+        },
+        {}
+      );
+      cardBackDetails = buildBackDetailsFromOcr(backOcrLines);
+    }
 
     const responsePayload = {
       ...EMPTY_RESPONSE,
@@ -1130,6 +1141,60 @@ function normalizeSlabPlayerName(text = "") {
     })
     .filter(Boolean)
     .join(" ");
+}
+
+function detectGradedCard(lines = []) {
+  if (!Array.isArray(lines) || !lines.length) return false;
+  if (findVerifiedGradeOrScore(lines)) return true;
+  return lines.some((entry) => {
+    const raw = String(entry?.text || entry?.normalized || "").toLowerCase();
+    if (!raw) return false;
+    if (raw.includes("slab") || raw.includes("graded card") || raw.includes("slabbed")) {
+      return true;
+    }
+    return GRADE_KEYWORDS.some((keyword) => raw.includes(keyword));
+  });
+}
+
+function buildGradedCardResponse(lines = []) {
+  const playerEntry = findVerifiedPlayerFromOcr(lines);
+  const playerValue = playerEntry?.matchedName || "";
+  const sources = { ...EMPTY_RESPONSE.sources };
+  const confidence = { ...EMPTY_RESPONSE.confidence };
+  const isTextVerified = { ...EMPTY_RESPONSE.isTextVerified };
+  const manualSuggestions = { ...EMPTY_RESPONSE.manualSuggestions };
+  const evidence = [];
+  if (playerEntry) {
+    sources.player = "ocr";
+    confidence.player = "high";
+    isTextVerified.player = true;
+    evidence.push(buildEvidenceLine("player", playerEntry));
+  } else {
+    confidence.player = "low";
+    evidence.push("Graded card path: no verified player text detected.");
+  }
+  return {
+    player: playerValue,
+    team: "",
+    sport: "",
+    year: "",
+    setName: "",
+    setBrand: "",
+    cardNumber: "",
+    brand: "",
+    notes: "",
+    grade: "",
+    gradingAuthority: "",
+    gradeValue: "",
+    scoreRating: "",
+    confidence,
+    sources,
+    sourceEvidence: evidence,
+    isTextVerified,
+    needsUserConfirmation: true,
+    manualSuggestions,
+    isGradedCard: true,
+  };
 }
 
 function findTeamCandidate(lines) {

@@ -62,6 +62,9 @@ const CARD_IDENTITY_FIELDS = [
   { key: "grade", label: "Grading" },
 ];
 const OPTIONAL_IDENTITY_FIELDS = new Set(["grade"]);
+const GRADED_CONFIRM_FIELDS = new Set(["team", "year", "setName"]);
+const GRADED_NEEDS_CONFIRM_COPY =
+  "For graded cards, we’ll confirm this from the slab label or let you add it.";
 const OCR_ZONE_LABELS = {
   bottomCenter: "Bottom Center Nameplate",
   bottomLeft: "Bottom Left Accent",
@@ -329,6 +332,8 @@ export default function SingleListing() {
 
   const cardIntel = listingData?.cardIntel || null;
   const cardAttributes = listingData?.cardAttributes || null;
+  const isGradedCard =
+    Boolean(cardAttributes?.isGradedCard) || Boolean(cardIntel?.isGradedCard);
   const manualSuggestions = cardIntel?.manualSuggestions || {};
   const analysisComplete = Boolean(cardAttributes) || manualAnalysisOverride;
   const ocrZoneRows = useMemo(() => {
@@ -557,12 +562,12 @@ export default function SingleListing() {
   }, []);
 
 
-  const identityEvidenceByField = useMemo(() => {
-    const map = {};
-    CARD_IDENTITY_FIELDS.forEach(({ key }) => {
-      map[key] = [];
-    });
-    map.grade = [];
+const identityEvidenceByField = useMemo(() => {
+  const map = {};
+  CARD_IDENTITY_FIELDS.forEach(({ key }) => {
+    map[key] = [];
+  });
+  map.grade = [];
     if (Array.isArray(cardIntel?.sourceEvidence)) {
       cardIntel.sourceEvidence.forEach((line) => {
         if (typeof line !== "string") return;
@@ -597,6 +602,174 @@ export default function SingleListing() {
       });
     },
     [cardIntel]
+  );
+
+  const renderIdentityField = (field) => {
+    const { key, label } = field;
+    const status = cardIdentityStatuses[key] || {};
+    const isVerified = Boolean(status.verified);
+    const hasManual = status.hasManual;
+    const isSuggested = !isVerified && !hasManual && status.hasSuggestion;
+    const isBlank = !isVerified && !hasManual && !status.hasSuggestion;
+    const isOptionalField = OPTIONAL_IDENTITY_FIELDS.has(key);
+    const displayValue = isVerified
+      ? status.baseValue
+      : hasManual
+      ? status.manualValue
+      : status.suggestion || "";
+    const hasEvidence =
+      isVerified && identityEvidenceByField[key]?.length > 0;
+    const showEvidence = hasEvidence && openEvidenceField === key;
+    const indicator = isVerified
+      ? "Verified from card"
+      : hasManual
+      ? "Entered by you"
+      : isSuggested
+      ? "Suggested"
+      : isOptionalField
+      ? "Optional"
+      : "Needs confirmation";
+    const defaultNeedsTone = "text-white/40 border-white/15 bg-black/30";
+    const gradedNeedsTone = "text-white/70 border-white/10 bg-white/5";
+    const needsTone = isGradedCard ? gradedNeedsTone : defaultNeedsTone;
+    const indicatorTone = isVerified
+      ? "text-[#8FF0C5] border-[#8FF0C5]/40 bg-[#0f2d22]"
+      : hasManual
+      ? "text-[#E8D5A8] border-[#E8D5A8]/40 bg-white/5"
+      : isSuggested
+      ? "text-white/70 border-white/20 bg-white/5"
+      : needsTone;
+    const actionButton = identityExpanded
+      ? isVerified
+        ? hasEvidence && (
+          <button
+            type="button"
+            className="text-xs text-[#8FF0C5] hover:text-white transition"
+            onClick={() =>
+              setOpenEvidenceField((prev) => (prev === key ? null : key))
+            }
+          >
+            {showEvidence ? "Hide proof" : "Show proof"}
+          </button>
+        )
+        : !isOptionalField && (
+          <button
+            type="button"
+            className="text-xs uppercase tracking-[0.3em] text-white/80 border border-white/20 rounded-full px-3 py-1 hover:border-white/60 transition"
+            onClick={() => startManualCardField(key)}
+          >
+            Confirm
+          </button>
+        )
+      : null;
+    const wantsGradedCopy = isGradedCard && GRADED_CONFIRM_FIELDS.has(key);
+    const blankMessageCopy = wantsGradedCopy
+      ? GRADED_NEEDS_CONFIRM_COPY
+      : "We couldn’t see this detail in the current photo — tap Confirm to fill it once.";
+    const containerClasses = [
+      "rounded-2xl border border-white/10 bg-black/25 p-4 flex flex-col gap-3",
+    ];
+    if (isGradedCard && isVerified) {
+      containerClasses.push(
+        "border-[#8FF0C5]/50 bg-[#041413] ring-1 ring-[#8FF0C5]/25"
+      );
+    }
+    return (
+      <div key={key} className={containerClasses.join(" ")}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="text-xs uppercase tracking-[0.35em] text-white/40">{label}</div>
+              {isVerified && isGradedCard && (
+                <span className="text-[10px] uppercase tracking-[0.35em] text-[#8FF0C5]">
+                  Locked in
+                </span>
+              )}
+            </div>
+            <div className="text-lg font-semibold text-white">{displayValue || "—"}</div>
+          </div>
+          <div className="flex flex-col items-start sm:items-end gap-2">
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.35em] ${indicatorTone}`}
+            >
+              {indicator}
+            </span>
+            {actionButton}
+          </div>
+        </div>
+
+        {showEvidence && (
+          <ul className="rounded-2xl border border-emerald-200/30 bg-[#061711] p-3 space-y-1 text-xs text-white/80">
+            {identityEvidenceByField[key].slice(0, 3).map((line, idx) => (
+              <li key={`${key}-evidence-${idx}`} className="flex gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#8FF0C5] mt-1" />
+                <span>{line}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {manualCardField === key && (
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input
+              type="text"
+              autoFocus
+              value={manualCardValue}
+              onChange={(event) => setManualCardValue(event.target.value)}
+              className="flex-1 rounded-2xl border border-white/20 bg-black/40 px-3 py-2 text-sm focus:border-white/60 focus:outline-none"
+              placeholder={`Enter ${label}`}
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={saveManualCardField}
+                className="px-4 py-2 rounded-2xl bg-[#E8D5A8] text-black text-xs uppercase tracking-[0.3em]"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={cancelManualCardField}
+                className="px-4 py-2 rounded-2xl border border-white/25 text-white/70 text-xs uppercase tracking-[0.3em]"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {isBlank && manualCardField !== key && (
+          <div className="text-xs text-white/50">{blankMessageCopy}</div>
+        )}
+      </div>
+    );
+  };
+
+  const groupedPrimaryFields = CARD_IDENTITY_FIELDS.filter(
+    (entry) => !GRADED_CONFIRM_FIELDS.has(entry.key)
+  );
+  const confirmationFields = CARD_IDENTITY_FIELDS.filter((entry) =>
+    GRADED_CONFIRM_FIELDS.has(entry.key)
+  );
+  const identityFieldLayout = isGradedCard ? (
+    <>
+      <div className="grid gap-4">
+        {groupedPrimaryFields.map(renderIdentityField)}
+      </div>
+      <div className="mt-4 rounded-3xl border border-white/10 bg-[#04130d]/70 p-4">
+        <div className="flex items-center justify-between text-xs uppercase tracking-[0.35em] text-white/60">
+          <span>Additional slab details</span>
+          <span className="text-[10px] text-white/40">Optional until confirmed</span>
+        </div>
+        <div className="grid gap-4 mt-3">
+          {confirmationFields.map(renderIdentityField)}
+        </div>
+      </div>
+    </>
+  ) : (
+    <div className="grid gap-4">
+      {CARD_IDENTITY_FIELDS.map(renderIdentityField)}
+    </div>
   );
 
   const startManualCardField = useCallback(
@@ -1913,6 +2086,11 @@ useEffect(() => {
                     <p className="text-[11px] text-white/55 mt-3">
                       Only printed text that was visible in this photo appears here.
                     </p>
+                    {isGradedCard && (
+                      <p className="text-[11px] text-[#F7D8A4] mt-2">
+                        Graded-card mode: we surface the confirmed player, then let you confirm team, year, and set from the slab text.
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
@@ -1952,131 +2130,8 @@ useEffect(() => {
               </div>
             )}
 
-            <div className="grid gap-4">
-              {CARD_IDENTITY_FIELDS.map(({ key, label }) => {
-                const status = cardIdentityStatuses[key] || {};
-                const isVerified = Boolean(status.verified);
-                const hasManual = status.hasManual;
-                const isSuggested = !isVerified && !hasManual && status.hasSuggestion;
-                const isBlank = !isVerified && !hasManual && !status.hasSuggestion;
-                const isOptionalField = OPTIONAL_IDENTITY_FIELDS.has(key);
-                const displayValue = isVerified
-                  ? status.baseValue
-                  : hasManual
-                  ? status.manualValue
-                  : status.suggestion || "";
-                const hasEvidence =
-                  isVerified && identityEvidenceByField[key]?.length > 0;
-                const showEvidence = hasEvidence && openEvidenceField === key;
-                const indicator = isVerified
-                  ? "Verified from card"
-                  : hasManual
-                  ? "Entered by you"
-                  : isSuggested
-                  ? "Suggested"
-                  : isOptionalField
-                  ? "Optional"
-                  : "Needs confirmation";
-                const indicatorTone = isVerified
-                  ? "text-[#8FF0C5] border-[#8FF0C5]/40 bg-[#0f2d22]"
-                  : hasManual
-                  ? "text-[#E8D5A8] border-[#E8D5A8]/40 bg-white/5"
-                  : isSuggested
-                  ? "text-white/70 border-white/20 bg-white/5"
-                  : "text-white/40 border-white/15 bg-black/30";
-                const actionButton = identityExpanded
-                  ? isVerified
-                    ? hasEvidence && (
-                      <button
-                        type="button"
-                        className="text-xs text-[#8FF0C5] hover:text-white transition"
-                        onClick={() =>
-                          setOpenEvidenceField((prev) => (prev === key ? null : key))
-                        }
-                      >
-                        {showEvidence ? "Hide proof" : "Show proof"}
-                      </button>
-                    )
-                    : !isOptionalField && (
-                      <button
-                        type="button"
-                        className="text-xs uppercase tracking-[0.3em] text-white/80 border border-white/20 rounded-full px-3 py-1 hover:border-white/60 transition"
-                        onClick={() => startManualCardField(key)}
-                      >
-                        Confirm
-                      </button>
-                    )
-                  : null;
-                return (
-                  <div
-                    key={key}
-                    className="rounded-2xl border border-white/10 bg-black/25 p-4 flex flex-col gap-3"
-                  >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <div className="text-xs uppercase tracking-[0.35em] text-white/40">{label}</div>
-                        <div className="text-lg font-semibold text-white">{displayValue || "—"}</div>
-                      </div>
-                      <div className="flex flex-col items-start sm:items-end gap-2">
-                        <span
-                          className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.35em] ${indicatorTone}`}
-                        >
-                          {indicator}
-                        </span>
-                        {actionButton}
-                      </div>
-                    </div>
-
-                    {showEvidence && (
-                      <ul className="rounded-2xl border border-emerald-200/30 bg-[#061711] p-3 space-y-1 text-xs text-white/80">
-                        {identityEvidenceByField[key].slice(0, 3).map((line, idx) => (
-                          <li key={`${key}-evidence-${idx}`} className="flex gap-2">
-                            <span className="h-1.5 w-1.5 rounded-full bg-[#8FF0C5] mt-1" />
-                            <span>{line}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-
-                    {manualCardField === key && (
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        <input
-                          type="text"
-                          autoFocus
-                          value={manualCardValue}
-                          onChange={(event) => setManualCardValue(event.target.value)}
-                          className="flex-1 rounded-2xl border border-white/20 bg-black/40 px-3 py-2 text-sm focus:border-white/60 focus:outline-none"
-                          placeholder={`Enter ${label}`}
-                        />
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={saveManualCardField}
-                            className="px-4 py-2 rounded-2xl bg-[#E8D5A8] text-black text-xs uppercase tracking-[0.3em]"
-                          >
-                            Save
-                          </button>
-                          <button
-                            type="button"
-                            onClick={cancelManualCardField}
-                            className="px-4 py-2 rounded-2xl border border-white/25 text-white/70 text-xs uppercase tracking-[0.3em]"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-            {isBlank && manualCardField !== key && (
-              <div className="text-xs text-white/50">
-                We couldn’t see this detail in the current photo — tap Confirm to fill it once.
-              </div>
-            )}
+            {identityFieldLayout}
           </div>
-        );
-      })}
-    </div>
-            </div>
           )}
           <div className="space-y-6">
             <div className="lux-card mb-8 space-y-3">
