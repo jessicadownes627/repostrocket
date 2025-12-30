@@ -272,7 +272,7 @@ export function ListingProvider({ children }) {
       const back = Array.isArray(listingData?.secondaryPhotos)
         ? listingData.secondaryPhotos
         : [];
-      if (!forceFlag && (!front.length || !back.length)) {
+      if (!forceFlag && !front.length) {
         console.log("[listingStore] sports analysis missing photos", {
           frontCount: front.length,
           backCount: back.length,
@@ -309,7 +309,7 @@ export function ListingProvider({ children }) {
           photos: photoBundle,
           onHash: onHashDecision,
           requestId: sessionId,
-          includeBackImage: true,
+          includeBackImage: Boolean(back.length),
           disableCrops: true,
           includeNameZones: false,
         });

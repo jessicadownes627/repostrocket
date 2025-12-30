@@ -64,7 +64,8 @@ const CARD_IDENTITY_FIELDS = [
 const OPTIONAL_IDENTITY_FIELDS = new Set(["grade"]);
 const GRADED_CONFIRM_FIELDS = new Set(["team", "year", "setName"]);
 const GRADED_NEEDS_CONFIRM_COPY =
-  "For graded cards, we’ll confirm this from the slab label or let you add it.";
+  "Detected from the slab label — please confirm or update it.";
+const SLAB_DETECTED_INDICATOR = "Detected from slab label";
 const OCR_ZONE_LABELS = {
   bottomCenter: "Bottom Center Nameplate",
   bottomLeft: "Bottom Left Accent",
@@ -630,10 +631,13 @@ const identityEvidenceByField = useMemo(() => {
     const hasEvidence =
       isVerified && identityEvidenceByField[key]?.length > 0;
     const showEvidence = hasEvidence && openEvidenceField === key;
-    const indicator = isVerified
-      ? "Verified from card"
-      : hasManual
+    const slabDetected = isGradedCard && (isVerified || isSuggested);
+    const indicator = hasManual
       ? "Entered by you"
+      : slabDetected
+      ? SLAB_DETECTED_INDICATOR
+      : isVerified
+      ? "Verified from card"
       : isSuggested
       ? "READ FROM CARD"
       : isOptionalField
@@ -643,7 +647,9 @@ const identityEvidenceByField = useMemo(() => {
     const gradedNeedsTone = "text-white/70 border-white/10 bg-white/5";
     const readFromCardTone = "text-[#F7EBB3] border-[#F7EBB3]/40 bg-[#070c09]";
     const needsTone = isGradedCard ? gradedNeedsTone : defaultNeedsTone;
-    const indicatorTone = isVerified
+    const indicatorTone = slabDetected
+      ? readFromCardTone
+      : isVerified
       ? "text-[#8FF0C5] border-[#8FF0C5]/40 bg-[#0f2d22]"
       : hasManual
       ? "text-[#E8D5A8] border-[#E8D5A8]/40 bg-white/5"
@@ -653,21 +659,40 @@ const identityEvidenceByField = useMemo(() => {
     const editClickable = identityEvidenceByField[key]?.length > 0;
     const noConfirmForHighConfidence =
       (key === "player" || key === "team") && isSuggested && editClickable;
-    const actionButton = identityExpanded
-      ? isVerified
-        ? hasEvidence && (
-          <button
-            type="button"
-            className="text-xs text-[#8FF0C5] hover:text-white transition"
-            onClick={() =>
-              setOpenEvidenceField((prev) => (prev === key ? null : key))
-            }
-          >
-            {showEvidence ? "Hide proof" : "Show proof"}
-          </button>
-        )
-        : noConfirmForHighConfidence
-        ? (
+    const canConfirmField = !isOptionalField && !hasManual;
+    const confirmButton = canConfirmField && (
+      <button
+        type="button"
+        className="text-xs uppercase tracking-[0.3em] text-white/80 border border-white/20 rounded-full px-3 py-1 hover:border-white/60 transition"
+        onClick={() => startManualCardField(key)}
+      >
+        Confirm
+      </button>
+    );
+    const evidenceButton =
+      hasEvidence && (
+        <button
+          type="button"
+          className="text-xs text-[#8FF0C5] hover:text-white transition"
+          onClick={() =>
+            setOpenEvidenceField((prev) => (prev === key ? null : key))
+          }
+        >
+          {showEvidence ? "Hide proof" : "Show proof"}
+        </button>
+      );
+    let actionButton = null;
+    if (identityExpanded) {
+      if (isGradedCard) {
+        const slabActions = [evidenceButton, confirmButton].filter(Boolean);
+        actionButton =
+          slabActions.length > 0 ? (
+            <div className="flex flex-col gap-2 sm:items-end">{slabActions}</div>
+          ) : null;
+      } else if (isVerified) {
+        actionButton = evidenceButton;
+      } else if (noConfirmForHighConfidence) {
+        actionButton = (
           <button
             type="button"
             className="text-xs text-white/60 underline-offset-2 hover:text-white/80"
@@ -675,17 +700,11 @@ const identityEvidenceByField = useMemo(() => {
           >
             Edit
           </button>
-        )
-        : !isOptionalField && (
-          <button
-            type="button"
-            className="text-xs uppercase tracking-[0.3em] text-white/80 border border-white/20 rounded-full px-3 py-1 hover:border-white/60 transition"
-            onClick={() => startManualCardField(key)}
-          >
-            Confirm
-          </button>
-        )
-      : null;
+        );
+      } else {
+        actionButton = confirmButton;
+      }
+    }
     const wantsGradedCopy = isGradedCard && GRADED_CONFIRM_FIELDS.has(key);
     const blankMessageCopy = wantsGradedCopy
       ? GRADED_NEEDS_CONFIRM_COPY

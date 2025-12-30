@@ -336,61 +336,58 @@ export async function handler(event) {
     };
     const allOcrLines = [...ocrLines, ...backOcrLines];
     const isGradedCard = detectGradedCard(allOcrLines);
-    let zoneOcrResults = {};
-    let zoneSuggestions = {};
-    let zoneUsage = {};
-    if (!isGradedCard && nameZoneCrops && Object.keys(nameZoneCrops).length) {
-      zoneOcrResults = await runNameZoneOcr(client, nameZoneCrops);
-      const manualFromZones = buildManualSuggestionsFromZones(zoneOcrResults);
-      zoneSuggestions = manualFromZones.suggestions || {};
-      zoneUsage = manualFromZones.zoneUsage || {};
-    }
     let derived = null;
     let slabIdentity = null;
-    let formattedZones = {};
-    let cardBackDetails = null;
     if (isGradedCard) {
       derived = buildGradedCardResponse(allOcrLines);
     } else {
-      const slabLines = zoneOcrResults?.slabLabel?.lines || [];
-      slabIdentity = deriveSlabIdentity(slabLines);
-      const combinedOcrLines =
-        slabLines && slabLines.length ? [...ocrLines, ...slabLines] : ocrLines;
-      derived = deriveFieldsFromOcr(combinedOcrLines, hints);
+      slabIdentity = deriveSlabIdentity(allOcrLines);
+      derived = deriveFieldsFromOcr(allOcrLines, hints);
       applySlabIdentityOverrides(derived, slabIdentity);
-      formattedZones = Object.entries(zoneOcrResults || {}).reduce(
-        (acc, [zoneKey, zoneData]) => {
-          const lines = Array.isArray(zoneData?.lines) ? zoneData.lines : [];
-          const bestConfidence = lines.reduce(
-            (max, line) => Math.max(max, line.confidence || 0),
-            0
-          );
-          acc[zoneKey] = {
-            lines,
-            bestConfidence,
-            usedForSuggestion: Boolean(zoneUsage?.[zoneKey]),
-            image: nameZoneCrops?.[zoneKey]?.image || null,
-          };
-          return acc;
-        },
-        {}
-      );
-      cardBackDetails = buildBackDetailsFromOcr(backOcrLines);
     }
+
+    const normalizedAttributes = {
+      player: derived.player || "",
+      team: derived.team || "",
+      year: derived.year || "",
+      setName: derived.setName || "",
+      setBrand: derived.setBrand || derived.setName || "",
+      cardNumber: derived.cardNumber || "",
+      brand: derived.brand || "",
+      grade: derived.grade || "",
+      gradingAuthority: derived.gradingAuthority || "",
+      gradeValue: derived.gradeValue || "",
+      scoreRating: derived.scoreRating || "",
+      parallel: derived.parallel || "",
+      notes: derived.notes || "",
+      confidence: derived.confidence || EMPTY_RESPONSE.confidence,
+      sources: derived.sources || EMPTY_RESPONSE.sources,
+      isTextVerified: derived.isTextVerified || EMPTY_RESPONSE.isTextVerified,
+      needsUserConfirmation:
+        typeof derived.needsUserConfirmation === "boolean"
+          ? derived.needsUserConfirmation
+          : true,
+      manualOverrides: derived.manualOverrides || {},
+      corners: derived.corners || null,
+      cornerCondition: derived.cornerCondition || null,
+      grading: derived.grading || null,
+      pricing: derived.pricing || null,
+      isGradedCard: Boolean(derived.isGradedCard),
+    };
 
     const responsePayload = {
       ...EMPTY_RESPONSE,
       ...derived,
+      cardAttributes: normalizedAttributes,
       imageHash,
       requestId,
       ocr: { lines: ocrLines },
       ocrBack: { lines: backOcrLines },
       ocrFull: fullCardOcr,
-      ocrZones: formattedZones,
-      cardBackDetails,
+      ocrZones: {},
+      cardBackDetails: null,
       manualSuggestions: {
         ...EMPTY_RESPONSE.manualSuggestions,
-        ...zoneSuggestions,
         ...derived.manualSuggestions,
       },
     };
