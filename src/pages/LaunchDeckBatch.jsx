@@ -5,6 +5,8 @@ import "../styles/launchdeck.css";
 import PreviewCard from "../components/PreviewCard";
 import { buildPlatformPreview } from "../utils/platformPreview";
 import { formatDescriptionByPlatform } from "../utils/formatDescriptionByPlatform";
+import copyToClipboard from "../utils/clipboard";
+import { buildListingCopyText } from "../utils/listingCopyText";
 
 import {
   formatEbay,
@@ -181,6 +183,8 @@ export default function LaunchDeckBatch() {
   const [cardGroups, setCardGroups] = useState(null);
   const [activeGroupFilter, setActiveGroupFilter] = useState("all");
   const [activeDetailIndex, setActiveDetailIndex] = useState(null);
+  const [copyToast, setCopyToast] = useState("");
+  const copyToastTimerRef = useRef(null);
   const isPremiumUser =
     getPremiumStatus() ||
     (typeof window !== "undefined" &&
@@ -197,6 +201,33 @@ export default function LaunchDeckBatch() {
     },
     [setProcessedItems]
   );
+
+  useEffect(() => {
+    return () => {
+      if (copyToastTimerRef.current) {
+        clearTimeout(copyToastTimerRef.current);
+      }
+    };
+  }, []);
+
+  const triggerCopyToast = (message = "Copied to clipboard") => {
+    setCopyToast(message);
+    if (copyToastTimerRef.current) {
+      clearTimeout(copyToastTimerRef.current);
+    }
+    copyToastTimerRef.current = setTimeout(() => {
+      setCopyToast("");
+      copyToastTimerRef.current = null;
+    }, 3200);
+  };
+
+  const handleBatchCopyListingText = async () => {
+    if (!hasBatchCopyText) return;
+    const success = await copyToClipboard(candidateCopyText);
+    if (success) {
+      triggerCopyToast();
+    }
+  };
 
   const handleAutoCropAll = async () => {
     if (!processedItems || !processedItems.length) return;
@@ -635,6 +666,31 @@ export default function LaunchDeckBatch() {
     displayedItems = cardGroups[activeGroupFilter] || [];
   }
 
+  const copyTargetItem =
+    activeDetailIndex !== null && processedItems[activeDetailIndex]
+      ? processedItems[activeDetailIndex]
+      : displayedItems.length
+      ? displayedItems[0]
+      : processedItems[0];
+
+  const candidateCopyText = useMemo(() => {
+    if (!copyTargetItem) return "";
+    const primary = copyTargetItem.autoListing || copyTargetItem;
+    return buildListingCopyText({
+      title: primary.title || copyTargetItem.title,
+      price: primary.price || copyTargetItem.price,
+      description:
+        primary.description || copyTargetItem.description || "",
+      condition: copyTargetItem.condition,
+      category: copyTargetItem.category,
+      size: copyTargetItem.size,
+      cardAttributes:
+        primary.cardAttributes || copyTargetItem.cardAttributes || {},
+    });
+  }, [copyTargetItem]);
+
+  const hasBatchCopyText = Boolean(candidateCopyText.trim());
+
   if (!items.length) {
     navigate("/");
     return null;
@@ -666,28 +722,43 @@ export default function LaunchDeckBatch() {
 
   return (
     <>
+      {copyToast && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 bg-black/80 border border-[rgba(232,213,168,0.45)] text-[rgba(248,233,207,0.95)] px-5 py-3 rounded-full shadow-lg text-sm tracking-wide">
+          {copyToast}
+        </div>
+      )}
       <div
         className="ld-batch-wrapper"
         style={{ maxWidth: "1100px", margin: "0 auto", padding: "1rem", color: "white" }}
       >
-      {/* Platform Toggle Toolbar */}
-      <div className="flex items-center gap-3 mb-6 mt-2">
-        {["ebay", "whatnot", "mercari"].map((p) => (
+        {/* Platform Toggle Toolbar */}
+        <div className="mb-6 mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-3">
+            {["ebay", "whatnot", "mercari"].map((p) => (
+              <button
+                key={p}
+                onClick={() => setPlatform(p)}
+                className={`px-4 py-1.5 rounded-full text-sm border transition ${
+                  platform === p
+                    ? "bg-[#F5E7D0] text-black border-[#F5E7D0]"
+                    : "bg-black/30 text-white border-white/20 hover:bg-black/50"
+                }`}
+              >
+                {p === "ebay" && "eBay"}
+                {p === "whatnot" && "Whatnot"}
+                {p === "mercari" && "Mercari"}
+              </button>
+            ))}
+          </div>
           <button
-            key={p}
-            onClick={() => setPlatform(p)}
-            className={`px-4 py-1.5 rounded-full text-sm border transition ${
-              platform === p
-                ? "bg-[#F5E7D0] text-black border-[#F5E7D0]"
-                : "bg-black/30 text-white border-white/20 hover:bg-black/50"
-            }`}
+            type="button"
+            onClick={handleBatchCopyListingText}
+            disabled={!hasBatchCopyText}
+            className="px-4 py-2 rounded-full text-[11px] uppercase tracking-[0.3em] border border-white/30 text-white/80 bg-white/5 hover:bg-white/20 transition disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {p === "ebay" && "eBay"}
-            {p === "whatnot" && "Whatnot"}
-            {p === "mercari" && "Mercari"}
+            Copy listing text
           </button>
-        ))}
-      </div>
+        </div>
 
       {/* SMART GROUPING PANEL — TAPPABLE FILTERS */}
       {isSportsBatch && cardGroups && (

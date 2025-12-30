@@ -4,6 +4,8 @@ import { useListingStore } from "../store/useListingStore";
 import PreviewCard from "../components/PreviewCard";
 import { buildPlatformPreview } from "../utils/platformPreview";
 import { formatDescriptionByPlatform } from "../utils/formatDescriptionByPlatform";
+import copyToClipboard from "../utils/clipboard";
+import { buildListingCopyText } from "../utils/listingCopyText";
 import "../styles/overrides.css";
 
 export default function LaunchDeck() {
@@ -77,6 +79,26 @@ export default function LaunchDeck() {
     }
   };
 
+  const handleCopyListingText = async () => {
+    const listing = activeListing || listingData;
+    if (!listing) return;
+    const copyBody = buildListingCopyText({
+      title: platformPreview?.baseTitle || listing.title,
+      price: listing.price,
+      description:
+        platformPreview?.summaryDescription || listing.description || "",
+      condition: listing.condition,
+      category: listing.category,
+      size: listing.size,
+      cardAttributes: listing.cardAttributes,
+    });
+    if (!copyBody.trim()) return;
+    const success = await copyToClipboard(copyBody);
+    if (success) {
+      setLaunchToast("Copied to clipboard");
+    }
+  };
+
   const handleLaunch = async ({
     label,
     launchUrl,
@@ -121,16 +143,26 @@ export default function LaunchDeck() {
       </div>
 
       {/* PREVIEW CARDS */}
-{listings.length === 0 ? (
+      {listings.length === 0 ? (
         <div className="text-sm opacity-60">
           No listing found to preview. Go back and create a listing first.
         </div>
       ) : (
         <>
-          <div className="mb-5 flex justify-center">
-            <span className="ready-launch-badge">
-              <span>Ready to Launch</span>
-            </span>
+          <div className="mb-5 flex flex-col items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap justify-center">
+              <span className="ready-launch-badge">
+                <span>Ready to Launch</span>
+              </span>
+              <button
+                type="button"
+                onClick={handleCopyListingText}
+                disabled={!activeListing}
+                className="px-4 py-2 text-[11px] uppercase tracking-[0.3em] rounded-full border border-white/30 text-white/80 bg-white/5 hover:bg-white/20 transition disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Copy listing text
+              </button>
+            </div>
           </div>
           <div className="space-y-8">
             {["ebay", "poshmark", "mercari"].map((platformKey, idx) => (
