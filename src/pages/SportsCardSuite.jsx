@@ -5,10 +5,81 @@ import usePaywallGate from "../hooks/usePaywallGate";
 import PremiumModal from "../components/PremiumModal";
 import { useListingStore } from "../store/useListingStore";
 
+const GRADING_LINKS = [
+  {
+    label: "PSA",
+    description: "Industry-standard grading with broad buyer trust.",
+    url: "https://www.psacard.com/",
+  },
+  {
+    label: "BGS",
+    description: "Beckett grading with subgrades available.",
+    url: "https://www.beckett.com/grading/",
+  },
+  {
+    label: "SGC",
+    description: "Popular for vintage + modern slabs.",
+    url: "https://gosgc.com/",
+  },
+  {
+    label: "CGC",
+    description: "Trusted crossover grader for sports & collectibles.",
+    url: "https://www.cgccards.com/",
+  },
+];
+
 export default function SportsCardSuite() {
   const navigate = useNavigate();
   const { gate, paywallState, closePaywall } = usePaywallGate();
   const { setBatchMode } = useListingStore();
+  const slabContext = useMemo(() => {
+    const library = loadListingLibrary();
+    const authorities = {};
+    let gradedCount = 0;
+
+    const isKnownAuthority = (value) => {
+      if (!value) return null;
+      const upper = String(value).trim().toUpperCase();
+      if (["PSA", "BGS", "SGC", "CGC"].includes(upper)) {
+        return upper;
+      }
+      return null;
+    };
+
+    if (Array.isArray(library) && library.length) {
+      for (const item of library) {
+        const hasSlabFlag =
+          Boolean(item?.cardAttributes?.isGradedCard) ||
+          Boolean(item?.cardIntel?.isGradedCard) ||
+          Boolean(item?.cardIntelligence?.graded) ||
+          Boolean(item?.cardIntelligence?.slabbed) ||
+          Boolean(item?.gradingCompany) ||
+          Boolean(item?.isGraded);
+        if (!hasSlabFlag) continue;
+
+        gradedCount += 1;
+        const authority =
+          item?.cardAttributes?.gradingAuthority ||
+          item?.cardIntel?.gradingAuthority ||
+          item?.cardIntel?.grading?.authority ||
+          item?.cardIntelligence?.gradingCompany ||
+          item?.gradingCompany ||
+          null;
+        const known = isKnownAuthority(authority);
+        if (known) {
+          authorities[known] = (authorities[known] || 0) + 1;
+        }
+      }
+    }
+
+    const sorted = Object.entries(authorities).sort((a, b) => b[1] - a[1]);
+    const likelyAuthority = sorted.length ? sorted[0][0] : null;
+
+    return {
+      gradedCount,
+      likelyAuthority,
+    };
+  }, []);
   const hasCards = useMemo(() => {
     try {
       const library = loadListingLibrary();
@@ -71,87 +142,139 @@ export default function SportsCardSuite() {
           Built for sellers who need one place to prep, analyze, and launch card listings.
         </p>
 
-        {/* CTA Section */}
-        <div className="flex flex-col gap-5 mt-8">
-          <button
-            onClick={() =>
-              handleNavigate("/batch", "batchMode", {
-                state: { flow: "sports" },
-              })
-            }
-            className="w-full text-left px-6 py-6 rounded-3xl border border-[#F4E9D5]/90 text-[#F8EED5] bg-gradient-to-b from-[#161210] via-[#0C0A0A] to-[#070606] shadow-[0_25px_70px_rgba(8,4,0,0.55)] hover:shadow-[0_30px_85px_rgba(8,4,0,0.65)] transition-all"
-          >
-            <div className="text-sm uppercase tracking-[0.45em] opacity-80 mb-2">
-              Batch Sports Cards
-              <span className="ml-3 px-2 py-0.5 text-[10px] rounded-full border border-[#CBB78A]/40 text-[#CBB78A] uppercase tracking-[0.3em]">
-                Premium
+        {/* Feature cards */}
+        <div className="space-y-5 mt-8">
+          <div className="rounded-[32px] border-[2px] border-white/20 bg-gradient-to-b from-[#161210] via-[#0C0A0A] to-[#070606] shadow-[0_25px_70px_rgba(8,4,0,0.55)]">
+            <button
+              onClick={() =>
+                handleNavigate("/batch", "batchMode", {
+                  state: { flow: "sports" },
+                })
+              }
+              className="w-full text-left px-6 py-6 rounded-[32px] text-[#F8EED5] bg-transparent hover:shadow-[0_30px_85px_rgba(8,4,0,0.65)] transition-all"
+            >
+              <div className="text-sm uppercase tracking-[0.45em] opacity-80 mb-2 flex items-center gap-3">
+                <span>Batch Sports Cards</span>
+                <span className="px-2 py-0.5 text-[10px] rounded-full border border-[#CBB78A]/40 text-[#CBB78A] uppercase tracking-[0.3em]">
+                  Premium
+                </span>
+              </div>
+              <div className="text-[17px] leading-relaxed mb-4 max-w-3xl text-white/80">
+                One guided pipeline keeps every card moving from capture to launch.
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] text-white/70">
+                {[
+                  "1. Capture front/back with auto-crop + corner checks",
+                  "2. Analyze player, year, grading, pricing when visible",
+                  "3. Approve, flag, or park cards that need work",
+                  "4. Send ready cards straight into Launch Deck",
+                ].map((step) => (
+                  <div
+                    key={step}
+                    className="rounded-xl border border-white/15 bg-black/25 px-3 py-1.5"
+                  >
+                    {step}
+                  </div>
+                ))}
+              </div>
+              <span className="mt-4 inline-flex text-[11px] tracking-[0.3em] uppercase text-white/90">
+                Enter Batch Flow →
               </span>
-            </div>
-            <div className="text-[17px] text-white leading-relaxed mb-4 max-w-3xl">
-              One guided pipeline keeps every card moving from capture to launch.
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-white/70">
-              {[
-                "1. Capture front/back with auto-crop + corner checks",
-                "2. Analyze player, year, grading, pricing when visible",
-                "3. Approve, flag, or park cards that need work",
-                "4. Send ready cards straight into Launch Deck",
-              ].map((step) => (
-                <div
-                  key={step}
-                  className="rounded-xl border border-white/10 bg-black/20 px-3 py-1.5"
-                >
-                  {step}
-                </div>
-              ))}
-            </div>
-            <span className="mt-4 inline-flex text-xs tracking-[0.3em] uppercase">
-              Enter Batch Flow →
-            </span>
-          </button>
+            </button>
+          </div>
 
-          <button
-            onClick={() => handleNavigate("/card-prep")}
-            className="w-full text-left px-5 py-4 rounded-2xl border border-white/15 text-white bg-white/5 hover:bg-white/10 transition-all"
-          >
-            <div className="text-sm uppercase tracking-[0.35em] opacity-70 mb-2">
-              Single Card Pro Editor
+          <div className="rounded-[32px] border-[2px] border-white/20 bg-black/15">
+            <button
+              onClick={() => handleNavigate("/card-prep")}
+              className="w-full text-left px-6 py-5 rounded-[32px] text-white hover:bg-white/5 transition-all"
+            >
+              <div className="text-sm uppercase tracking-[0.35em] opacity-70 mb-2">
+                Single Card Pro Editor
+              </div>
+              <div className="text-base text-white/80 leading-relaxed mb-2">
+                The full-frame editor for one-off cards. Confirm corners, run AI
+                polish, and fine-tune titles + tags before sending to Launch Deck.
+              </div>
+              <span className="text-xs uppercase tracking-[0.3em] text-white/70">
+                Open Pro Editor →
+              </span>
+            </button>
+          </div>
+
+          <div className="rounded-[32px] border-[2px] border-white/20 bg-black/10">
+            <div className="px-6 py-5 rounded-[32px]">
+              <div className="text-[10px] uppercase tracking-[0.4em] text-white/45 mb-2">
+                Slab awareness
+              </div>
+              <p className="text-base leading-relaxed text-white/80">
+                Repost Rocket watches for graded/slabbed cards in your saved items so
+                you know when confirming details with the slab label is the right move.
+              </p>
+              {slabContext?.gradedCount > 0 && (
+                <>
+                  <p className="text-base leading-relaxed text-white/80 mt-2">
+                    Graded card detected in your saved items. Sellers typically confirm
+                    listing details from the slab label when working this format.
+                  </p>
+                  {slabContext.likelyAuthority && (
+                    <p className="text-[11px] uppercase tracking-[0.35em] text-white/60 mt-1">
+                      Likely {slabContext.likelyAuthority}
+                    </p>
+                  )}
+                </>
+              )}
+              <div className="mt-4">
+                <div className="text-[10px] uppercase tracking-[0.4em] text-white/50 mb-2">
+                  Official grading resources
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {GRADING_LINKS.map((link) => (
+                    <a
+                      key={link.label}
+                      href={link.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block rounded-2xl border border-white/15 px-3 py-2 transition hover:border-white/40"
+                    >
+                      <div className="text-[12px] font-semibold">{link.label}</div>
+                  <p className="text-[11px] text-white/70 mt-1">
+                        {link.description}
+                      </p>
+                    </a>
+                  ))}
+                </div>
+              </div>
             </div>
-            <div className="text-base text-white/80 leading-relaxed mb-2">
-              The full-frame editor for one-off cards. Confirm corners, run AI
-              polish, and fine-tune titles + tags before sending to Launch Deck.
-            </div>
-            <span className="text-xs tracking-[0.3em] uppercase">
-              Open Pro Editor →
-            </span>
-          </button>
+          </div>
 
           {SHOW_MULTI_CARD_EXPERIMENT && (
-            <button
-              onClick={() => handleNavigate(multiCardInfo.path)}
-              className="w-full text-left px-5 py-5 rounded-2xl border border-white/10 bg-black/20 text-white/80 hover:bg-black/35 transition-all opacity-80"
-            >
-              <div className="text-[10px] uppercase tracking-[0.4em] text-white/50 mb-2">
-                Experimental
-              </div>
-              <div className="text-lg font-semibold text-white">
-                {multiCardInfo.title}
-              </div>
-              <div className="text-sm opacity-70 mt-1">
-                {multiCardInfo.description}
-              </div>
-              <div className="text-[11px] opacity-60 mt-3 italic">
-                {multiCardInfo.disclaimer}
-              </div>
-              <div className="text-[11px] opacity-55 mt-1">
-                {multiCardInfo.trustNote}
-              </div>
-            </button>
+            <div className="rounded-[32px] border border-white/10 bg-black/10">
+              <button
+                onClick={() => handleNavigate(multiCardInfo.path)}
+                className="w-full text-left px-5 py-5 rounded-[32px] text-white/80 hover:bg-white/5 transition-all"
+              >
+                <div className="text-[10px] uppercase tracking-[0.4em] text-white/50 mb-2">
+                  Experimental
+                </div>
+                <div className="text-lg font-semibold text-white">
+                  {multiCardInfo.title}
+                </div>
+                <div className="text-sm opacity-70 mt-1">
+                  {multiCardInfo.description}
+                </div>
+                <div className="text-[11px] opacity-60 mt-3 italic">
+                  {multiCardInfo.disclaimer}
+                </div>
+                <div className="text-[11px] opacity-55 mt-1">
+                  {multiCardInfo.trustNote}
+                </div>
+              </button>
+            </div>
           )}
         </div>
 
         {/* Features */}
-        <div className="mt-24">
+        <div className="mt-16">
           <details className="border border-white/15 rounded-2xl bg-black/20 overflow-hidden">
             <summary className="cursor-pointer px-4 py-3 text-sm uppercase tracking-[0.3em] text-white/45 flex items-center justify-between">
               <span>Included in your suite</span>
