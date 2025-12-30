@@ -1,15 +1,3 @@
-export async function handler(event) {
-  return {
-    statusCode: 200,
-    body: JSON.stringify({
-      analysisComplete: true,
-      cardAttributes: {},
-      flags: {},
-      source: "stub",
-    }),
-  };
-}
-
 import OpenAI from "openai";
 
 const SYSTEM_PROMPT = `
@@ -229,13 +217,6 @@ const EMPTY_RESPONSE = {
 
 export async function handler(event) {
   console.log("🔥🔥🔥 RUNNING SOURCE cardIntel.js 🔥🔥🔥");
-  return {
-    statusCode: 200,
-    body: JSON.stringify({
-      ok: true,
-      hardStop: true,
-    }),
-  };
   console.log("[cardIntel] handler entered");
   console.log("[cardIntel] function invoked");
   let currentRequestId = `cardIntel-${Date.now()}`;
@@ -285,6 +266,12 @@ export async function handler(event) {
         body: JSON.stringify({ error: "Card images required" }),
       };
     }
+
+    console.log("[cardIntel] frontImage dump", {
+      exists: Boolean(frontImage),
+      length: frontImage ? frontImage.length : 0,
+      mime: frontImage?.startsWith("data:") ? frontImage.split(";")[0] : "unknown",
+    });
 
     // if (process.env.NODE_ENV === "development") {
     //   const mockPayload = {

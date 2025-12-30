@@ -42,6 +42,10 @@ export const MAX_CORNER_NUDGE_RATIO = 0.12;
 const DEFAULT_ANALYSIS_ERROR_MESSAGE =
   "Card analysis is offline right now. Please retry in a moment.";
 const textEncoder = typeof TextEncoder !== "undefined" ? new TextEncoder() : null;
+const ENABLE_BACK_IMAGE =
+  import.meta.env.VITE_ALLOW_CARD_INTEL_BACK_IMAGE === "true";
+const ENABLE_CORNER_CROPS =
+  import.meta.env.VITE_ALLOW_CARD_INTEL_CORNERS === "true";
 
 async function computeImageHash(frontImage = "", backImage = "") {
   const combined = `${frontImage || ""}::${backImage || ""}`;
@@ -72,7 +76,8 @@ async function ensureDataUrlFromSource(source) {
     const blob = await response.blob();
     if (!blob) return "";
     const file = new File([blob], "card-photo", { type: blob.type || "image/jpeg" });
-    return await fileToDataUrl(file);
+    const raw = await fileToDataUrl(file);
+    return await downscaleImageDataUrl(raw);
   } catch (err) {
     console.error("Card intel: failed to fetch image source", err);
     return "";
@@ -83,7 +88,8 @@ async function dataUrlFromEntry(entry) {
   if (!entry) return "";
   if (entry.file instanceof File || entry.file instanceof Blob) {
     try {
-      return await fileToDataUrl(entry.file);
+      const raw = await fileToDataUrl(entry.file);
+      return await downscaleImageDataUrl(raw);
     } catch (err) {
       console.error("Card intel: failed to convert file", err);
     }
@@ -92,7 +98,58 @@ async function dataUrlFromEntry(entry) {
   const src = entry.url || getPhotoUrl(entry) || "";
   if (!src) return "";
   if (src.startsWith("data:")) return src;
-  return await ensureDataUrlFromSource(src);
+  const remote = await ensureDataUrlFromSource(src);
+  return await downscaleImageDataUrl(remote);
+}
+
+async function downscaleImageDataUrl(
+  dataUrl,
+  { maxDimension = 1200, quality = 0.78 } = {}
+) {
+  if (!dataUrl) return "";
+  if (typeof document === "undefined" || typeof window === "undefined") {
+    return dataUrl;
+  }
+  try {
+    const image = await loadImageFromDataUrl(dataUrl);
+    if (!image) return dataUrl;
+    const maxSide = Math.max(image.width, image.height);
+    if (maxSide <= maxDimension) {
+      return dataUrl;
+    }
+    const ratio = maxDimension / maxSide;
+    const targetWidth = Math.round(image.width * ratio);
+    const targetHeight = Math.round(image.height * ratio);
+    const canvas = document.createElement("canvas");
+    canvas.width = targetWidth || 1;
+    canvas.height = targetHeight || 1;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return dataUrl;
+    ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
+    return canvas.toDataURL("image/jpeg", quality);
+  } catch (err) {
+    console.error("Card intel: failed to downscale image", err);
+    return dataUrl;
+  }
+}
+
+function loadImageFromDataUrl(src) {
+  return new Promise((resolve, reject) => {
+    if (!src) {
+      reject(new Error("No image source provided"));
+      return;
+    }
+    const ImgConstructor = typeof Image !== "undefined" ? Image : null;
+    if (!ImgConstructor) {
+      reject(new Error("Image constructor not available"));
+      return;
+    }
+    const img = new ImgConstructor();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.crossOrigin = "anonymous";
+    img.src = src;
+  });
 }
 
 function sanitizeText(value, limit = 160) {
@@ -138,7 +195,11 @@ export async function prepareCardIntelPayload(item = {}, options = {}) {
 
   const overrideFront = options.frontDataUrl;
   const overrideBack = options.frontDataUrl ? null : options.backDataUrl;
-  const includeBackImage = options.includeBackImage !== false;
+  const includeBackImage =
+    (ENABLE_BACK_IMAGE &&
+      options.includeBackImage !== false &&
+      Boolean(backEntry)) ||
+    Boolean(overrideBack);
 
   const frontImage = overrideFront || (await dataUrlFromEntry(frontEntry));
   const backImage =
@@ -184,7 +245,9 @@ export async function prepareCardIntelPayload(item = {}, options = {}) {
 
   let cornerFront = null;
   let cornerBack = null;
-  if (!options.disableCrops) {
+  const allowCornerCrops =
+    ENABLE_CORNER_CROPS && options.enableCornerCrop !== false && !options.disableCrops;
+  if (allowCornerCrops) {
     cornerFront =
       frontImage && options.enableCornerCrop !== false
         ? await maybeCropForCorners(frontImage)
@@ -202,7 +265,7 @@ export async function prepareCardIntelPayload(item = {}, options = {}) {
     backImage,
     cornerFront,
     cornerBack,
-    skipCornerAnalysis: Boolean(options.disableCrops),
+    skipCornerAnalysis: !allowCornerCrops,
   };
 }
 

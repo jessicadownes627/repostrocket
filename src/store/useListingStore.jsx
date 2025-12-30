@@ -236,13 +236,16 @@ export function ListingProvider({ children }) {
       setSportsAnalysisError("");
     };
 
+    const shouldSkipCardIntelFetch = import.meta.env.VITE_ALLOW_CARD_INTEL_FETCH === "true" ? false : true;
     const requestSportsAnalysisImpl = async (params) => {
-      console.log("[DEV] Skipping cardIntel fetch — frontend stub");
-      setListingField("cardAttributes", {});
-      setAnalysisSessionId(null);
-      setAnalysisInFlight(false);
-      setSportsAnalysisError("");
-      return { stubbed: true };
+      if (shouldSkipCardIntelFetch) {
+        console.log("[DEV] Skipping cardIntel fetch — frontend stub");
+        setListingField("cardAttributes", {});
+        setAnalysisSessionId(null);
+        setAnalysisInFlight(false);
+        setSportsAnalysisError("");
+        return { stubbed: true };
+      }
       const incomingForce = params?.force;
       const incomingBypass = params?.bypassAllGuards;
       console.assert(incomingForce === true, "FORCE FLAG LOST BEFORE STORE");
