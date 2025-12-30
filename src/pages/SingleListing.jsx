@@ -275,6 +275,7 @@ export default function SingleListing() {
   const [identityExpanded, setIdentityExpanded] = useState(false);
   const [manualAnalysisOverride, setManualAnalysisOverride] = useState(false);
   const [analysisStarted, setAnalysisStarted] = useState(false);
+  const [showVerifiedSummary, setShowVerifiedSummary] = useState(false);
   const [resumeDecisionMade, setResumeDecisionMade] = useState(() =>
     getResumeDecisionFlag()
   );
@@ -587,6 +588,9 @@ const identityEvidenceByField = useMemo(() => {
   useEffect(() => {
     setOpenEvidenceField(null);
   }, [cardIntel?.imageHash]);
+  useEffect(() => {
+    setShowVerifiedSummary(false);
+  }, [verifiedIdentityFields.length]);
 
   const computeNeedsUserConfirmation = useCallback(
     (manualOverrides = {}) => {
@@ -764,9 +768,9 @@ const identityEvidenceByField = useMemo(() => {
         <div className="grid gap-4 mt-3">
           {confirmationFields.map(renderIdentityField)}
         </div>
-      </div>
-    </>
-  ) : (
+          </div>
+        </>
+      ) : (
     <div className="grid gap-4">
       {CARD_IDENTITY_FIELDS.map(renderIdentityField)}
     </div>
@@ -2065,35 +2069,6 @@ useEffect(() => {
                 </div>
               )}
 
-              {hasVerifiedIdentity && (
-                <div className="relative overflow-hidden rounded-3xl border border-[#8FF0C5]/25 bg-gradient-to-br from-[#0e201a] via-[#0d1a16] to-[#0a1211] p-5 mb-6 text-sm text-white/85 shadow-[0_20px_45px_rgba(0,0,0,0.45)]">
-                  <div className="absolute -top-10 -right-6 h-32 w-32 bg-[#8FF0C5]/15 blur-3xl pointer-events-none" />
-                  <div className="relative z-10">
-                    <p className="font-semibold text-[#8FF0C5] mb-2">
-                      Here’s what we verified from visible card text
-                    </p>
-                    <div className="flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.3em] text-[#8FF0C5]">
-                      {verifiedIdentityFields.map((field) => (
-                        <span
-                          key={field.key}
-                          className="inline-flex items-center gap-2 rounded-2xl border border-[#8FF0C5]/40 bg-[#0a1c16]/60 px-3 py-1"
-                        >
-                          <span className="h-1.5 w-1.5 rounded-full bg-[#8FF0C5]" />
-                          {field.label}
-                        </span>
-                      ))}
-                    </div>
-                    <p className="text-[11px] text-white/55 mt-3">
-                      Only printed text that was visible in this photo appears here.
-                    </p>
-                    {isGradedCard && (
-                      <p className="text-[11px] text-[#F7D8A4] mt-2">
-                        Graded-card mode: we surface the confirmed player, then let you confirm team, year, and set from the slab text.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
             </>
           )}
 
@@ -2189,11 +2164,55 @@ useEffect(() => {
                 Continue to Launch Deck
               </button>
               <p className="text-xs text-white/60">
-                {listingPhotosForExport.length
-                  ? `Carrying ${listingPhotosForExport.length} listing-ready photos (front, back, corners) into Listing Details.`
-                  : "Add more photos to unlock the listing-ready package."}
+                Details you confirm here carry straight into Launch Deck for the final polish.
               </p>
             </div>
+            {hasVerifiedIdentity && (
+              <div className="mt-6 space-y-2">
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-left text-xs uppercase tracking-[0.35em] text-white/70"
+                  onClick={() => setShowVerifiedSummary((prev) => !prev)}
+                >
+                  <span>
+                    Verified from card ({verifiedIdentityFields.length}{" "}
+                    {verifiedIdentityFields.length === 1 ? "field" : "fields"})
+                  </span>
+                  <span className="text-[10px] text-white/40">
+                    {showVerifiedSummary ? "Hide proof" : "Show proof"}
+                  </span>
+                </button>
+                {showVerifiedSummary && (
+                  <div className="relative overflow-hidden rounded-3xl border border-[#8FF0C5]/25 bg-gradient-to-br from-[#0e201a] via-[#0d1a16] to-[#0a1211] p-5 text-sm text-white/85 shadow-[0_20px_45px_rgba(0,0,0,0.45)]">
+                    <div className="absolute -top-10 -right-6 h-32 w-32 bg-[#8FF0C5]/15 blur-3xl pointer-events-none" />
+                    <div className="relative z-10">
+                      <p className="font-semibold text-[#8FF0C5] mb-2">
+                        Here’s what we verified from visible card text
+                      </p>
+                      <div className="flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.3em] text-[#8FF0C5]">
+                        {verifiedIdentityFields.map((field) => (
+                          <span
+                            key={field.key}
+                            className="inline-flex items-center gap-2 rounded-2xl border border-[#8FF0C5]/40 bg-[#0a1c16]/60 px-3 py-1"
+                          >
+                            <span className="h-1.5 w-1.5 rounded-full bg-[#8FF0C5]" />
+                            {field.label}
+                          </span>
+                        ))}
+                      </div>
+                      <p className="text-[11px] text-white/55 mt-3">
+                        Only printed text that was visible in this photo appears here.
+                      </p>
+                      {isGradedCard && (
+                        <p className="text-[11px] text-[#F7D8A4] mt-2">
+                          Graded-card mode: we surface the confirmed player, then let you confirm team, year, and set from the slab text.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           </>
         ) : (
