@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useListingStore } from "../store/useListingStore";
 import { convertHeicIfNeeded } from "../utils/imageTools";
-import { deriveAltTextFromFilename } from "../utils/photoHelpers";
+import {
+  deriveAltTextFromFilename,
+  photoEntryToDataUrl,
+} from "../utils/photoHelpers";
 import {
   buildCornerPreviewFromEntries,
   regenerateCornerImage,
@@ -92,6 +95,7 @@ export default function MagicCardPrep({ analysisActive = false }) {
   const [cornerError, setCornerError] = useState("");
   const [adjustTarget, setAdjustTarget] = useState(null);
   const [adjustBusyKey, setAdjustBusyKey] = useState("");
+  const [rotatingPhotoSide, setRotatingPhotoSide] = useState(null);
   const adjustMomentumRef = useRef({});
   const adjustHoldTimerRef = useRef(null);
   const adjustPointerActiveRef = useRef(false);
@@ -377,6 +381,56 @@ export default function MagicCardPrep({ analysisActive = false }) {
     [frontPhoto, backPhoto, syncListingPhotos, resetCardIntel, clearCorners]
   );
 
+  const rotateImageEntry = useCallback(async (entry) => {
+    if (!entry) return null;
+    try {
+      const src = await photoEntryToDataUrl(entry);
+      if (!src) return null;
+      return await rotateImageDataUrl(src);
+    } catch (err) {
+      console.error("Failed to rotate photo:", err);
+      return null;
+    }
+  }, []);
+
+  const rotateConfirmedPhoto = useCallback(
+    async (position) => {
+      if (rotatingPhotoSide) return;
+      const entry = position === "front" ? frontPhoto : backPhoto;
+      if (!entry) return;
+      setRotatingPhotoSide(position);
+      try {
+        const rotatedUrl = await rotateImageEntry(entry);
+        if (!rotatedUrl) return;
+        const nextEntry = {
+          ...entry,
+          url: rotatedUrl,
+          file: undefined,
+        };
+        if (position === "front") {
+          setFrontPhoto(nextEntry);
+          syncListingPhotos(nextEntry, backPhoto);
+        } else {
+          setBackPhoto(nextEntry);
+          syncListingPhotos(frontPhoto, nextEntry);
+        }
+        resetCardIntel();
+        clearCorners();
+      } finally {
+        setRotatingPhotoSide(null);
+      }
+    },
+    [
+      rotatingPhotoSide,
+      frontPhoto,
+      backPhoto,
+      syncListingPhotos,
+      resetCardIntel,
+      clearCorners,
+      rotateImageEntry,
+    ]
+  );
+
   useEffect(() => {
     let cancelled = false;
     if (!frontPhoto || !backPhoto) {
@@ -530,6 +584,14 @@ export default function MagicCardPrep({ analysisActive = false }) {
           onClick={() => handleBrowse(position)}
         >
           Replace
+        </button>
+        <button
+          type="button"
+          disabled={Boolean(rotatingPhotoSide)}
+          className="px-4 rounded-xl border border-white/10 text-[11px] uppercase tracking-[0.25em] text-white/55 hover:border-white/40 transition"
+          onClick={() => rotateConfirmedPhoto(position)}
+        >
+          {rotatingPhotoSide === position ? "Rotating..." : "🔄 Rotate 90°"}
         </button>
         <button
           type="button"
@@ -1266,4 +1328,30 @@ export default function MagicCardPrep({ analysisActive = false }) {
       )}
     </div>
   );
+}
+
+function rotateImageDataUrl(dataUrl) {
+  if (!dataUrl) return Promise.resolve("");
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.height;
+      canvas.height = img.width;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("Canvas context unavailable"));
+        return;
+      }
+      ctx.translate(canvas.width, 0);
+      ctx.rotate((90 * Math.PI) / 180);
+      ctx.drawImage(img, 0, 0);
+      resolve(canvas.toDataURL("image/jpeg"));
+    };
+    img.onerror = (err) => {
+      reject(err || new Error("Failed to load image for rotation"));
+    };
+    img.src = dataUrl;
+  });
 }

@@ -435,6 +435,12 @@ export default function SingleListing() {
   const verifiedIdentityFields = useMemo(() => {
     return CARD_IDENTITY_FIELDS.filter((field) => cardIdentityStatuses[field.key]?.verified);
   }, [cardIdentityStatuses]);
+  const verifiedSummaryChips = useMemo(() => {
+    const targetKeys = ["player", "team", "setName", "year"];
+    return verifiedIdentityFields
+      .filter((field) => targetKeys.includes(field.key))
+      .slice(0, 4);
+  }, [verifiedIdentityFields]);
   const hasVerifiedIdentity = verifiedIdentityFields.length > 0;
   useEffect(() => {
     if (hasVerifiedIdentity) {
@@ -629,20 +635,24 @@ const identityEvidenceByField = useMemo(() => {
       : hasManual
       ? "Entered by you"
       : isSuggested
-      ? "Suggested"
+      ? "READ FROM CARD"
       : isOptionalField
       ? "Optional"
       : "Needs confirmation";
     const defaultNeedsTone = "text-white/40 border-white/15 bg-black/30";
     const gradedNeedsTone = "text-white/70 border-white/10 bg-white/5";
+    const readFromCardTone = "text-[#F7EBB3] border-[#F7EBB3]/40 bg-[#070c09]";
     const needsTone = isGradedCard ? gradedNeedsTone : defaultNeedsTone;
     const indicatorTone = isVerified
       ? "text-[#8FF0C5] border-[#8FF0C5]/40 bg-[#0f2d22]"
       : hasManual
       ? "text-[#E8D5A8] border-[#E8D5A8]/40 bg-white/5"
       : isSuggested
-      ? "text-white/70 border-white/20 bg-white/5"
+      ? readFromCardTone
       : needsTone;
+    const editClickable = identityEvidenceByField[key]?.length > 0;
+    const noConfirmForHighConfidence =
+      (key === "player" || key === "team") && isSuggested && editClickable;
     const actionButton = identityExpanded
       ? isVerified
         ? hasEvidence && (
@@ -654,6 +664,16 @@ const identityEvidenceByField = useMemo(() => {
             }
           >
             {showEvidence ? "Hide proof" : "Show proof"}
+          </button>
+        )
+        : noConfirmForHighConfidence
+        ? (
+          <button
+            type="button"
+            className="text-xs text-white/60 underline-offset-2 hover:text-white/80"
+            onClick={() => startManualCardField(key)}
+          >
+            Edit
           </button>
         )
         : !isOptionalField && (
@@ -2089,22 +2109,37 @@ useEffect(() => {
               </div>
             </div>
 
-            {cardHighlights.length > 0 && (
-              <div>
-                <div className="text-xs uppercase tracking-[0.35em] text-white/45 mb-2">Card Highlights</div>
+          {cardHighlights.length > 0 && (
+            <div>
+              <div className="text-xs uppercase tracking-[0.35em] text-white/45 mb-2">Card Highlights</div>
+              <div className="flex flex-wrap gap-2">
+                {cardHighlights.map((chip) => (
+                  <span
+                    key={chip}
+                    className="inline-flex items-center rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-white/85"
+                  >
+                    {chip}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+            <div className="mb-4 flex flex-wrap items-center gap-3 text-[11px] uppercase tracking-[0.35em] text-white/70">
+              <span>✨ We read these directly from the card</span>
+              {verifiedSummaryChips.length > 0 && (
                 <div className="flex flex-wrap gap-2">
-                  {cardHighlights.map((chip) => (
+                  {verifiedSummaryChips.map((field) => (
                     <span
-                      key={chip}
-                      className="inline-flex items-center rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-white/85"
+                      key={`summary-chip-${field.key}`}
+                      className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/5 px-2 py-1 text-[10px] font-semibold tracking-[0.3em] text-white/80"
                     >
-                      {chip}
+                      {field.label}
                     </span>
                   ))}
                 </div>
-              </div>
-            )}
-
+              )}
+            </div>
             {identityFieldLayout}
           </div>
           )}
