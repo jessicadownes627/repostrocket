@@ -909,8 +909,11 @@ const identityEvidenceByField = useMemo(() => {
     !resumeDecisionMade &&
     hasPersistedDraftAvailable &&
     !getResumeDecisionFlag();
-  const analysisPendingMessage =
-    sportsHandoffState?.text || "Analyzing confirmed photos…";
+  const ANALYSIS_RUNNING_MESSAGE =
+    "Reading visible card details… this can take up to ~10 seconds.";
+  const analysisPendingMessage = analysisInFlight
+    ? ANALYSIS_RUNNING_MESSAGE
+    : sportsHandoffState?.text || "Analyzing confirmed photos…";
   useEffect(() => {
     if (!isMobileViewport) return;
     console.log("[mobile-overlay] magic results visible:", showMagicResults);
@@ -2278,24 +2281,25 @@ useEffect(() => {
               <h2 className="text-2xl font-semibold text-white mt-1">
                 Awaiting analysis
               </h2>
-              <p className="text-sm text-white/70 mt-2">
-                {analysisPendingMessage}
-              </p>
+              <p className="text-sm text-white/70 mt-2">{analysisPendingMessage}</p>
             </div>
             <div className="mt-3">
               <AnalysisProgress active={analysisInFlight} />
             </div>
             <div className="space-y-2 mt-6">
+              {combinedCardError && !analysisInFlight && (
+                <button
+                  type="button"
+                  className="lux-continue-btn w-full py-4 bg-gradient-to-r from-[#2FC98A] to-[#0A6C4C] text-white font-semibold tracking-[0.3em]"
+                  onClick={handleRunSportsAnalysis}
+                >
+                  Retry analysis
+                </button>
+              )}
               <button
                 type="button"
-                className="lux-continue-btn w-full py-4 bg-gradient-to-r from-[#2FC98A] to-[#0A6C4C] text-white font-semibold tracking-[0.3em]"
-                onClick={handleRunSportsAnalysis}
-              >
-                Retry analysis
-              </button>
-              <button
-                type="button"
-                className="lux-quiet-btn w-full py-3 text-[11px] uppercase tracking-[0.35em]"
+                disabled={analysisInFlight}
+                className="lux-quiet-btn w-full py-3 text-[11px] uppercase tracking-[0.35em] disabled:opacity-40 disabled:cursor-not-allowed"
                 onClick={enterManualAnalysisMode}
               >
                 Continue without auto data
