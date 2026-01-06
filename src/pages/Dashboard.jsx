@@ -69,7 +69,7 @@ export default function Dashboard() {
       <LuxeCard
         title="Sports Card Suite"
         subtitle="Collectibles"
-        description="Tools for collectors — detection, pricing, builds, and more."
+        description="Sports card? Start here → capture, analyze, and launch with confidence."
         onClick={() => navigate("/sports-cards")}
       />
 

@@ -4,14 +4,15 @@ import { useListingStore } from "../store/useListingStore";
 import PreviewCard from "../components/PreviewCard";
 import { buildPlatformPreview } from "../utils/platformPreview";
 import { formatDescriptionByPlatform } from "../utils/formatDescriptionByPlatform";
-import copyToClipboard from "../utils/clipboard";
-import { buildListingCopyText } from "../utils/listingCopyText";
+import { generateResizedVariants } from "../utils/imageTools";
+import { photoEntryToDataUrl } from "../utils/photoHelpers";
 import "../styles/overrides.css";
 
 export default function LaunchDeck() {
   const location = useLocation();
   const navigate = useNavigate();
   const { listingData } = useListingStore();
+  const [platformImages, setPlatformImages] = useState({});
 
   const locationItems = location.state?.items;
   const listings =
@@ -23,7 +24,7 @@ export default function LaunchDeck() {
 
   const activeListing = listings.length ? listings[0] : null;
   const platformPreview = activeListing
-    ? buildPlatformPreview(activeListing)
+    ? buildPlatformPreview(activeListing, platformImages)
     : null;
 
   const platformDescriptions =
@@ -51,6 +52,58 @@ export default function LaunchDeck() {
   }, []);
 
   useEffect(() => {
+    if (!activeListing) {
+      setPlatformImages({});
+      return;
+    }
+
+    let cancelled = false;
+
+    const resolvePrimaryPhotoEntry = () => {
+      if (!activeListing) return null;
+      const photos = Array.isArray(activeListing.photos)
+        ? activeListing.photos
+        : [];
+      if (photos.length) return photos[0];
+      if (activeListing.editedPhoto) {
+        return { url: activeListing.editedPhoto };
+      }
+      if (activeListing.photo) {
+        return { url: activeListing.photo };
+      }
+      return null;
+    };
+
+    const prepareImages = async () => {
+      const entry = resolvePrimaryPhotoEntry();
+      if (!entry) {
+        setPlatformImages({});
+        return;
+      }
+      try {
+        const dataUrl = await photoEntryToDataUrl(entry);
+        if (!dataUrl || cancelled) {
+          return;
+        }
+        const variants = await generateResizedVariants(dataUrl);
+        if (cancelled) return;
+        setPlatformImages(variants || {});
+      } catch (err) {
+        console.error("Platform image preparation failed:", err);
+        if (!cancelled) {
+          setPlatformImages({});
+        }
+      }
+    };
+
+    prepareImages();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeListing]);
+
+  useEffect(() => {
     if (!launchToast) return;
     const timer = setTimeout(() => setLaunchToast(""), 3200);
     return () => clearTimeout(timer);
@@ -76,26 +129,6 @@ export default function LaunchDeck() {
       }
     } catch (err) {
       console.warn("Copy failed:", err);
-    }
-  };
-
-  const handleCopyListingText = async () => {
-    const listing = activeListing || listingData;
-    if (!listing) return;
-    const copyBody = buildListingCopyText({
-      title: platformPreview?.baseTitle || listing.title,
-      price: listing.price,
-      description:
-        platformPreview?.summaryDescription || listing.description || "",
-      condition: listing.condition,
-      category: listing.category,
-      size: listing.size,
-      cardAttributes: listing.cardAttributes,
-    });
-    if (!copyBody.trim()) return;
-    const success = await copyToClipboard(copyBody);
-    if (success) {
-      setLaunchToast("Copied to clipboard");
     }
   };
 
@@ -132,13 +165,16 @@ export default function LaunchDeck() {
       {/* HEADER */}
       <div className="mb-6">
         <h1 className="text-[30px] font-semibold tracking-tight sparkly-header header-glitter">
-          Listing Preview
+          Launch Your Listing
         </h1>
-        <p className="text-sm opacity-70 mt-1 mb-3">
-          Preview your listing for each marketplace, copy details, and launch.
+        <p className="text-sm opacity-70 mt-1 mb-2">
+          Send this listing to any marketplace below. You can launch to one, several, or come back later.
         </p>
-        <p className="text-xs opacity-55">
-          We’ll open each marketplace in a new tab — just make sure you’re signed in.
+        <p className="text-xs opacity-60 mb-4">
+          Repost Rocket is not competing with eBay, Mercari, or Poshmark — we simply help each platform receive a clean, ready-to-post listing faster.
+        </p>
+        <p className="text-xs opacity-50">
+          Each marketplace card is opt-in. Choose where to open next; every action runs independently and opens the marketplace in a new tab.
         </p>
       </div>
 
@@ -149,21 +185,6 @@ export default function LaunchDeck() {
         </div>
       ) : (
         <>
-          <div className="mb-5 flex flex-col items-center gap-3">
-            <div className="flex items-center gap-3 flex-wrap justify-center">
-              <span className="ready-launch-badge">
-                <span>Ready to Launch</span>
-              </span>
-              <button
-                type="button"
-                onClick={handleCopyListingText}
-                disabled={!activeListing}
-                className="px-4 py-2 text-[11px] uppercase tracking-[0.3em] rounded-full border border-white/30 text-white/80 bg-white/5 hover:bg-white/20 transition disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Copy listing text
-              </button>
-            </div>
-          </div>
           <div className="space-y-8">
             {["ebay", "poshmark", "mercari"].map((platformKey, idx) => (
               <div key={platformKey} className="space-y-8">
@@ -182,6 +203,7 @@ export default function LaunchDeck() {
                   }
                   onEdit={goBackToEditor}
                   isPrimary={idx === 0}
+                  platformImage={platformPreview?.preparedImages?.[platformKey]}
                   onLaunch={({ label, launchUrl, title, description, price }) =>
                     handleLaunch({ label, launchUrl, title, description, price })
                   }

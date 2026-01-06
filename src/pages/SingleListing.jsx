@@ -37,6 +37,7 @@ import {
   loadListingLibrary,
 } from "../utils/savedListings";
 import { shareImage, getImageSaveLabel } from "../utils/saveImage";
+import usePaywallGate from "../hooks/usePaywallGate";
 import "../styles/overrides.css";
 import AnalysisProgress from "../components/AnalysisProgress";
 
@@ -228,6 +229,7 @@ export default function SingleListing() {
   const isPremiumUser = getPremiumStatus() || devPremiumOverride;
 
   const { cardData, parseCard, loading: parsingCard } = useCardParser();
+  const { gate } = usePaywallGate();
 
   const title = listingData?.title || "";
   const description = listingData?.description || "";
@@ -914,6 +916,7 @@ const identityEvidenceByField = useMemo(() => {
   const analysisPendingMessage = analysisInFlight
     ? ANALYSIS_RUNNING_MESSAGE
     : sportsHandoffState?.text || "Analyzing confirmed photos…";
+
   useEffect(() => {
     if (!isMobileViewport) return;
     console.log("[mobile-overlay] magic results visible:", showMagicResults);
@@ -1377,11 +1380,13 @@ useEffect(() => {
     [apparelIntel]
   );
 
-  const handleContinueToLaunchDeck = useCallback(() => {
-    navigate("/launch", {
-      state: { listingPhotos: listingPhotosForExport },
+  const handleVerifyAndLaunch = useCallback(() => {
+    gate("verify_listing", () => {
+      navigate("/launch", {
+        state: { listingPhotos: listingPhotosForExport },
+      });
     });
-  }, [navigate, listingPhotosForExport]);
+  }, [gate, navigate, listingPhotosForExport]);
 
   const describeCornerConfidence = (level) => {
     if (!level) return "";
@@ -1525,6 +1530,10 @@ useEffect(() => {
     setMagicError("");
     if (listingData?.previousAiChoices) {
       listingData.previousAiChoices = {};
+    }
+    if (category === "Sports Cards") {
+      setMagicError("Sports cards use the Sports Card Suite; Magic Fill is bypassed.");
+      return;
     }
     if (magicLoading) return;
     // Premium (including Jess override numbers + rr_dev_premium) bypasses daily limit
@@ -1930,9 +1939,6 @@ useEffect(() => {
       <h1 className="sparkly-header header-glitter text-center text-3xl">
         Single Listing
       </h1>
-      <p className="text-center lux-soft-text text-sm mb-8">
-        Make your listing shine
-      </p>
       <div className="lux-divider w-2/3 mx-auto mb-10"></div>
 
       {sportsHandoffState && identityReady && (
@@ -2212,17 +2218,8 @@ useEffect(() => {
               onBlur={commitDescriptionToStore}
               placeholder="Sharp corners, clean surface, no creases."
             />
-            <div className="space-y-3">
-              <button
-                type="button"
-                className="lux-continue-btn w-full py-4 text-sm font-semibold tracking-[0.35em]"
-                onClick={handleContinueToLaunchDeck}
-              >
-                Continue to Launch Deck
-              </button>
-              <p className="text-xs text-white/60">
-                Details you confirm here carry straight into Launch Deck for the final polish.
-              </p>
+            <div className="text-xs text-white/60">
+              Details you confirm here carry straight into Launch Deck for the final polish.
             </div>
             {hasVerifiedIdentity && (
               <div className="mt-6 space-y-2">
@@ -3216,22 +3213,17 @@ useEffect(() => {
       {/* ---------------------- */}
       {/*  ACTION BUTTONS        */}
       {/* ---------------------- */}
-      <div className="mt-16 space-y-4">
-        <div className="lux-animated-bar w-1/4 mx-auto mb-6" />
-
+      <div className="mt-16 space-y-3">
         <button
-          className="lux-continue-btn shadow-lg w-full py-5 text-base tracking-[0.32em]"
-          onClick={() => {
-            document.body.classList.add("lux-page-transition");
-            setTimeout(() => {
-              navigate("/launch");
-              document.body.classList.remove("lux-page-transition");
-            }, 180);
-          }}
+          type="button"
+          className="lux-continue-btn w-full py-5 text-base font-semibold tracking-[0.28em]"
+          onClick={handleVerifyAndLaunch}
         >
-          Preview Listing →
+          Verify &amp; Lock Listing →
         </button>
-
+        <p className="text-xs text-white/60 text-center">
+          Lock in the confirmed card details and continue to Launch Deck.
+        </p>
         <button
           onClick={() => {
             resetListing();

@@ -26,9 +26,9 @@ const STAGES = {
   CONFIRM: "confirm",
 };
 
-const ADJUST_BASE_STEP_RATIO = 0.018;
+const ADJUST_BASE_STEP_RATIO = 0.011;
 const ADJUST_ACCEL_WINDOW_MS = 420;
-const ADJUST_ACCEL_MULTIPLIER = 0.55;
+const ADJUST_ACCEL_MULTIPLIER = 0.35;
 const ADJUST_HOLD_INTERVAL_MS = 140;
 
 const normalizeCornerEntry = (entry) => {
@@ -733,126 +733,21 @@ export default function MagicCardPrep({ analysisActive = false }) {
                             {isAnalysisReady && entry && renderConfidenceBadge(entry?.confidence)}
                           </div>
                           {isAnalysisReady && entry && (
-                    <div className="mt-2">
-                      <button
-                        type="button"
-                        className="text-[10px] tracking-[0.25em] text-[#E8D5A8] hover:text-[#fff4d4] transition"
-                        onClick={() =>
-                          setAdjustTarget({
-                            sideKey,
-                            cornerKey: corner.key,
-                          })
-                        }
-                      >
-                        Adjust
-                      </button>
-                      {adjustTarget &&
-                        adjustTarget.sideKey === sideKey &&
-                        adjustTarget.cornerKey === corner.key && (
-                          <div className="mt-2 rounded-2xl border border-white/15 bg-black/70 p-3 text-[10px] text-white/80 space-y-2">
-                            <div className="text-center uppercase tracking-[0.3em] text-white/60">
-                              Adjust Corner
+                            <div className="mt-2">
+                              <button
+                                type="button"
+                                className="text-[10px] tracking-[0.25em] text-[#E8D5A8] hover:text-[#fff4d4] transition"
+                                onClick={() =>
+                                  setAdjustTarget({
+                                    sideKey,
+                                    cornerKey: corner.key,
+                                  })
+                                }
+                              >
+                                Adjust
+                              </button>
                             </div>
-                          <div className="adjust-controls grid grid-cols-3 gap-1 text-xs font-semibold sm:gap-2">
-                              <span />
-                              <button
-                                type="button"
-                                className="adjust-arrow rounded-xl border border-white/20 hover:border-white/50 disabled:opacity-30"
-                                disabled={
-                                  adjustBusyKey === `${sideKey}-${corner.key}` ||
-                                  isAxisClamped(entry, "y", -1)
-                                }
-                                onPointerDown={(event) =>
-                                  handleAdjustPointerDown(event, sideKey, corner.key, "y", -1)
-                                }
-                                onPointerUp={handleAdjustPointerUp}
-                                onPointerLeave={handleAdjustPointerUp}
-                                onPointerCancel={handleAdjustPointerUp}
-                                onClick={() => {
-                                  if (adjustPointerActiveRef.current) return;
-                                  handleAdjustMove(sideKey, corner.key, "y", -1);
-                                }}
-                              >
-                                ↑
-                              </button>
-                              <span />
-                              <button
-                                type="button"
-                                className="adjust-arrow rounded-xl border border-white/20 hover:border-white/50 disabled:opacity-30"
-                                disabled={
-                                  adjustBusyKey === `${sideKey}-${corner.key}` ||
-                                  isAxisClamped(entry, "x", -1)
-                                }
-                                onPointerDown={(event) =>
-                                  handleAdjustPointerDown(event, sideKey, corner.key, "x", -1)
-                                }
-                                onPointerUp={handleAdjustPointerUp}
-                                onPointerLeave={handleAdjustPointerUp}
-                                onPointerCancel={handleAdjustPointerUp}
-                                onClick={() => {
-                                  if (adjustPointerActiveRef.current) return;
-                                  handleAdjustMove(sideKey, corner.key, "x", -1);
-                                }}
-                              >
-                                ←
-                              </button>
-                              <button
-                                type="button"
-                                className="adjust-arrow rounded-xl border border-white/20 hover:border-white/50 disabled:opacity-30"
-                                disabled={
-                                  adjustBusyKey === `${sideKey}-${corner.key}` ||
-                                  isAxisClamped(entry, "y", 1)
-                                }
-                                onPointerDown={(event) =>
-                                  handleAdjustPointerDown(event, sideKey, corner.key, "y", 1)
-                                }
-                                onPointerUp={handleAdjustPointerUp}
-                                onPointerLeave={handleAdjustPointerUp}
-                                onPointerCancel={handleAdjustPointerUp}
-                                onClick={() => {
-                                  if (adjustPointerActiveRef.current) return;
-                                  handleAdjustMove(sideKey, corner.key, "y", 1);
-                                }}
-                              >
-                                ↓
-                              </button>
-                              <button
-                                type="button"
-                                className="adjust-arrow rounded-xl border border-white/20 hover:border-white/50 disabled:opacity-30"
-                                disabled={
-                                  adjustBusyKey === `${sideKey}-${corner.key}` ||
-                                  isAxisClamped(entry, "x", 1)
-                                }
-                                onPointerDown={(event) =>
-                                  handleAdjustPointerDown(event, sideKey, corner.key, "x", 1)
-                                }
-                                onPointerUp={handleAdjustPointerUp}
-                                onPointerLeave={handleAdjustPointerUp}
-                                onPointerCancel={handleAdjustPointerUp}
-                                onClick={() => {
-                                  if (adjustPointerActiveRef.current) return;
-                                  handleAdjustMove(sideKey, corner.key, "x", 1);
-                                }}
-                              >
-                                →
-                              </button>
-                              <span />
-                              <span />
-                            </div>
-                            <button
-                              type="button"
-                              className="w-full py-1 rounded-full border border-white/20 text-[10px] uppercase tracking-[0.25em] text-white/70 hover:bg-white/5"
-                              onClick={() => {
-                                handleAdjustPointerUp();
-                                setAdjustTarget(null);
-                              }}
-                            >
-                              Done
-                            </button>
-                          </div>
-                        )}
-                    </div>
-                  )}
+                          )}
                 </div>
               );
             })}
@@ -1079,6 +974,11 @@ export default function MagicCardPrep({ analysisActive = false }) {
     stopAdjustHold();
   }, [stopAdjustHold]);
 
+  const closeAdjustOverlay = useCallback(() => {
+    handleAdjustPointerUp();
+    setAdjustTarget(null);
+  }, [handleAdjustPointerUp]);
+
   const startAdjustHold = useCallback(
     (sideKey, cornerKey, axis, direction) => {
       stopAdjustHold();
@@ -1231,6 +1131,107 @@ export default function MagicCardPrep({ analysisActive = false }) {
     );
   };
 
+  const renderCornerAdjustOverlay = () => {
+    if (stage !== STAGES.CONFIRM || !adjustTarget) return null;
+    const targetEntry =
+      cornerMap[adjustTarget.sideKey]?.[adjustTarget.cornerKey] || null;
+    const targetInfo = CORNER_POSITIONS.find(
+      (corner) => corner.key === adjustTarget.cornerKey
+    );
+    if (!targetEntry || !targetInfo) return null;
+    const prettySide = adjustTarget.sideKey === "front" ? "Front" : "Back";
+    const isBusy =
+      adjustBusyKey === `${adjustTarget.sideKey}-${adjustTarget.cornerKey}`;
+
+    const renderArrowButton = (axis, direction, label) => (
+      <button
+        type="button"
+        className="adjust-arrow rounded-xl border border-white/20 hover:border-white/50 disabled:opacity-30"
+        disabled={isBusy || isAxisClamped(targetEntry, axis, direction)}
+        onPointerDown={(event) => {
+          event.stopPropagation();
+          handleAdjustPointerDown(
+            event,
+            adjustTarget.sideKey,
+            adjustTarget.cornerKey,
+            axis,
+            direction
+          );
+        }}
+        onPointerUp={(event) => {
+          event.stopPropagation();
+          handleAdjustPointerUp();
+        }}
+        onPointerLeave={(event) => {
+          event.stopPropagation();
+          handleAdjustPointerUp();
+        }}
+        onPointerCancel={(event) => {
+          event.stopPropagation();
+          handleAdjustPointerUp();
+        }}
+        onClick={(event) => {
+          event.stopPropagation();
+          if (adjustPointerActiveRef.current) return;
+          handleAdjustMove(
+            adjustTarget.sideKey,
+            adjustTarget.cornerKey,
+            axis,
+            direction
+          );
+        }}
+      >
+        {label}
+      </button>
+    );
+
+    return (
+      <div className="corner-adjust-overlay" onClick={closeAdjustOverlay}>
+        <div
+          className="corner-adjust-panel"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-[11px] uppercase tracking-[0.35em] text-white/60">
+              Adjust {prettySide} {targetInfo.label}
+            </div>
+            <button
+              type="button"
+              className="text-[10px] uppercase tracking-[0.35em] text-white/40"
+              onClick={(event) => {
+                event.stopPropagation();
+                closeAdjustOverlay();
+              }}
+            >
+              Close
+            </button>
+          </div>
+          <div className="adjust-controls grid grid-cols-3 gap-2 text-lg font-semibold text-white/85">
+            <span />
+            {renderArrowButton("y", -1, "↑")}
+            <span />
+            {renderArrowButton("x", -1, "←")}
+            {renderArrowButton("y", 1, "↓")}
+            {renderArrowButton("x", 1, "→")}
+          </div>
+          <p className="text-[11px] text-white/50 mt-3 text-center">
+            Tap or hold to nudge the corner gently.
+          </p>
+          <button
+            type="button"
+            className="mt-4 w-full rounded-full border border-white/20 py-2 text-[10px] uppercase tracking-[0.3em] text-white/70 hover:bg-white/5"
+            onClick={(event) => {
+              event.stopPropagation();
+              closeAdjustOverlay();
+            }}
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="app-wrapper min-h-screen px-6 py-10 flex flex-col relative">
       <div className="rr-deep-emerald"></div>
@@ -1256,6 +1257,7 @@ export default function MagicCardPrep({ analysisActive = false }) {
       </div>
 
       {stage === STAGES.CAPTURE ? renderCaptureStage() : renderConfirmStage()}
+      {renderCornerAdjustOverlay()}
 
       <input
         type="file"

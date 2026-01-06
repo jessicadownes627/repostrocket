@@ -57,6 +57,7 @@ export default function PreviewCard({
   platformTitle,
   platformDescription,
   onLaunch,
+  platformImage,
   isPrimary = false,
 }) {
   if (!item) return null;
@@ -66,8 +67,13 @@ export default function PreviewCard({
     .map((p) => getPhotoUrl(p))
     .find((url) => Boolean(url));
   const photo = item.editedPhoto || fallbackPhoto || null;
+  const previewPhoto = platformImage || photo;
   const { label } = platformMeta(platform);
   const displaySize = shouldDisplaySize(item) ? item.size : "";
+  const launchButtonLabel = `Open ${label}`;
+  const headerTitle = `Ready for ${label}`;
+  const headerSubtext =
+    "Formatted to match this marketplace’s listing flow and category structure.";
 
   const links = buildListingExportLinks({
     title: item.title || "",
@@ -95,15 +101,27 @@ export default function PreviewCard({
     "
     >
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div
-          className={`uppercase tracking-[0.25em] ${
-            isPrimary
-              ? "text-[13px] text-[rgba(232,213,168,0.92)]"
-              : "text-[12px] text-[rgba(232,213,168,0.65)]"
-          }`}
-        >
-          {label}
+      <div className="flex items-start justify-between mb-4 gap-4">
+        <div className="flex-1">
+          <div
+            className={`uppercase tracking-[0.35em] text-[10px] ${
+              isPrimary
+                ? "text-[rgba(232,213,168,0.85)]"
+                : "text-[rgba(232,213,168,0.5)]"
+            } mb-1`}
+          >
+            {label}
+          </div>
+          <div
+            className={`text-[17px] font-semibold leading-tight ${
+              isPrimary ? "text-white" : "text-white/80"
+            }`}
+          >
+            {headerTitle}
+          </div>
+          <div className="text-[10px] uppercase tracking-[0.3em] text-white/50 mt-1">
+            {headerSubtext}
+          </div>
         </div>
         {onEdit && (
           <button
@@ -119,10 +137,10 @@ export default function PreviewCard({
       {/* Body */}
       <div className="flex gap-4 items-start">
         {/* Thumbnail */}
-        {photo ? (
+        {previewPhoto ? (
           <img
-            src={photo}
-            alt="Preview"
+            src={previewPhoto}
+            alt={`${label} preview`}
             className="w-20 h-20 object-cover rounded-[14px] border border-[rgba(232,213,168,0.25)] shadow-[0_3px_10px_rgba(0,0,0,0.50)]"
           />
         ) : (
@@ -220,37 +238,40 @@ export default function PreviewCard({
       </div>
 
       {/* Launch row */}
-      <div className="px-4 pb-5 pt-1">
-        <button
-          type="button"
-          disabled={!launchUrl}
-          onClick={() => {
-            if (!launchUrl) return;
-            if (onLaunch) {
-              onLaunch({
-                platform,
-                label,
-                launchUrl,
-                title: displayTitle,
-                description: displayDescription,
-                price: item.price,
-              });
-              return;
-            }
-            window.open(launchUrl, "_blank", "noopener");
-          }}
-          className={`
-            w-full mt-2 py-3 rounded-2xl text-[11px] font-semibold tracking-[0.3em] launch-pulse
-            ${
-              launchUrl
-                ? "bg-gradient-to-r from-[#F7E8C8] via-[#F2DDB1] to-[#E3CFA0] text-[#1B1208] border border-[rgba(248,233,207,0.6)] shadow-[0_10px_25px_rgba(0,0,0,0.45)] hover:shadow-[0_14px_30px_rgba(0,0,0,0.55)] transition"
-                : "bg-black/30 text-white/35 border border-white/10 cursor-not-allowed"
-            }
-          `}
-        >
-          {launchUrl ? `Launch to ${label}` : "Launch unavailable"}
-        </button>
-      </div>
+        <div className="px-4 pb-5 pt-1">
+          <button
+            type="button"
+            disabled={!launchUrl}
+            onClick={() => {
+              if (!launchUrl) return;
+              if (onLaunch) {
+                onLaunch({
+                  platform,
+                  label,
+                  launchUrl,
+                  title: displayTitle,
+                  description: displayDescription,
+                  price: item.price,
+                });
+                return;
+              }
+              window.open(launchUrl, "_blank", "noopener");
+            }}
+            className={`
+              w-full mt-2 py-3 rounded-2xl text-[11px] font-semibold tracking-[0.3em] launch-pulse
+              ${
+                launchUrl
+                  ? "bg-gradient-to-r from-[#F7E8C8] via-[#F2DDB1] to-[#E3CFA0] text-[#1B1208] border border-[rgba(248,233,207,0.6)] shadow-[0_10px_25px_rgba(0,0,0,0.45)] hover:shadow-[0_14px_30px_rgba(0,0,0,0.55)] transition"
+                  : "bg-black/30 text-white/35 border border-white/10 cursor-not-allowed"
+              }
+            `}
+          >
+            {launchUrl ? launchButtonLabel : "Launch unavailable"}
+          </button>
+          <p className="text-[11px] text-white/50 mt-2">
+            Opens in a new tab with your listing details prepared — you stay in full control.
+          </p>
+        </div>
     </div>
   );
 }

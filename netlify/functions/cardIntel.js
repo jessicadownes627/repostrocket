@@ -345,10 +345,20 @@ export async function handler(event) {
       derived = deriveFieldsFromOcr(allOcrLines, hints);
       applySlabIdentityOverrides(derived, slabIdentity);
     }
+    const cardBackDetails = buildBackDetailsFromOcr(backOcrLines);
 
+    const fallbackTeam = cardBackDetails?.team || "";
+    const normalizedSources = { ...derived.sources };
+    if (!derived.team && fallbackTeam) {
+      normalizedSources.team = "back";
+    }
+    const normalizedIsTextVerified = { ...derived.isTextVerified };
+    if (!derived.team && fallbackTeam) {
+      normalizedIsTextVerified.team = false;
+    }
     const normalizedAttributes = {
       player: derived.player || "",
-      team: derived.team || "",
+      team: derived.team || fallbackTeam,
       year: derived.year || "",
       setName: derived.setName || "",
       setBrand: derived.setBrand || derived.setName || "",
@@ -361,8 +371,12 @@ export async function handler(event) {
       parallel: derived.parallel || "",
       notes: derived.notes || "",
       confidence: derived.confidence || EMPTY_RESPONSE.confidence,
-      sources: derived.sources || EMPTY_RESPONSE.sources,
-      isTextVerified: derived.isTextVerified || EMPTY_RESPONSE.isTextVerified,
+      sources: Object.keys(normalizedSources).length
+        ? normalizedSources
+        : EMPTY_RESPONSE.sources,
+      isTextVerified: Object.keys(normalizedIsTextVerified).length
+        ? normalizedIsTextVerified
+        : EMPTY_RESPONSE.isTextVerified,
       needsUserConfirmation:
         typeof derived.needsUserConfirmation === "boolean"
           ? derived.needsUserConfirmation
@@ -373,6 +387,7 @@ export async function handler(event) {
       grading: derived.grading || null,
       pricing: derived.pricing || null,
       isGradedCard: Boolean(derived.isGradedCard),
+      position: cardBackDetails?.position || "",
     };
 
     const responsePayload = {
@@ -391,6 +406,7 @@ export async function handler(event) {
       gradeValue: normalizedAttributes.gradeValue,
       scoreRating: normalizedAttributes.scoreRating,
       parallel: normalizedAttributes.parallel,
+      position: normalizedAttributes.position || "",
       notes: normalizedAttributes.notes,
       confidence: normalizedAttributes.confidence,
       sources: normalizedAttributes.sources,
@@ -400,7 +416,7 @@ export async function handler(event) {
       ocrBack: { lines: backOcrLines },
       ocrFull: fullCardOcr,
       ocrZones: {},
-      cardBackDetails: null,
+      cardBackDetails,
       manualSuggestions: {
         ...EMPTY_RESPONSE.manualSuggestions,
         ...derived.manualSuggestions,

@@ -1,7 +1,7 @@
 import { buildCardTitle } from "./buildCardTitle";
 
 // Builds per-platform preview strings without mutating listingData.
-export function buildPlatformPreview(listing) {
+export function buildPlatformPreview(listing, preparedImages = {}) {
   if (!listing) {
     return {
       baseTitle: "",
@@ -48,6 +48,6 @@ export function buildPlatformPreview(listing) {
       mercari: mercariTitle,
       poshmark: poshmarkTitle,
     },
+    preparedImages: preparedImages || {},
   };
 }
-

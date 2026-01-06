@@ -1,211 +1,148 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { runTrendSenseInfinity } from "../utils/trendSenseInfinity";
-import { runTrendSenseUltra } from "../utils/trendSenseUltra";
 import { loadListingLibrary } from "../utils/savedListings";
-import { getLiveTrendAlerts } from "../utils/liveTrendAlerts";
-import Sparkline from "../components/Sparkline";
-import TrendingTodayCard from "../components/TrendingTodayCard";
-import ListNextCard from "../components/ListNextCard";
-import FlipPotentialCard from "../components/FlipPotentialCard";
-import HotTagCard from "../components/HotTagCard";
-import SmartPriceBandCard from "../components/SmartPriceBandCard";
-import CategoryMomentumCard from "../components/CategoryMomentumCard";
-import TrendSenseSearchPanel from "../components/TrendSenseSearchPanel";
+import { runTrendSenseInfinity } from "../utils/trendSenseInfinity";
 import usePaywallGate from "../hooks/usePaywallGate";
 import PremiumModal from "../components/PremiumModal";
-import {
-  trendingPairs,
-  trendingOpportunities,
-} from "../data/trendingOpportunities";
-import {
-  IconFlame,
-  IconChart,
-  IconFlip,
-  IconBolt,
-  IconPrice,
-  IconBrain,
-} from "../components/LuxIcons";
 
-const HEADLINE_RECENCY_LIMIT_DAYS = 21;
+const STALE_TAG_KEYWORDS = [
+  "holiday",
+  "christmas",
+  "halloween",
+  "valentine",
+  "easter",
+  "spring",
+  "summer",
+  "winter",
+  "mother's day",
+  "father's day",
+  "back to school",
+];
 
-function formatRelativeDate(dateStr) {
-  if (!dateStr) return "recent";
-  const parsed = new Date(dateStr);
-  if (Number.isNaN(parsed.getTime())) return "recent";
-  const diffMs = Date.now() - parsed.getTime();
-  const diffMinutes = Math.floor(diffMs / (1000 * 60));
-  if (diffMinutes < 60) {
-    return diffMinutes <= 1 ? "just now" : `${diffMinutes} mins ago`;
-  }
-  const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) {
-    return diffHours === 1 ? "1 hour ago" : `${diffHours} hours ago`;
-  }
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 7) {
-    return diffDays === 1 ? "1 day ago" : `${diffDays} days ago`;
-  }
-  const diffWeeks = Math.floor(diffDays / 7);
-  return diffWeeks === 1 ? "1 week ago" : `${diffWeeks} weeks ago`;
-}
+const ABSENCE_PHRASES = [
+  "No recent news mentions tied to this item.",
+  "No buyer search acceleration detected.",
+  "Comparable listings selling at typical velocity.",
+];
 
-function getDaysSince(dateStr) {
+function formatTimestamp(dateStr) {
   if (!dateStr) return null;
-  const parsed = Date.parse(dateStr);
-  if (Number.isNaN(parsed)) return null;
-  return Math.max(0, Math.floor((Date.now() - parsed) / (1000 * 60 * 60 * 24)));
+  const parsed = new Date(dateStr);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
-function isHeadlineRecent(headline) {
-  const days = getDaysSince(headline?.publishedAt);
-  if (days == null) return false;
-  return days <= HEADLINE_RECENCY_LIMIT_DAYS;
+function getDecisionLabel(report) {
+  if (!report) return "QUIET";
+  if (report.eventLinked && (report.eventImpactScore ?? 0) >= 24) {
+    return "ACTIVE";
+  }
+  if (report.eventLinked) {
+    return "STABLE";
+  }
+  return "QUIET";
 }
 
-function hasRecentCatalystHeadlines(headlines = []) {
-  return headlines.some(
-    (headline) => !headline?.isHistorical && isHeadlineRecent(headline)
+function getReasonText(report) {
+  if (!report) return "No listings tracked yet.";
+  if (report.eventLinked) {
+    return (
+      report.eventHeadline ||
+      report.eventReasons?.[0] ||
+      report.trendGuidance?.reason ||
+      "New activity is tied to this listing."
+    );
+  }
+  return "No new activity detected for this item.";
+}
+
+function getEventHeadline(report) {
+  if (!report) return null;
+  return (
+    report.eventHeadline ||
+    report.eventReasons?.[0] ||
+    report.trendGuidance?.reason ||
+    null
   );
 }
 
-function formatLastCheckedText(daysSinceHeadline, fallbackTime) {
-  if (daysSinceHeadline == null || daysSinceHeadline <= 0) {
-    return `Today at ${fallbackTime}`;
+function buildEffectText(report) {
+  if (!report || !report.eventLinked) {
+    return "No qualifying news or demand events detected.";
   }
-  if (daysSinceHeadline === 1) return "1 day ago";
-  return `${daysSinceHeadline} days ago`;
-}
-
-function getGuidanceSentences(action) {
-  switch (action) {
-    case "Increase":
-      return [
-        "Demand catalyst detected.",
-        "Pricing momentum is favorable.",
-      ];
-    case "Watch":
-      return [
-        "Signals are forming.",
-        "Prepare to adjust pricing quickly.",
-      ];
-    case "Decrease":
-      return [
-        "Cooling demand detected.",
-        "Consider defensive pricing.",
-      ];
-    case "Hold":
-    default:
-      return [
-        "No demand catalysts detected.",
-        "Pricing stability confirmed.",
-      ];
+  const pieces = [];
+  const score = report.eventImpactScore ?? report.ts?.trendScore ?? 0;
+  if (score >= 50) {
+    pieces.push("Search interest ↑");
+  } else if (score >= 30) {
+    pieces.push("Search interest steady");
   }
-}
-
-function formatStatValue(value) {
-  if (value == null || Number.isNaN(value)) return "—";
-  if (typeof value === "string") return value;
-  if (value >= 1000) {
-    return `${Math.round(value / 100) / 10}k`;
+  if (score >= 35) {
+    pieces.push("Comps selling faster");
   }
-  return value;
+  if (score >= 45) {
+    pieces.push("Buyer interest rising");
+  }
+  return pieces.length ? pieces.join(" · ") : "Signals holding steady.";
 }
 
 const SAMPLE_REPORTS = [
   {
-    item: { id: "sample-1", title: "90s Starter Chicago Bulls Jacket" },
-    trendScore: 82,
+    item: { id: "sample-1", title: "1990s Starter Chicago Bulls Jacket" },
     eventLinked: true,
-    eventHeadline: "Playoff spike pushing prices 30% higher",
+    eventHeadline:
+      "Bulls playoff chatter triggered a merch spike across streaming and feeds.",
     eventHeadlines: [
       {
         source: "ESPN",
-        title: "Bulls push for playoffs fuels merch sales",
+        title: "Playoff push sends vintage merch into buyers' carts",
         publishedAt: "2025-01-07T12:00:00Z",
         link: "https://www.espn.com",
         isHistorical: false,
       },
-      {
-        source: "CNBC",
-        title: "Chicago sports gear sees surge",
-        publishedAt: "2025-01-06T09:00:00Z",
-        link: "https://www.cnbc.com",
-        isHistorical: false,
-      },
     ],
-    buyerHint: "List before tonight's tipoff for peak demand.",
+    eventTimestamp: "2025-01-07T12:00:00Z",
+    eventReasons: [
+      "NBA playoff coverage referenced Chicago merch.",
+      "Listed after a viral highlight segment.",
+    ],
+    buyerHint: "List before tonight’s tipoff for peak interest.",
     trendGuidance: {
       action: "Increase",
-      reason: "Bulls playoff chatter is filling feeds. Based on 2 recent headlines.",
-      headlineCount: 2,
+      reason:
+        "Playoff buzz is pushing demand — prices are rising on similar jackets.",
+      headlineCount: 1,
       daysSinceHeadline: 1,
     },
     ts: {
-      demandLabel: "Heating",
-      smartBands: { floor: 110, target: 135, ceiling: 160 },
-      smartPriceRange: { min: 110, target: 135, max: 160 },
-      buyerHint: "BIN + watchers captures the premium right now.",
-      profitPotential: 45,
+      trendScore: 82,
+      buyerHint: "Buyers expect premium pricing while the event is live.",
     },
+    eventImpactScore: 42,
   },
 ];
 
 const SAMPLE_INFINITY = {
-  listNext: SAMPLE_REPORTS,
-  flipPotential: [
-    {
-      item: { id: "sample-2", title: "Shohei Rookie Chrome PSA 9", price: 95 },
-      ts: {
-        demandLabel: "Hot",
-        smartBands: { floor: 140, target: 165, ceiling: 190 },
-        smartPriceRange: { min: 140, target: 165, max: 190 },
-        buyerHint: "Opening week buzz is fueling bids.",
-        profitPotential: 70,
-      },
-    },
-  ],
+  reports: SAMPLE_REPORTS,
   hotTags: [
     { keyword: "starter jacket", score: 78 },
-    { keyword: "shohei rookie", score: 83 },
+    { keyword: "playoff merch", score: 62 },
+    { keyword: "vintage outerwear", score: 54 },
   ],
-  categoryMomentum: {
-    "Vintage Outerwear": {
-      score: 72,
-      direction: "rise",
-      trend: "up",
-      insight: "NBA playoff merch is driving traffic.",
-    },
-  },
-  reports: SAMPLE_REPORTS.map((rep) => ({
-    ...rep,
-  })),
 };
 
-const SAMPLE_ALERTS = [
-  {
-    message: "Starter jackets up +45% week over week in Chicago.",
-    headlines: [
-      {
-        source: "Retail Dive",
-        title: "Vintage merch jumps during playoff runs",
-        publishedAt: "2025-01-06T00:00:00Z",
-        link: "https://www.retaildive.com",
-      },
-    ],
-  },
-];
-
 export default function TrendSenseDashboard() {
-  const [reports, setReports] = useState([]);
-  const [infinity, setInfinity] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [alerts, setAlerts] = useState([]);
   const navigate = useNavigate();
-  const [openItem, setOpenItem] = useState(null);
   const { gate, paywallState, closePaywall } = usePaywallGate();
   const [hasAccess, setHasAccess] = useState(false);
-  const [openListingId, setOpenListingId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [reports, setReports] = useState([]);
+  const [infinity, setInfinity] = useState(SAMPLE_INFINITY);
 
   useEffect(() => {
     const allowed = gate("trendsense", () => setHasAccess(true));
@@ -213,55 +150,158 @@ export default function TrendSenseDashboard() {
       setHasAccess(false);
       setReports(SAMPLE_REPORTS);
       setInfinity(SAMPLE_INFINITY);
-      setAlerts(SAMPLE_ALERTS);
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [gate]);
 
   useEffect(() => {
-    if (hasAccess !== true) return;
-    async function load() {
-      const items = loadListingLibrary() || [];
-      if (!items.length) {
-        setReports([]);
-        setInfinity({
-          reports: [],
-          listNext: [],
-          flipPotential: [],
-          hotTags: [],
-          categoryMomentum: {},
-        });
-        setLoading(false);
+    if (!hasAccess) return;
+    let cancelled = false;
+    const loadTrendSense = async () => {
+      setLoading(true);
+      const library = loadListingLibrary() || [];
+      if (!library.length) {
+        if (!cancelled) {
+          setReports([]);
+          setInfinity(SAMPLE_INFINITY);
+          setLoading(false);
+        }
         return;
       }
-
-      const rep = [];
-      for (const item of items) {
-        const r = await runTrendSenseUltra(item);
-        if (r) {
-          rep.push({ item, ...r });
-        }
+      const data = await runTrendSenseInfinity(library);
+      if (cancelled) return;
+      if (data) {
+        setReports(data.reports || []);
+        setInfinity({
+          reports: data.reports || [],
+          hotTags: data.hotTags || [],
+        });
+      } else {
+        setReports([]);
+        setInfinity({ hotTags: [] });
       }
-
-      const inf =
-        (await runTrendSenseInfinity(items)) || {
-          reports: [],
-          listNext: [],
-          flipPotential: [],
-          hotTags: [],
-          categoryMomentum: {},
-        };
-
-      const alertList = getLiveTrendAlerts(rep);
-
-      setReports(rep);
-      setInfinity(inf);
-      setAlerts(alertList);
       setLoading(false);
-    }
-    load();
+    };
+    loadTrendSense();
+    return () => {
+      cancelled = true;
+    };
   }, [hasAccess]);
+
+  const sortedReports = useMemo(() => {
+    return [...reports].sort((a, b) => {
+      const aScore = (a?.eventImpactScore ?? a?.ts?.trendScore ?? 0) + (a?.eventLinked ? 10 : 0);
+      const bScore = (b?.eventImpactScore ?? b?.ts?.trendScore ?? 0) + (b?.eventLinked ? 10 : 0);
+      return bScore - aScore;
+    });
+  }, [reports]);
+
+  const waitReports = sortedReports.filter(
+    (report) => getDecisionLabel(report) === "QUIET"
+  );
+  const activeReports = sortedReports.filter(
+    (report) => getDecisionLabel(report) !== "QUIET"
+  );
+  const topReports = activeReports.slice(0, 5);
+  const waitCount = waitReports.length;
+  const heroReport = sortedReports[0] || null;
+  const heroDecision = getDecisionLabel(heroReport);
+  const heroReason = getReasonText(heroReport);
+  const heroSource =
+    heroReport?.eventHeadlines?.[0]?.source || "TrendSense curated signal";
+  const heroTiming =
+    heroReport?.eventTimestamp ||
+    heroReport?.eventHeadlines?.[0]?.publishedAt ||
+    null;
+  const heroEventHeadline =
+    getEventHeadline(heroReport) ||
+    selectAbsencePhrase(heroReport?.item?.id?.length || 0);
+  const heroEffect = buildEffectText(heroReport);
+  const heroEvidence = formatEvidenceChips(heroReport);
+  const heroTimingLabel = heroTiming ? formatTimestamp(heroTiming) : null;
+  const [heroPulseKey, setHeroPulseKey] = useState(0);
+  const [heroActivePulse, setHeroActivePulse] = useState(false);
+  const activeNewsReports = sortedReports.filter(
+    (report) =>
+      report.eventLinked &&
+      (report.eventHeadline ||
+        (report.eventHeadlines && report.eventHeadlines.length))
+  );
+  const liveSignalCount = activeNewsReports.length;
+  const liveNewsItems = activeNewsReports.slice(0, 3).map((report, idx) => {
+    const timestamp =
+      report.eventTimestamp ||
+      report.eventHeadlines?.[0]?.publishedAt ||
+      null;
+    return {
+      id: report.item?.id || report.eventHeadline || `news-${idx}`,
+      headline:
+        report.eventHeadline ||
+        report.eventHeadlines?.[0]?.title ||
+        report.eventReasons?.[0] ||
+        report.item?.title ||
+        "Live signal detected",
+      source: report.eventHeadlines?.[0]?.source || "TrendSense curated signal",
+      timestampLabel: formatTimestamp(timestamp),
+      why:
+        report.trendGuidance?.reason ||
+        report.buyerHint ||
+        `Items like ${report.item?.title || "this listing"} are in focus.`,
+    };
+  });
+  const opportunitySignals = activeReports
+    .filter((report) => getDecisionLabel(report) === "ACTIVE")
+    .slice(0, 3)
+    .map((report, idx) => {
+      const timestamp =
+        report.eventTimestamp ||
+        report.eventHeadlines?.[0]?.publishedAt ||
+        null;
+      return {
+        id: report.item?.id || report.eventHeadline || `signal-${idx}`,
+        heading: report.item?.title || "Tracked listing",
+        reason: getReasonText(report),
+        source: report.eventHeadlines?.[0]?.source || "TrendSense curated signal",
+        timestampLabel: formatTimestamp(timestamp),
+        why:
+          report.buyerHint ||
+          report.trendGuidance?.reason ||
+          "Activity is forming around listings like yours.",
+      };
+    });
+
+  useEffect(() => {
+    setHeroPulseKey((prev) => prev + 1);
+    if (heroDecision === "ACTIVE") {
+      setHeroActivePulse(true);
+      const timer = setTimeout(() => setHeroActivePulse(false), 1400);
+      return () => clearTimeout(timer);
+    }
+    setHeroActivePulse(false);
+  }, [heroDecision, heroReport?.eventTimestamp, heroReport?.eventImpactScore]);
+
+  const tagList = (infinity?.hotTags || []).slice(0, 5);
+  const filteredTagList = tagList.filter((tag) => {
+    const lower = (tag.keyword || "").toLowerCase();
+    return !STALE_TAG_KEYWORDS.some((stale) => lower.includes(stale));
+  });
+  const [expandedListing, setExpandedListing] = useState(null);
+  const [showBuyerPerspective, setShowBuyerPerspective] = useState(false);
+  const [showWaitList, setShowWaitList] = useState(false);
+
+  const buyerInsights = topReports
+    .map((report) => {
+      const hint = report.buyerHint || report.ts?.buyerHint;
+      if (!hint) return null;
+      return {
+        id: report.item?.id || report?.eventHeadline,
+        title: report.item?.title || "Listing",
+        hint,
+      };
+    })
+    .filter(Boolean);
+
+  const heroAvailable = Boolean(heroReport);
 
   if (loading) {
     return (
@@ -271,550 +311,368 @@ export default function TrendSenseDashboard() {
     );
   }
 
-  const trendingToday = reports.filter((r) => r.eventLinked);
-  const listNext = infinity.listNext || [];
-  const flipPotential = infinity.flipPotential || [];
-  const hotTags = infinity.hotTags || [];
-  const savedListingCount = reports.length;
-  const categorySet = new Set(
-    reports.map((r) => (r.item?.category || "").trim()).filter(Boolean)
-  );
-  const hasCategoryMomentum =
-    infinity?.categoryMomentum &&
-    Object.keys(infinity.categoryMomentum).length > 0;
-  const smartPriceEntries =
-    infinity?.reports?.filter((rep) => rep.ts?.smartPriceRange) || [];
-
-  const actionableAlerts = Array.isArray(alerts)
-    ? alerts
-        .map((a) => {
-          const recentHeadlines = (a.headlines || []).filter(
-            (headline) => !headline.isHistorical && isHeadlineRecent(headline)
-          );
-          if (!recentHeadlines.length) return null;
-          return { ...a, headlines: recentHeadlines.slice(0, 3) };
-        })
-        .filter(Boolean)
-    : [];
-  const canShowListNext =
-    savedListingCount >= 1 &&
-    hasCategoryMomentum &&
-    Array.isArray(listNext) &&
-    listNext.length > 0;
-  const canShowFlipPotential =
-    savedListingCount >= 2 &&
-    Array.isArray(flipPotential) &&
-    flipPotential.length > 0;
-  const canShowAlerts = actionableAlerts.length > 0;
-  const canShowSmartPrice =
-    savedListingCount >= 1 && smartPriceEntries.length > 0;
-  const canShowCategoryMomentum =
-    savedListingCount >= 3 && categorySet.size >= 2 && hasCategoryMomentum;
-  const canShowHotTags =
-    savedListingCount >= 2 &&
-    Array.isArray(hotTags) &&
-    hotTags.length > 0;
-  const previewGuidance =
-    reports[0]?.trendGuidance || {
-      action: "Hold",
-      reason:
-        "TrendSense watches your saved listings and adapts as you add more cards, apparel, and collectibles.",
-      headlineCount: 0,
-      daysSinceHeadline: null,
-    };
-  const filteredTrendingPairs = trendingPairs.filter((pair) => {
-    const leftRecent = hasRecentCatalystHeadlines(pair.left.headlines || []);
-    const rightRecent = hasRecentCatalystHeadlines(pair.right.headlines || []);
-    return leftRecent || rightRecent;
-  });
-  const trendingPair = filteredTrendingPairs[0] || null;
-  const filteredOpportunities = trendingOpportunities.filter((item) =>
-    hasRecentCatalystHeadlines(item.headlines || [])
-  );
-  const previewGuidanceDetail =
-    previewGuidance.headlineCount > 0
-      ? `Based on ${previewGuidance.headlineCount} recent headline${
-          previewGuidance.headlineCount > 1 ? "s" : ""
-        }.`
-      : "Market conditions remain stable across tracked categories.";
-  const currentTimeLabel = new Date().toLocaleTimeString([], {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-  const lastCheckedCopy = formatLastCheckedText(
-    previewGuidance.daysSinceHeadline,
-    currentTimeLabel
-  );
-  const guidanceSources = previewGuidance.headlineCount ?? 0;
-  const reassuranceCopy = `Last checked: ${lastCheckedCopy} • Sources scanned: ${guidanceSources}`;
-  const guidanceSentences = getGuidanceSentences(previewGuidance.action);
-  const renderHeadlineList = (headlines) => {
-    if (!Array.isArray(headlines) || !headlines.length) return null;
-    return (
-      <div className="mt-3 space-y-1 text-[11px] text-white/60">
-        {headlines.slice(0, 3).map((headline, idx) => {
-          const isHistorical =
-            headline.isHistorical ??
-            !isHeadlineRecent(headline);
-          return (
-            <div key={`${headline.title || idx}-${idx}`}>
-              {headline.link ? (
-                <a
-                  href={headline.link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[#E8D5A8] hover:opacity-80"
-                >
-                  {headline.source || "Source"}
-                </a>
-              ) : (
-                <span className="text-[#E8D5A8]">
-                  {headline.source || "Source"}
-                </span>
-              )}
-              <span className="opacity-80"> — {headline.title}</span>
-              <span className="opacity-40 ml-1">
-                • {formatRelativeDate(headline.publishedAt)}
-              </span>
-              {isHistorical && (
-                <span className="ml-2 text-[#E57373] uppercase tracking-[0.25em] text-[9px]">
-                  Historical
-                </span>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
-  const listingsEvaluatedCount = savedListingCount;
-  const categoriesScannedCount = Math.max(categorySet.size, listingsEvaluatedCount ? 1 : 0);
-  const marketSourcesChecked = Math.max(
-    previewGuidance.headlineCount || 0,
-    actionableAlerts.length
-  );
-  const priceBandsRecalculated = smartPriceEntries.length || 0;
-  const systemActivityStats = [
-    {
-      label: "Saved listings evaluated",
-      value: formatStatValue(listingsEvaluatedCount),
-      status: "Live",
-    },
-    {
-      label: "Relevant categories scanned",
-      value: formatStatValue(categoriesScannedCount),
-      status: "Today",
-    },
-    {
-      label: "Market sources checked",
-      value: formatStatValue(marketSourcesChecked),
-      status: "Live",
-    },
-    {
-      label: "Price bands recalculated",
-      value: formatStatValue(priceBandsRecalculated),
-      status: "Today",
-    },
-  ];
-  const categoryExamples = Array.from(categorySet).slice(0, 3);
-  const premiumSignals = [
-    { label: "Outlook", value: "Short-term (14–30 days)" },
-    { label: "Confidence", value: savedListingCount >= 3 ? "High" : "Moderate" },
-    { label: "Next scan", value: "Within 24 hours" },
-  ];
-
   return (
-    <div className="min-h-screen bg-[#050807] text-[#E8E1D0] px-6 py-10">
-      <div className="max-w-3xl mx-auto">
+    <div className="min-h-screen bg-[#050807] text-[#E8E1D0] px-6 py-10 relative overflow-hidden">
+      <div className="trend-background" aria-hidden="true" />
+      <div className="max-w-3xl mx-auto space-y-8 relative z-10">
         <button
           type="button"
           onClick={() => navigate("/dashboard")}
-          className="text-left text-xs uppercase tracking-[0.3em] text-[#E8DCC0] mb-4 hover:text-white transition"
+          className="text-left text-xs uppercase tracking-[0.3em] text-[#E8DCC0] mb-1 hover:text-white transition"
         >
           ← Back
         </button>
-        <h1 className="sparkly-header header-glitter text-3xl mb-3">
-          TrendSense
-        </h1>
-        <p className="text-sm opacity-70 mb-8">
-          Live demand signals, category momentum, and smart “list next”
-          insights for your saved listings.
-        </p>
-        {hasAccess === false && (
-          <div className="text-xs uppercase tracking-[0.35em] text-center text-white/60 bg-black/30 border border-white/10 rounded-full py-2 mb-6">
-            Preview mode = accurate snapshot. Premium unlocks unlimited live TrendSense + pro workflows.
-          </div>
-        )}
 
-       {/* System Activity Strip */}
-<div className="bg-[#060b0f] border border-white/10 rounded-2xl p-4 mb-2 grid gap-4 sm:grid-cols-2">
-  {systemActivityStats.map((stat) => (
-    <div key={stat.label}>
-      <div className="text-[11px] uppercase tracking-[0.3em] text-white/45">
-        {stat.label}
-      </div>
-      <div className="text-2xl font-semibold text-white mt-1">
-        {stat.value}
-      </div>
-      <div className="text-[11px] text-white/45">{stat.status}</div>
-    </div>
-  ))}
-</div> {/* ← THIS WAS MISSING */}
-
-<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-[11px] text-white/45 mb-8">
-  <span>TrendSense evaluates your saved listings in real time.</span>
-  {savedListingCount === 0 && (
-    <span className="mt-2 sm:mt-0">
-      No saved listings yet — add one to begin live analysis.
-    </span>
-  )}
-</div>
-
-        {/* TrendSense Preview */}
-        <div className="lux-bento-card bg-[#05090C] border border-[#1D252C] rounded-2xl p-6 mb-10 relative overflow-hidden">
-          <div className="absolute inset-0 opacity-30 bg-gradient-to-r from-transparent via-[#0b2a23]/40 to-transparent animate-pulse-slow"></div>
-          <div className="relative z-10 grid gap-6 lg:grid-cols-[minmax(0,1.75fr)_minmax(0,1fr)] items-start">
-            <div>
-              <div className="flex items-center gap-3 text-xs uppercase tracking-[0.35em] text-white/60">
-                <span className="inline-flex h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(19,236,158,0.5)] animate-pulse"></span>
-                TrendSense Preview
-                <SectionStatus active label="• Live" />
-              </div>
-              <div className="text-sm text-white/75 mt-2">
-                Evaluating your saved listings against live demand.
-              </div>
-              <div className="bg-white/5 border border-white/10 rounded-xl p-4 text-[13px] text-white/80 leading-relaxed mt-5">
-                {previewGuidance.reason}
-              </div>
-              {previewGuidanceDetail && (
-                <p className="text-[12px] text-white/65 mt-3">
-                  {previewGuidanceDetail}
-                </p>
-              )}
-              <p className="text-[11px] text-white/55 mt-2">
-                Guidance refreshes the moment market conditions shift.
-              </p>
-              <p className="text-[11px] text-white/45 mt-2">
-                {reassuranceCopy}
-              </p>
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+            <span className="sparkly-header header-glitter text-3xl md:text-4xl">
+              TrendSense
+            </span>
+            <div className="flex items-center gap-2 text-[11px] text-white/60">
+              <span className="trend-live-indicator" />
+              Live monitoring
             </div>
-            <GuidancePanel
-              action={previewGuidance.action}
-              sentences={guidanceSentences}
-            />
           </div>
-          <div className="relative z-10 grid gap-3 mt-4 sm:grid-cols-3 text-[11px] text-white/65">
-            {premiumSignals.map((signal) => (
-              <div
-                key={signal.label}
-                className="bg-white/5 border border-white/10 rounded-xl px-3 py-2"
-              >
-                <div className="uppercase tracking-[0.3em] text-white/40">
-                  {signal.label}
-                </div>
-                <div className="mt-1 text-white/80">{signal.value}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* 🔎 TrendSense Search */}
-        <div className="mt-8 mb-12">
-          <TrendSenseSearchPanel disabled={hasAccess === false} />
-        </div>
-
-        {/* Your Listings */}
-        <div className="mt-6 mb-12 relative">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="sparkly-header text-2xl">Your Listings</h2>
-            <SectionStatus
-              active={reports.length > 0}
-              label={reports.length > 0 ? "• Live" : "• Standing by"}
-            />
-          </div>
-          <p className="text-xs opacity-60">
-            Live guidance for every saved listing.
+          <p className="text-sm opacity-70">
+            News-first signals that surface what’s moving in the market and why.
           </p>
-          <p className="text-[11px] text-white/45 mt-1">
-            To remove a listing, open it and toggle “Track for TrendSense” off in Single Listing.
+          <p className="text-xs opacity-55">
+            Every insight ties to a real event—news, drops, or demand shifts—so ACTIVE signals feel earned.
           </p>
-          <p className="text-[11px] text-white/40 mb-4 hidden sm:block">
-            {categoryExamples.length
-              ? `Currently evaluating: ${categoryExamples.join(", ")}`
-              : "Ready to evaluate once listings are added."}
-          </p>
-          <div className="absolute inset-0 pointer-events-none hidden lg:block">
-            <div className="w-32 h-32 rounded-full bg-[rgba(232,213,168,0.06)] blur-3xl translate-x-[60%] -translate-y-[20%]"></div>
-          </div>
-
-          {reports.length > 0 ? (
-            <div className="space-y-3">
-              {reports.map((report, index) => {
-                const id = report.item?.id ?? `report-${index}`;
-                return (
-                  <ListingGuidanceItem
-                    key={id}
-                    report={report}
-                    isOpen={openListingId === id}
-                    onToggle={() =>
-                      setOpenListingId(openListingId === id ? null : id)
-                    }
-                    navigate={navigate}
-                  />
-                );
-              })}
-            </div>
-          ) : (
-            <EmptyStateCard
-              title="No listings are live in TrendSense yet."
-              helper="Add a listing and TrendSense will begin evaluating immediately."
-              status="• Standing by"
-            />
-          )}
-        </div>
-
-        {/* 🔥 Trending Today Panel */}
-        <div className="mt-6 mb-10">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="sparkly-header text-2xl">
-              Trending Today
-            </h2>
-            <SectionStatus
-              active={trendingToday.length > 0}
-              label={trendingToday.length > 0 ? "• Live" : "• Standing by"}
-            />
-          </div>
-          <p className="text-xs opacity-60 mb-3">
-            Live picks drawn from your saved listings.
-          </p>
-
-          {trendingToday.length > 0 ? (
-            trendingToday.slice(0, 5).map((rep) => (
-              <TrendingTodayCard key={rep.item.id} report={rep} />
-            ))
-          ) : (
-            <EmptyStateCard
-              title="Market conditions remain stable across tracked categories."
-              helper="Awaiting new catalysts to elevate featured listings."
-              status="• Standing by"
-            />
-          )}
-        </div>
-
-        {/* SIDE-BY-SIDE TRENDING DUO */}
-        <Section
-          title={
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <IconFlame />
-                Today’s Trending Duo
+          <div className="trend-live-summary">
+            {liveSignalCount > 0 ? (
+              <div className="flex items-center gap-2 text-sm text-white/70">
+                <span className="gold-dot" aria-hidden="true" />
+                <span>{liveSignalCount} live signals detected today</span>
               </div>
-              <SectionStatus
-                active={Boolean(trendingPair)}
-                label={trendingPair ? "• Live" : "• Standing by"}
-              />
-            </div>
-          }
-        >
-      <p className="text-xs opacity-60 mb-4">
-        Dual-market movers surfaced when paired catalysts align.
-      </p>
-      {trendingPair ? (
-        <div className="grid grid-cols-2 gap-4">
-              {/* LEFT BOX */}
-              <div className="bg-black/30 border border-[#E8D5A8]/60 rounded-lg p-4">
-                <div className="text-xs uppercase opacity-60 mb-1">
-                  Do you have this?
-                </div>
-                <Title>{trendingPair.left.title}</Title>
-                <Details>{trendingPair.left.reason}</Details>
-                <Details className="opacity-60 text-xs mt-1">
-                  Category: {trendingPair.left.category}
-                </Details>
-                {renderHeadlineList(trendingPair.left.headlines)}
-                <button
-                  className="mt-3 text-xs px-2 py-1 border border-[#E8D5A8]/60 rounded hover:bg-[#E8D5A8]/10"
-                  onClick={() => navigate("/prep")}
-                >
-                  Add Listing
-                </button>
-              </div>
-
-              {/* RIGHT BOX */}
-              <div className="bg-black/30 border border-[#E8D5A8]/60 rounded-lg p-4">
-                <div className="text-xs uppercase opacity-60 mb-1">
-                  No? You definitely have this.
-                </div>
-                <Title>{trendingPair.right.title}</Title>
-                <Details>{trendingPair.right.reason}</Details>
-                <Details className="opacity-60 text-xs mt-1">
-                  Category: {trendingPair.right.category}
-                </Details>
-                {renderHeadlineList(trendingPair.right.headlines)}
-                <button
-                  className="mt-3 text-xs px-2 py-1 border border-[#E8D5A8]/60 rounded hover:bg-[#E8D5A8]/10"
-                  onClick={() => navigate("/prep")}
-                >
-                  Add Listing
-                </button>
-              </div>
-        </div>
-      ) : (
-            <EmptyStateCard
-              title="Momentum signals remain neutral, favoring price stability."
-              helper="Requires dual catalysts across two listings to activate."
-              status="• Standing by"
-            />
-          )}
-        </Section>
-
-        {/* OPPORTUNITY PANEL — Only if no saved listings */}
-{reports.length === 0 && (
-  <Section
-    title={
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className="text-xl">🔥</span>
-          <div>
-            <div className="sparkly-header text-2xl">What’s Heating Up</div>
-          </div>
-        </div>
-        <SectionStatus
-          active={filteredOpportunities.length > 0}
-          label={filteredOpportunities.length > 0 ? "• Live" : "• Standing by"}
-        />
-      </div>
-    }
-  >
-    <p className="text-xs opacity-80 text-[#FFDBA9]">
-      Items seeing early momentum—even if you don’t have them yet.
-    </p>
-    <p className="text-[11px] text-white/55 mb-4">
-      Coming in hot? We’ll surface it instantly so you can ride the wave.
-    </p>
-            {filteredOpportunities.length > 0 ? (
-              filteredOpportunities.map((op, i) => (
-                <Card key={i}>
-                  <Title>{op.title}</Title>
-                  <Details>{op.reason}</Details>
-                  <Details className="opacity-60 text-xs mt-1">
-                    Category: {op.category}
-                  </Details>
-                  {renderHeadlineList(op.headlines)}
-
-                  <div className="flex gap-3 mt-3 text-xs">
-                    <button
-                      className="px-2 py-1 border border-[#E8D5A8]/60 rounded hover:bg-[#E8D5A8]/10"
-                      onClick={() => navigate("/prep")}
-                    >
-                      Add Your First Listing
-                    </button>
-                  </div>
-                </Card>
-              ))
             ) : (
-              <EmptyStateCard
-                title="No early surges spotted yet."
-                helper="Add a saved listing and we’ll signal the next category that comes in hot."
-                status="• Standing by"
-              />
+              <p className="text-sm text-white/60">
+                TrendSense is scanning news and buyer behavior right now.
+              </p>
             )}
-          </Section>
-        )}
-
-        {canShowListNext && (
-          <div className="mt-14 mb-10">
-            <h2 className="sparkly-header text-2xl mb-2">List Next</h2>
-            <p className="text-xs opacity-60 mb-4">
-              Based on demand, price signals, and category momentum.
-            </p>
-            {listNext.slice(0, 5).map((entry) => (
-              <ListNextCard key={entry.id} report={entry} />
-            ))}
           </div>
-        )}
+        </div>
 
-        {canShowFlipPotential && (
-          <div className="mt-14 mb-10">
-            <h2 className="sparkly-header text-2xl mb-2">
-              Flip Potential
-            </h2>
-            <p className="text-xs opacity-60 mb-4">
-              High-upside items with strong sell-through signals.
-            </p>
-            {flipPotential.slice(0, 5).map((entry) => (
-              <FlipPotentialCard key={entry.id} report={entry} />
-            ))}
-          </div>
-        )}
-
-        {canShowAlerts && (
-          <div className="mt-14 mb-10">
-            <h2 className="sparkly-header text-2xl mb-2">
-              Live Trend Alerts
-            </h2>
-            {actionableAlerts.map((alert, i) => (
-              <div
-                key={`${alert.itemId || i}-${i}`}
-                className="text-sm text-[#E8E1D0] mb-4"
-              >
-                <div className="font-semibold text-[#E8D5A8]">
-                  • {alert.message}
-                </div>
-                {renderHeadlineList(alert.headlines)}
+        {heroAvailable ? (
+          <div
+            className={`bg-[#0b1318] border border-[#1f2c33] rounded-3xl p-6 space-y-4 trend-hero-card ${
+              heroDecision !== "QUIET" ? "trend-hero-card-active" : ""
+            }`}
+          >
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="state-row flex items-center gap-4">
+                <span
+                  className={`state-pill state-pill-${heroDecision.toLowerCase()} font-semibold tracking-[0.35em] text-[11px]`}
+                >
+                  {heroDecision}
+                </span>
+                <p className="text-sm uppercase tracking-[0.35em] text-white/60">
+                  {heroReport.item?.title || "Listing readout"}
+                </p>
               </div>
-            ))}
+            </div>
+            <div className="hero-reason-row flex items-start gap-3">
+              {heroDecision === "ACTIVE" && (
+                <span className="hero-arrow-large" aria-hidden="true">
+                  →
+                </span>
+              )}
+              <p
+                className={`hero-reason text-[18px] md:text-[20px] font-semibold leading-tight ${
+                  heroDecision === "ACTIVE" ? "hero-reason-active" : ""
+                }`}
+              >
+                {heroReason}
+              </p>
+            </div>
+            {heroDecision === "QUIET" ? (
+              <p className="trend-quiet-note">Monitoring for new signals.</p>
+            ) : (
+              <p className="text-sm text-white/80 leading-snug">{heroEffect}</p>
+            )}
+            <div className="hero-evidence">
+              <span className="text-[11px] uppercase tracking-[0.35em] text-white/50">
+                Evidence
+              </span>
+              <ul
+                key={`hero-evidence-${heroPulseKey}`}
+                className="evidence-list text-[10px] text-white/70"
+              >
+                {heroEvidence.map((chip) => (
+                  <li
+                    key={`${chip.label}-${chip.status}`}
+                    className={`evidence-line ${
+                      heroDecision !== "QUIET" ? "evidence-active" : ""
+                    }`}
+                  >
+                    <span>{chip.label}</span>
+                    <span>{chip.status}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-3">
+              <div className="text-[11px] uppercase tracking-[0.35em] text-white/50">
+                {heroDecision === "ACTIVE"
+                  ? "Why it’s active"
+                  : heroDecision === "STABLE"
+                  ? "What changed"
+                  : "Why it’s quiet"}
+              </div>
+              <div className="space-y-2 text-sm text-white/80">
+                <div>
+                  <span className="text-xs uppercase tracking-[0.3em] text-white/40 mr-2">
+                    Source
+                  </span>
+                  {heroSource}
+                </div>
+                <div>
+                  <span className="text-xs uppercase tracking-[0.3em] text-white/40 mr-2">
+                    Event
+                  </span>
+                  {heroEventHeadline ||
+                    "No qualifying news or demand events detected."}
+                </div>
+                {heroTimingLabel && (
+                  <div>
+                    <span className="text-xs uppercase tracking-[0.3em] text-white/40 mr-2">
+                      Timing
+                    </span>
+                    {heroTimingLabel}
+                  </div>
+                )}
+                <div>
+                  <span className="text-xs uppercase tracking-[0.3em] text-white/40 mr-2">
+                    Effect
+                  </span>
+                  {heroEffect}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-[#0b1318] border border-[#1f2c33] rounded-3xl p-6 space-y-2">
+            <div className="text-[11px] uppercase tracking-[0.35em] text-white/50">
+              No tracked listings yet
+            </div>
+            <p className="text-sm text-white/70">
+              Add your first listing and TrendSense surfaces a reason-driven verdict with proof.
+            </p>
           </div>
         )}
 
-        {canShowSmartPrice && (
-          <div className="mt-14 mb-10">
-            <h2 className="sparkly-header text-2xl mb-2">
-              Smart Price Bands
-            </h2>
-            <p className="text-xs opacity-60 mb-4">
-              Min–Target–Max pricing predicted from active demand and comps.
-            </p>
-            {smartPriceEntries.slice(0, 5).map((entry) => (
-              <SmartPriceBandCard key={entry.item.id} entry={entry} />
-            ))}
+        <section className="space-y-4">
+          <div className="flex items-center gap-3">
+            {liveSignalCount > 0 && <span className="gold-dot" aria-hidden="true" />}
+            <h2 className="sparkly-header text-2xl">Live News</h2>
           </div>
-        )}
-
-        {canShowCategoryMomentum && (
-          <div className="mt-14 mb-10">
-            <h2 className="sparkly-header text-2xl mb-2">
-              Category Momentum
-            </h2>
-            <p className="text-xs opacity-60 mb-4">
-              Which categories are heating up or cooling off this week.
-            </p>
-            {Object.entries(infinity.categoryMomentum)
-              .slice(0, 8)
-              .map(([category, data]) => (
-                <CategoryMomentumCard
-                  key={category}
-                  category={category}
-                  data={data}
-                />
+          {liveNewsItems.length ? (
+            <div className="space-y-3">
+              {liveNewsItems.map((news) => (
+                <div
+                  key={news.id}
+                  className="news-card border border-white/10 rounded-3xl p-4 bg-[#070b0f]"
+                >
+                  <div className="news-card-row flex gap-3">
+                    <span className="hero-arrow-large" aria-hidden="true">
+                      →
+                    </span>
+                    <div className="space-y-1">
+                      <p className="text-lg font-semibold text-white">
+                        {news.headline}
+                      </p>
+                      <div className="flex flex-wrap gap-4 text-[11px] text-white/60">
+                        <span>Source: {news.source}</span>
+                        {news.timestampLabel && <span>Updated: {news.timestampLabel}</span>}
+                      </div>
+                      <p className="text-sm text-white/70">
+                        Why this matters — {news.why}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               ))}
-          </div>
+            </div>
+          ) : (
+            <p className="text-sm text-white/60">
+              No live news detected yet—checks are running.
+            </p>
+          )}
+        </section>
+
+        {opportunitySignals.length > 0 && (
+          <section className="space-y-4">
+            <div className="flex items-center gap-3">
+              <h2 className="sparkly-header text-2xl">Do you have any of these?</h2>
+            </div>
+            <div className="space-y-4">
+              {opportunitySignals.map((signal) => (
+                <div
+                  key={signal.id}
+                  className="opportunity-card border border-white/10 rounded-3xl p-4 bg-[#070b0f]"
+                >
+                  <div className="space-y-2">
+                    <p className="text-lg font-semibold text-white">
+                      {signal.heading}
+                    </p>
+                    <p className="opportunity-reason text-sm text-white/80 leading-snug">
+                      <span className="hero-arrow-large" aria-hidden="true">
+                        →
+                      </span>
+                      {signal.reason}
+                    </p>
+                    <div className="flex flex-wrap gap-3 text-[11px] text-white/60">
+                      <span className="evidence-line">
+                        <span>•</span>
+                        <span>Source: {signal.source}</span>
+                      </span>
+                      {signal.timestampLabel && (
+                        <span className="evidence-line">
+                          <span>•</span>
+                          <span>Updated: {signal.timestampLabel}</span>
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-white/70">
+                      {signal.why}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
         )}
 
-        {canShowHotTags && (
-          <div className="mt-14 mb-10">
-            <h2 className="sparkly-header text-2xl mb-2">
-              Hot Tags This Week
-            </h2>
-            <p className="text-xs opacity-60 mb-4">
-              Emerging keywords across the resale market.
-            </p>
-            {hotTags.slice(0, 10).map((t, index) => (
-              <HotTagCard key={`${t.keyword || index}-${index}`} tag={t} />
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="sparkly-header text-2xl">Live Listings</h2>
+            <span className="text-[11px] text-white/60 uppercase tracking-[0.35em]">
+              {hasAccess ? "Live" : "Preview"}
+            </span>
+          </div>
+          <p className="text-xs text-white/60">
+            Each row surfaces QUIET / STABLE / ACTIVE status with a single event-backed reason.
+          </p>
+          <div className="space-y-3">
+            {topReports.length === 0 && (
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-4 text-sm text-white/60">
+                No listings are live—add a saved listing from Single Listing to begin realtime guidance.
+              </div>
+            )}
+            {topReports.map((report) => (
+              <ListingRow
+                key={report.item?.id || report.eventHeadline}
+                report={report}
+                expanded={expandedListing === report.item?.id}
+                onToggle={() =>
+                  setExpandedListing((prev) =>
+                    prev === report.item?.id ? null : report.item?.id
+                  )
+                }
+              />
             ))}
           </div>
-        )}
+          {waitCount > 0 && (
+            <div className="trend-quiet-summary rounded-2xl border border-white/10 bg-black/25 p-4 mt-2">
+              <div className="flex items-center justify-between text-sm text-white/70">
+                <p>Monitoring {waitCount} listings quietly.</p>
+                <button
+                  type="button"
+                  onClick={() => setShowWaitList((prev) => !prev)}
+                  className="text-[11px] uppercase tracking-[0.35em] text-white/60 border border-white/20 rounded-full px-3 py-1 hover:border-white/40 transition"
+                >
+                  {showWaitList ? "Hide details" : "Show details"}
+                </button>
+              </div>
+              {showWaitList && (
+                <div className="mt-3 space-y-2 text-[11px] text-white/60">
+                  {waitReports.slice(0, 5).map((report) => (
+                    <div
+                      key={report.item?.id || report.eventHeadline}
+                      className="rounded-xl border border-white/10 bg-black/15 p-3"
+                    >
+                      <div className="font-semibold text-white/80 text-sm">
+                        {report.item?.title || "Tracked listing"}
+                      </div>
+                      <p className="text-[11px] text-white/60 mt-1">
+                        {getEventHeadline(report) ||
+                          selectAbsencePhrase(report?.item?.id?.length || 0)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </section>
 
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="sparkly-header text-2xl">What buyers are searching now</h2>
+          </div>
+          <p className="text-xs text-white/60">
+            Short-lived phrases appearing across your listings.
+          </p>
+          {filteredTagList.length ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {filteredTagList.map((tag) => (
+                <div
+                  key={tag.keyword}
+                  className="rounded-2xl border border-white/10 bg-black/25 p-4 text-sm"
+                >
+                  <div className="font-semibold text-white tracking-[0.3em] text-[11px] uppercase">
+                    {tag.keyword}
+                  </div>
+                  <p className="text-white/70 mt-1 text-[12px]">
+                    Appearing in your tracked listings—visibility may shift quickly.
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-sm text-white/60">
+              No active buyer searches tied to your items right now.
+            </div>
+          )}
+        </section>
+
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="sparkly-header text-2xl">Buyer Perspective</h2>
+            <button
+              type="button"
+              onClick={() => setShowBuyerPerspective((prev) => !prev)}
+              className="text-[11px] uppercase tracking-[0.35em] text-white/60 border border-white/20 rounded-full px-3 py-1 hover:border-white/40 transition"
+            >
+              {showBuyerPerspective ? "Hide buyer insights" : "Show buyer insights"}
+            </button>
+          </div>
+          {showBuyerPerspective && (
+            <div className="space-y-3">
+              {buyerInsights.length ? (
+                buyerInsights.map((insight) => (
+                  <div
+                    key={insight.id}
+                    className="rounded-2xl border border-white/10 bg-black/30 p-4 text-sm text-white/70"
+                  >
+                    <div className="font-semibold text-white">
+                      {insight.title}
+                    </div>
+                    <p className="text-white/60 mt-1">{insight.hint}</p>
+                  </div>
+                ))
+              ) : (
+                  <p className="text-sm text-white/60">
+                    Buyer insights appear whenever TrendSense detects a concrete event.
+                  </p>
+              )}
+            </div>
+          )}
+        </section>
+
+        <p className="text-[11px] text-white/40 mt-6">
+          Signals include news mentions, buyer search behavior, and live marketplace activity.
+        </p>
       </div>
 
       <PremiumModal
@@ -824,345 +682,144 @@ export default function TrendSenseDashboard() {
         limit={paywallState.limit}
         onClose={closePaywall}
       />
-
-      {openItem && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 z-50">
-          <div className="bg-[#0A0D0F] w-full max-w-lg border border-[#E8D5A8] rounded-xl p-6 relative">
-            <button
-              className="absolute right-4 top-4 text-[#E8D5A8]/70 hover:text-[#E8D5A8]"
-              onClick={() => setOpenItem(null)}
-            >
-              ✕
-            </button>
-
-            <h2 className="text-xl mb-3">
-              {openItem.item?.title || "Listing"}
-            </h2>
-
-            {(() => {
-              const ultra = openItem.ts || openItem;
-              const floor =
-                ultra.priceFloor ?? ultra.smartPriceRange?.min ?? "—";
-              const target =
-                ultra.priceTarget ??
-                ultra.smartPriceRange?.target ??
-                "—";
-              const ceil =
-                ultra.priceCeiling ?? ultra.smartPriceRange?.max ?? "—";
-              const catKey = openItem.item?.category || "Other";
-              const catInfo =
-                infinity.categoryMomentum &&
-                infinity.categoryMomentum[catKey];
-              const flipScore =
-                ultra.priceCeiling && ultra.priceFloor
-                  ? ultra.priceCeiling - ultra.priceFloor
-                  : null;
-
-              return (
-                <div className="space-y-2 text-sm opacity-80">
-                  <div>
-                    <strong>Headline:</strong>{" "}
-                    {ultra.eventHeadline || "—"}
-                  </div>
-                  <div>
-                    <strong>Why:</strong>{" "}
-                    {ultra.eventReasons?.join(" • ") || "—"}
-                  </div>
-                  <div>
-                    <strong>Price Band:</strong>{" "}
-                    {floor} → {target} → {ceil}
-                  </div>
-                  <div>
-                    <strong>Flip Potential:</strong>{" "}
-                    {flipScore ?? "—"}
-                  </div>
-                  <div>
-                    <strong>Category Momentum:</strong>{" "}
-                    {catInfo?.direction || "—"}
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-/* ——————— Reusable Components ——————— */
-;
-
-function Section({ title, children }) {
-  return (
-    <div className="mb-10">
-      <h2 className="text-xl font-semibold mb-4">{title}</h2>
-      {children}
-    </div>
-  );
-}
-
-function Card({ children, item, navigate, onClick }) {
-  return (
-    <div
-      className="relative bg-black/30 border border-[#E8D5A8]/60 rounded-lg p-4 mb-3 hover:bg-black/40 transition cursor-pointer"
-      onClick={onClick}
-    >
-      <div>{children}</div>
-
-      {item && navigate && (
-        <div className="flex gap-3 mt-3 text-xs">
-          <button
-            onClick={() => navigate(`/inventory?open=${item.id}`)}
-            className="px-2 py-1 border border-[#E8D5A8]/60 rounded hover:bg-[#E8D5A8]/10"
-          >
-            Open Listing
-          </button>
-
-          <button
-            onClick={() =>
-              navigate("/launch-listing", { state: { item } })
-            }
-            className="px-2 py-1 border border-[#E8D5A8]/60 rounded hover:bg-[#E8D5A8]/10"
-          >
-            LaunchDeck
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Title({ children }) {
-  return <div className="font-semibold text-[#E8D5A8]">{children}</div>;
-}
-
-function Subtitle({ children }) {
-  return <div className="mt-2 font-medium">{children}</div>;
-}
-
-function Details({ children, className = "" }) {
-  return (
-    <div
-      className={`text-xs mt-1 opacity-75 leading-relaxed ${className}`}
-    >
-      {children}
-    </div>
-  );
-}
-
-function Empty({ children }) {
-  return <div className="text-xs opacity-50 italic p-2">{children}</div>;
-}
-
-function SectionStatus({ active = false, label }) {
-  const text = label || (active ? "• Live" : "• Standing by");
-  return (
-    <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.35em] text-white/55">
-      <span
-        className={`inline-flex h-2 w-2 rounded-full ${
-          active
-            ? "bg-emerald-400 shadow-[0_0_10px_rgba(19,236,158,0.55)]"
-            : "bg-white/25"
-        } animate-pulse`}
-      ></span>
-      {text}
-    </div>
-  );
-}
-
-function HelperChip({ children }) {
-  return (
-    <div className="inline-flex items-center px-3 py-1 rounded-full border border-white/15 text-[11px] text-white/70 bg-white/5 backdrop-blur-sm">
-      {children}
-    </div>
-  );
-}
-
-function EmptyStateCard({ title, helper, status }) {
-  return (
-    <div className="bg-black/30 border border-white/10 rounded-xl p-4 text-sm text-white/80">
-      <SectionStatus active={false} label={status || "• Standing by"} />
-      <div className="mt-2 text-[13px] text-white/80">{title}</div>
-      {helper && (
-        <div className="mt-3">
-          <HelperChip>{helper}</HelperChip>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ListingGuidanceItem({ report, isOpen, onToggle, navigate }) {
-  if (!report) return null;
-  const item = report.item || {};
-  const action = report.trendGuidance?.action || "Hold";
-  const reason =
-    report.trendGuidance?.reason ||
-    "Hold — no catalyst detected. Pricing typically stays steady.";
-  const firstPhoto = Array.isArray(item.photos) ? item.photos[0] : null;
-  const cover =
-    (typeof firstPhoto === "string" ? firstPhoto : firstPhoto?.url) ||
-    item.photo?.url ||
-    item.coverPhoto ||
-    item.photoUrl ||
+function ListingRow({ report, expanded, onToggle }) {
+  const decision = getDecisionLabel(report);
+  const reason = getReasonText(report);
+  const source = report.eventHeadlines?.[0]?.source || "TrendSense curation";
+  const timing =
+    report.eventTimestamp ||
+    report.eventHeadlines?.[0]?.publishedAt ||
     null;
-  const recentHeadlines = (report.eventHeadlines || []).filter(
-    (headline) => !headline?.isHistorical && isHeadlineRecent(headline)
-  );
-  const primaryHeadline = recentHeadlines[0] || null;
-  const collapsedLine = primaryHeadline
-    ? `${primaryHeadline.source || "Source"} • ${formatRelativeDate(
-        primaryHeadline.publishedAt
-      )}`
-    : "Hold — no catalyst detected.";
-  const actionAccent =
-    action === "Increase"
-      ? "text-emerald-300"
-      : action === "Watch"
-      ? "text-[#F7E7A5]"
-      : "text-white";
-
+  const eventHeadline =
+    getEventHeadline(report) ||
+    selectAbsencePhrase((report?.item?.id?.length || 0) + 1);
+  const effect = buildEffectText(report);
+  const evidenceChips = formatEvidenceChips(report);
+  const listingActive = decision !== "QUIET";
   return (
     <div
-      className={`rounded-2xl border border-white/10 bg-black/30 transition hover:border-white/30 ${
-        isOpen ? "ring-1 ring-[#E8D5A8]/60 bg-black/40" : ""
+      className={`rounded-3xl border border-white/10 bg-black/30 p-4 space-y-3 listing-row ${
+        listingActive ? "listing-row-active" : ""
       }`}
     >
-      <button
-        type="button"
-        onClick={onToggle}
-        className="w-full flex items-center gap-4 p-4 text-left"
-      >
-        <div className="h-14 w-14 rounded-xl bg-white/5 border border-white/10 overflow-hidden flex items-center justify-center text-white/40 text-lg uppercase">
-          {cover ? (
-            <img
-              src={cover}
-              alt={item.title || "Listing"}
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            (item.title || "?").slice(0, 1)
-          )}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2">
-            <div className="text-sm font-semibold text-white truncate">
-              {item.title || "Untitled Listing"}
-            </div>
+        <div className="listing-header flex items-center justify-between flex-wrap gap-3">
+          <div className="state-row flex items-center gap-3">
             <span
-              className={`text-[11px] uppercase tracking-[0.35em] ${actionAccent}`}
+              className={`state-pill state-pill-${decision.toLowerCase()} px-3 py-1 rounded-full text-[11px] tracking-[0.35em]`}
             >
-              {action}
+              {decision}
             </span>
-          </div>
-          <div className="text-xs text-white/60 mt-1 truncate">
-            {collapsedLine}
+            <p className="text-sm uppercase tracking-[0.35em] text-white/60">
+              {report.item?.title || "Listing"}
+            </p>
           </div>
         </div>
-        <span
-          className={`text-white/60 transition-transform ${
-            isOpen ? "rotate-45" : ""
+      <div className="listing-reason-row flex items-start gap-3">
+        {decision === "ACTIVE" && (
+          <span className="hero-arrow-large" aria-hidden="true">
+            →
+          </span>
+        )}
+        <p
+          className={`listing-reason text-[15px] text-white leading-snug ${
+            decision === "ACTIVE" ? "hero-reason-active" : ""
           }`}
         >
-          +
-        </span>
-      </button>
-      {isOpen && (
-        <div className="px-4 pb-4 text-sm text-white/80 space-y-3">
-          <div>{reason}</div>
-          {recentHeadlines.length > 0 ? (
-            <div>
-              <div className="text-[10px] uppercase tracking-[0.35em] text-white/40 mb-1">
-                Evidence
-              </div>
-              <div className="space-y-1 text-[11px] text-white/70">
-                {recentHeadlines.slice(0, 3).map((headline, idx) => (
-                  <div key={`${headline.title || idx}-${idx}`}>
-                    {headline.link ? (
-                      <a
-                        href={headline.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-[#E8D5A8] hover:opacity-80"
-                      >
-                        {headline.source || "Source"}
-                      </a>
-                    ) : (
-                      <span className="text-[#E8D5A8]">
-                        {headline.source || "Source"}
-                      </span>
-                    )}
-                    <span className="opacity-80">
-                      {" "}
-                      — {headline.title || "Headline"}
-                    </span>
-                    <span className="opacity-40 ml-1">
-                      • {formatRelativeDate(headline.publishedAt)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <HelperChip>Hold — no catalyst detected</HelperChip>
-          )}
-          <div className="flex flex-col gap-2 text-[11px] text-white/60">
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className="px-3 py-1 rounded-full border border-white/20 bg-transparent hover:border-white/40 transition text-white/70"
-                onClick={() => navigate && item.id && navigate(`/inventory?open=${item.id}`)}
-              >
-                Manage Listing
-              </button>
-            </div>
-            <span className="opacity-60">
-              Need to stop tracking? Open the listing and toggle “Track for TrendSense” off.
+          {reason}
+        </p>
+      </div>
+      {!listingActive && (
+        <p className="trend-quiet-note text-xs text-white/60">
+          Monitoring for new signals.
+        </p>
+      )}
+      {listingActive && (
+        <p className="listing-effect text-sm text-white/80">{effect}</p>
+      )}
+      <ul className="evidence-list text-[10px] text-white/70">
+        {evidenceChips.map((chip) => (
+          <li
+            key={`${chip.label}-${chip.status}`}
+            className={`evidence-line ${
+              listingActive ? "evidence-active" : ""
+            }`}
+          >
+            <span>{chip.label}</span>
+            <span>{chip.status}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="text-[11px] uppercase tracking-[0.35em] border border-white/20 rounded-full px-3 py-1 transition hover:border-white/40"
+        >
+          {expanded ? "Hide why" : "View why"}
+        </button>
+      </div>
+      {expanded && (
+        <div className="expanded-why bg-white/5 border border-white/10 rounded-2xl p-3 text-sm text-white/70 space-y-2">
+          <div>
+            <span className="text-[10px] uppercase tracking-[0.3em] text-white/40 mr-2">
+              Source
             </span>
+            {source}
+          </div>
+          <div>
+            <span className="text-[10px] uppercase tracking-[0.3em] text-white/40 mr-2">
+              Event
+            </span>
+            {eventHeadline}
+          </div>
+          {timing && (
+            <div>
+              <span className="text-[10px] uppercase tracking-[0.3em] text-white/40 mr-2">
+                Timing
+              </span>
+              {formatTimestamp(timing)}
+            </div>
+          )}
+          <div>
+            <span className="text-[10px] uppercase tracking-[0.3em] text-white/40 mr-2">
+              Effect
+            </span>
+            {effect}
           </div>
         </div>
       )}
     </div>
   );
 }
+function selectAbsencePhrase(index = 0) {
+  if (!ABSENCE_PHRASES.length) return "No qualifying news or demand events detected.";
+  const idx = index % ABSENCE_PHRASES.length;
+  return ABSENCE_PHRASES[idx];
+}
 
-function GuidancePanel({ action, sentences = [] }) {
-  const accent =
-    action === "Increase"
-      ? "text-emerald-300"
-      : action === "Watch"
-      ? "text-[#F7E7A5]"
-      : action === "Hold"
-      ? "text-white"
-      : "text-white";
-  const gradient =
-    action === "Increase"
-      ? "from-[rgba(18,70,53,0.9)] via-[#06110c] to-[#050808]"
-      : action === "Watch"
-      ? "from-[rgba(70,65,28,0.85)] via-[#110f05] to-[#050404]"
-      : "from-[#07130F] via-[#050909] to-[#040606]";
-  return (
-    <div className={`relative p-5 rounded-2xl border border-[#1F4133] bg-gradient-to-b ${gradient} shadow-[0_20px_40px_rgba(0,0,0,0.45)] overflow-hidden transform transition-transform duration-500 hover:-translate-y-0.5`}>
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(19,236,158,0.25),_transparent_60%)] opacity-50 animate-slow-pulse"></div>
-      <div className="absolute inset-0 rounded-2xl border border-white/5 [mask-image:radial-gradient(circle,_rgba(255,255,255,0.4),_transparent_70%)] animate-border-fade pointer-events-none"></div>
-      <div className="relative z-10">
-        <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.35em] text-white/50 mb-2">
-          <span>Current Guidance</span>
-          <span className="flex items-center gap-1 text-[#6FE0B8]">
-            <span className="inline-flex h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_10px_rgba(19,236,158,0.6)] animate-pulse"></span>
-            Live
-          </span>
-        </div>
-        <div className={`text-4xl font-semibold ${accent} drop-shadow-[0_0_25px_rgba(19,236,158,0.35)] animate-guidance-word`}>
-          {action}
-        </div>
-        {sentences.slice(0, 2).map((sentence, idx) => (
-          <div key={idx} className="text-[12px] text-white/70 mt-2">
-            {sentence}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+function formatEvidenceChips(report) {
+  const newsState = report?.eventLinked ? "fresh" : "none";
+  const searchState =
+    report?.ts?.searchBoost ?? report?.eventImpactScore
+      ? "forming"
+      : "calm";
+  const listingsState =
+    (report?.ts?.trendScore ?? 0) >= 50 ? "steady" : "calm";
+  const scanState = report?.eventTimestamp
+    ? formatTimestamp(report.eventTimestamp)
+    : null;
+
+  const chips = [
+    { label: "News", status: newsState },
+    { label: "Search", status: searchState },
+    { label: "Listings", status: listingsState },
+  ];
+  if (scanState) {
+    chips.push({ label: "Last scan", status: scanState });
+  }
+  return chips;
 }
