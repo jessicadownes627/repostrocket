@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { fetchRSSFeeds } from "../utils/fetchRSSFeeds";
 import { loadListingLibrary } from "../utils/savedListings";
 import { runTrendSenseInfinity } from "../utils/trendSenseInfinity";
@@ -22,63 +21,61 @@ const LIVE_FEEDS = [
 
 const FALLBACK_NEWS = [
   {
-    headline: "Travis Kelce headlines Taylor Swift’s Kansas City visit",
-    source: "Pop Culture Daily",
-    timestamp: new Date().toISOString(),
-    why: "Celebrity pairing keeps Chiefs merch and related drops in buyer focus.",
-  },
-  {
-    headline: "Marvel announces limited drop ahead of new series premiere",
-    source: "Streaming Brief",
-    timestamp: new Date().toISOString(),
-    why: "Launch chatter lifts visibility for related apparel and collectibles.",
+    headline: "Legacy franchises anchor today’s headlines",
+    source: "TrendSense desk",
+    publishedAt: new Date().toISOString(),
+    description: "Collectors keep a close eye on cultural heavyweights whenever attention clusters.",
+    link: "#",
   },
 ];
 
-const SELLER_FAMILIAR_KEYWORDS = [
-  "psa",
-  "bgs",
-  "cgc",
-  "jordan",
-  "nike",
-  "supreme",
-  "lebron",
-  "kobe",
-  "travis kelce",
-  "taylor swift",
-  "lego",
-  "marvel",
-  "star wars",
-  "disney",
-  "vogue",
-  "variety",
-  "collectible",
-  "nba",
-  "mlb",
-  "nfl",
-  "sports card",
-  "pop culture",
-  "concert",
-  "auction",
-]
-  .map((value) => value.toLowerCase())
-  .filter(Boolean);
+const HERO_FALLBACK = {
+  title: "Today’s headlines spotlight cultural landmarks and competitive moments.",
+  lead: "Media attention is clustering around franchises and athletes that always bring pieces back into focus.",
+  details: [
+    "Every broadcast finale, playoff shift, and high-profile release draws buyers toward familiar names.",
+  ],
+};
 
-const FALLBACK_OPPORTUNITIES = [
-  "PSA-graded sports cards",
-  "Jordan retros and iconic sneaker drops",
-  "Vintage LEGO and entertainment builds",
-  "Pop culture apparel tied to current headlines",
+const OPPORTUNITY_FALLBACK = [
+  "Cultural heavyweights and athletic milestones stay worthy of attention whenever coverage intensifies.",
 ];
 
+const CATEGORY_SOURCE_MAP = {
+  "espn.com": "sports",
+  "tmz.com": "media",
+  "eonline.com": "media",
+  "variety.com": "media",
+  "vogue.com": "fashion",
+  "hypebeast.com": "fashion",
+  "complex.com": "culture",
+};
+
+const CATEGORY_KEYWORDS = {
+  sports: ["playoff", "championship", "team", "trade", "nba", "nfl", "mlb", "nhl"],
+  retail: ["designer", "collection", "runway", "brand", "fashion", "apparel", "luxury"],
+  media: ["movie", "series", "music", "culture", "celebrity", "broadcast", "premiere", "documentary"],
+  business: ["earnings", "deal", "launch", "industry", "platform", "company", "investment"],
+  policy: ["regulation", "policy", "legislation", "govern", "law"],
+  tech: ["ai", "technology", "streaming", "platform", "software", "hardware"],
+};
+const CATEGORY_DISPLAY = {
+  sports: "Sports",
+  retail: "Retail",
+  media: "Media",
+  business: "Business",
+  policy: "Policy",
+  tech: "Tech",
+};
 export default function TrendSenseDashboard() {
-  const navigate = useNavigate();
   const { gate, paywallState, closePaywall } = usePaywallGate();
   const [hasAccess, setHasAccess] = useState(false);
   const [loading, setLoading] = useState(true);
   const [savedItems, setSavedItems] = useState([]);
-  const [newsEntries, setNewsEntries] = useState(FALLBACK_NEWS.map(normalizeFallback));
   const [reports, setReports] = useState([]);
+  const [newsEntries, setNewsEntries] = useState(
+    FALLBACK_NEWS.map(normalizeFallback)
+  );
 
   useEffect(() => {
     const allowed = gate("trendsense", () => setHasAccess(true));
@@ -100,10 +97,7 @@ export default function TrendSenseDashboard() {
       ]);
       if (cancelled) return;
       setSavedItems(library);
-      const normalized = normalizeNewsEntries(newsFeed);
-      if (normalized.length) {
-        setNewsEntries(normalized);
-      }
+      setNewsEntries(normalizeNewsEntries(newsFeed));
       setReports(infinityData?.reports || []);
       setLoading(false);
     };
@@ -113,236 +107,99 @@ export default function TrendSenseDashboard() {
     };
   }, [hasAccess]);
 
-  const itemStories = useMemo(() => {
-    return buildItemStories(savedItems, reports, newsEntries);
-  }, [savedItems, reports, newsEntries]);
-
-  const savedKeywords = useMemo(() => {
-    return buildSavedKeywords(savedItems);
-  }, [savedItems]);
-
-  const todaysCall = useMemo(() => {
-    return buildTodaysCall(itemStories);
-  }, [itemStories]);
-
-  const marketPulse = useMemo(() => {
-    return buildMarketPulse(newsEntries, savedKeywords);
-  }, [newsEntries, savedKeywords]);
-
-  const opportunityPrompts = useMemo(() => {
-    return buildOpportunityPrompts(savedKeywords);
-  }, [savedKeywords]);
-
-  const upcomingMoments = useMemo(() => {
-    return buildUpcomingMoments(newsEntries);
-  }, [newsEntries]);
-
-  const negativeSignals = useMemo(() => {
-    return buildNegativeSignals(newsEntries);
-  }, [newsEntries]);
-
-  const personalizedSuggestions = useMemo(() => {
-    return buildPersonalizedSuggestions(savedItems);
-  }, [savedItems]);
+  const marketPulse = useMemo(() => buildMarketPulse(newsEntries), [newsEntries]);
+  const heroBrief = useMemo(() => buildHeroBrief(marketPulse), [marketPulse]);
+  const opportunityNarratives = useMemo(
+    () => buildOpportunityNarratives(marketPulse),
+    [marketPulse]
+  );
+  const itemStories = useMemo(
+    () => buildItemStories(savedItems, reports),
+    [savedItems, reports]
+  );
 
   if (loading) {
     return <div className="trend-page-loading">Preparing today’s briefing…</div>;
   }
 
   return (
-    <div className="trend-page">
-      <header className="trend-header">
-        <span className="gold-dot" aria-hidden="true" />
-        <div>
-          <h1>TrendSense</h1>
-          <p className="trend-subtitle">
-            Live market intelligence for sellers who care about timing.
-          </p>
-          <p className="trend-quiet-note">
-            TrendSense stays quiet by design. It only surfaces moments when real-world events meaningfully affect buyer attention.
-          </p>
-        </div>
-      </header>
-      <div className="trend-gold-bar" aria-hidden="true" />
-
-      <section className="todays-call">
-        <div className={`todays-call-card todays-call-${todaysCall.status}`}>
-          <p className="call-label">Today’s Call</p>
-          <h2>{todaysCall.label}</h2>
-          <div className="call-status-row">
-            <span className={`status-indicator ${todaysCall.status}`} aria-hidden="true" />
-            <p className="call-status-text">Status: {todaysCall.label}</p>
-          </div>
-          <p className="call-reason">{todaysCall.reasonLine}</p>
-          <div className="call-actions">
-            <button type="button" className="primary-cta">
-              {todaysCall.ctaLabel}
-            </button>
-          </div>
-        </div>
+    <div className="trend-page trend-briefing">
+      <section className="hero-section">
+        <h1 className="hero-title text-display">TrendSense</h1>
+        <p className="hero-subhead text-meta">
+          Coverage today centers on the names shaping resale attention.
+        </p>
+        <hr className="hero-divider" />
       </section>
+      <div className="hero-gold-separator" aria-hidden="true" />
 
-      {todaysCall.status === "standBy" && (
-        <section className="watch-next">
-          <div className="section-heading">
-            <h2>What to Watch Next</h2>
-          </div>
-          <div className="watch-next-body">
-            {personalizedSuggestions.length > 0 && (
-              <article className="watch-next-block watch-next-personal-block">
-                <h3>Based on what you’re watching</h3>
-                <ul>
-                  {personalizedSuggestions.slice(0, 2).map((suggestion) => (
-                    <li key={suggestion}>{suggestion}</li>
-                  ))}
-                </ul>
-              </article>
-            )}
-            <article className="watch-next-block watch-next-guidance-block">
-              <h3>General guidance</h3>
-              <ul className="watch-next-list">
-                <li>
-                  Major film, TV, or gaming franchises (Star Wars collectibles, Marvel figures, Stranger Things comics).
-                </li>
-                <li>
-                  Widely collected sneaker lines (Nike Air Jordan releases, Adidas Yeezy).
-                </li>
-                <li>
-                  Sports memorabilia or seasonal collectibles tied to playoff runs and cultural moments.
-                </li>
-              </ul>
-              <div className="watch-next-cta">
-                <button type="button" className="primary-cta">
-                  Add another item to watch
-                </button>
-              </div>
-            </article>
-          </div>
-        </section>
-      )}
-
-      <section className="item-affected">
-        <div className="section-heading">
-          <h2>Your Listings</h2>
-          <p className="section-subtitle">
-            TrendSense keeps them in view—quiet monitoring unless an active moment appears.
-          </p>
-        </div>
-        <div className="item-affected-grid">
-          {itemStories.map((story) => (
-            <article
-              key={`item-${story.id}`}
-              className={`item-card-affected ${story.active ? "item-active" : ""}`}
-            >
-              <div className="item-affected-row">
-                {story.active && (
-                  <span className="item-arrow" aria-hidden="true">
-                    <MovementArrowIcon />
-                  </span>
-                )}
-                <div className="item-affected-content">
-                  <div className="item-card-body">
-                  {story.listingUrl ? (
-                    <a
-                      href={story.listingUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="item-link"
-                    >
-                      {story.itemName}
-                    </a>
-                  ) : (
-                    <p className="item-prefix">{story.itemName}</p>
-                  )}
-                    <p className="item-status">
-                      <span
-                        className={`status-indicator ${story.active ? "active" : "quiet"}`}
-                        aria-hidden="true"
-                      />
-                      <span className="status-label">
-                        Status: {story.active ? "ACTIVE" : "QUIET"}
-                      </span>
-                      {story.active && <span className="watching-dot" aria-hidden="true" />}
-                    </p>
-                    {story.active ? (
-                      <>
-                        <a
-                          href={story.link || "#"}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="item-headline"
-                        >
-                          {story.headline}
-                        </a>
-                        <p className="item-meta">
-                          {story.source}
-                          {story.timestampLabel ? ` · ${story.timestampLabel}` : ""}
-                        </p>
-                        <p className="item-why">Why this matters — {story.why}</p>
-                        <div className="timing-block">
-                          <p className="timing-title">Why now might matter</p>
-                          <p className="timing-copy">{story.timingNow}</p>
-                          <p className="timing-title">Why waiting could also make sense</p>
-                          <p className="timing-copy">{story.timingWait}</p>
-                        </div>
-                      </>
-                    ) : null}
-                  </div>
-                  <div className="item-actions">
-                    <button type="button" className="tracking-pill">
-                      Remove from tracking
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </article>
+      <section className="attention-strip" aria-label="Live attention">
+        <p className="attention-label text-meta">Attention is clustering around:</p>
+        <div className="attention-chips">
+          {buildAttentionChips(marketPulse).map((chip) => (
+            <span key={chip} className="attention-chip text-meta">
+              {chip}
+            </span>
           ))}
         </div>
       </section>
 
       <section className="market-pulse">
         <div className="section-heading">
-          <h2>Market Pulse — What’s Moving Buyer Attention</h2>
+          <p className="section-label text-headline">MARKET PULSE</p>
+          <p className="section-subhead text-meta">
+            What’s happening in the world right now
+          </p>
         </div>
-        <p className="market-pulse-note">
-          These are the real-world moments currently shaping buyer attention across collectibles, fashion, sports, and media.
-        </p>
-        <div className="news-grid">
-          {marketPulse.map((news) => (
-            <article key={news.headline} className="news-card">
-              <div className="news-headline-row">
-                <span className="market-pulse-bullet" aria-hidden="true" />
+        <div className="pulse-list">
+          {marketPulse.slice(0, 5).map((entry) => (
+            <article key={entry.headline} className="pulse-card">
+              <div className="pulse-headline-row">
+                <span className="pulse-bullet" aria-hidden="true" />
                 <a
-                  href={news.link || "#"}
+                  href={entry.link || "#"}
                   target="_blank"
                   rel="noreferrer"
-                  className="news-headline"
+                  className="pulse-headline text-headline headline-link"
                 >
-                  {news.headline}
+                  {entry.headline}
                 </a>
               </div>
-              <p className="news-meta">
-                {news.source}
-                {news.dateTimeLabel ? ` · ${news.dateTimeLabel}` : ""}
+              <p className="pulse-meta text-meta">
+                {entry.source}
+                {entry.publishedLabel ? ` · ${entry.publishedLabel}` : ""}
               </p>
-              {news.why && <p className="news-why">{news.why}</p>}
+              <div className={`pulse-tags ${entry.tagsDimmed ? "dimmed" : ""}`}>
+                {(entry.tags || []).map((tag) => (
+                  <span
+                    key={`${entry.headline}-${tag.text}`}
+                    className={`pulse-tag pulse-tag--${tag.variant}`}
+                  >
+                    {tag.text}
+                  </span>
+                ))}
+              </div>
             </article>
           ))}
         </div>
       </section>
+      <div className="market-pulse-divider" aria-hidden="true" />
 
-      <section className="opportunity-prompt">
+      <section className="opportunity-section">
         <div className="section-heading">
-          <h2>Do You Own Any of These?</h2>
+          <p className="section-label text-meta">Spotlighted opportunities</p>
+          <h3 className="text-headline">When the noise spikes, so can your listings</h3>
         </div>
-        <ul className="prompt-list">
-          {opportunityPrompts.map((prompt) => (
-            <li key={prompt}>{prompt}</li>
+        <div className="opportunity-grid">
+          {opportunityNarratives.map((copy) => (
+            <p key={copy} className="opportunity-copy text-body">
+              {copy}
+            </p>
           ))}
-        </ul>
-        <div className="prompt-ctas">
+        </div>
+        <div className="opportunity-ctas">
           <button type="button" className="primary-cta">
-            Add an Item to Watch
+            Add an item to track
           </button>
           <button type="button" className="secondary-cta">
             List with Repost Rocket
@@ -350,34 +207,62 @@ export default function TrendSenseDashboard() {
         </div>
       </section>
 
-      {upcomingMoments.length > 0 && (
-        <section className="upcoming-section">
-          <div className="section-heading">
-            <h2>Upcoming Moments to Watch</h2>
-          </div>
-          <ul className="upcoming-list">
-            {upcomingMoments.map((moment) => (
-              <li key={moment}>{moment}</li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {negativeSignals.length > 0 && (
-        <section className="negative-section">
-          <div className="section-heading">
-            <h2>Negative Signals</h2>
-          </div>
-          <ul className="negative-list">
-            {negativeSignals.map((signal) => (
-              <li key={signal}>{signal}</li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      <section className="credibility-block">
-        <p>TrendSense watches verified news sources, media releases, sports moments, auction behavior, and demand shifts.</p>
+      <section className="listings-section">
+        <div className="section-heading">
+          <p className="section-label">Your Listings</p>
+          <h3 className="text-headline">Your items, viewed through today’s headlines</h3>
+        </div>
+        <div className="listings-grid">
+          {itemStories.map((story) => (
+            <article
+              key={story.id}
+              className={`listing-card ${story.active ? "listing-active" : ""}`}
+            >
+              <div className="listing-header">
+                {story.listingUrl ? (
+                  <a
+                    href={story.listingUrl}
+                    rel="noreferrer"
+                    target="_blank"
+                    className="listing-heading-link text-headline"
+                  >
+                    {story.itemName}
+                  </a>
+                ) : (
+                  <p className="listing-heading text-headline">{story.itemName}</p>
+                )}
+                <p className="listing-status text-meta">
+                  <span
+                    className={`status-indicator ${story.active ? "active" : "quiet"}`}
+                  />
+                  {story.active ? "ACTIVE" : "QUIET"}
+                </p>
+              </div>
+              {story.active && (
+                <div className="listing-details">
+                  <a
+                    href={story.link || "#"}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="listing-headline text-headline"
+                  >
+                    ↗︎ {story.headline}
+                  </a>
+                  <p className="listing-meta text-meta">
+                    {story.source}
+                    {story.timestampLabel ? ` · ${story.timestampLabel}` : ""}
+                  </p>
+                  <p className="listing-why text-body">{story.why}</p>
+                </div>
+              )}
+              <div className="listing-actions">
+                <button type="button" className="remove-tracking">
+                  Remove from tracking
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
       </section>
 
       <PremiumModal
@@ -391,263 +276,374 @@ export default function TrendSenseDashboard() {
   );
 }
 
-function normalizeFallback(item) {
+function buildHeroBrief(marketPulse = []) {
+  if (!marketPulse.length) return HERO_FALLBACK;
+  const primary = marketPulse[0];
+  const secondary = marketPulse[1];
+  const detailLines = secondary ? [secondary.why] : [];
   return {
-    headline: item.headline,
-    source: item.source,
-    timestamp: item.timestamp,
-    timestampLabel: formatTimestamp(item.timestamp),
-    why: item.why,
-    link: item.link || "#",
-    context: item.headline,
-    dateLabel: formatDateOnly(item.timestamp),
-    dateTimeLabel: formatDateTime(item.timestamp),
+    title: primary.headline,
+    lead: primary.why,
+    details: detailLines,
+  };
+}
+
+function buildMarketPulse(entries = []) {
+  const selected = selectBalancedPulse(entries);
+  return applyTagStacks(selected);
+}
+
+function buildAttentionChips(entries = []) {
+  const seen = new Set();
+  const chips = [];
+  const tokenStopWords = new Set([
+    "where",
+    "inside",
+    "source",
+    "sources",
+    "source(s)",
+    "goal",
+    "what",
+    "today",
+    "trend",
+    "update",
+  ]);
+  for (const entry of entries) {
+    for (const tag of entry.tags || []) {
+      if (tag.variant === "category") continue;
+      const label = tag.text;
+      if (tokenStopWords.has(label.toLowerCase())) continue;
+      const normalized = label.toLowerCase();
+      if (seen.has(normalized)) continue;
+      seen.add(normalized);
+      chips.push(label);
+      if (chips.length >= 10) break;
+    }
+    if (chips.length >= 10) break;
+  }
+  return chips && chips.length ? chips : ["No major headlines detected"];
+}
+
+function selectBalancedPulse(entries = []) {
+  if (!entries.length) return [];
+  const targetSize = 5;
+  const sportsLimit = Math.floor(targetSize / 2);
+  const buckets = entries.reduce((acc, entry) => {
+    const category = entry.category || "media";
+    (acc[category] = acc[category] || []).push(entry);
+    return acc;
+  }, {});
+  const prioritized = ["business", "retail", "media", "policy", "tech"];
+  const selected = [];
+  const appendFromBucket = (name, limit = 1) => {
+    const bucket = buckets[name] || [];
+    while (bucket.length && selected.length < targetSize && limit > 0) {
+      const candidate = bucket.shift();
+      if (!selected.includes(candidate)) {
+        selected.push(candidate);
+        limit -= 1;
+      }
+    }
+  };
+  prioritized.forEach((category) => appendFromBucket(category));
+  const nonSportsExtras = entries.filter(
+    (entry) => entry.category !== "sports" && !selected.includes(entry)
+  );
+  for (const entry of nonSportsExtras) {
+    if (selected.length >= targetSize) break;
+    selected.push(entry);
+  }
+  let sportsCount = selected.filter((entry) => entry.category === "sports").length;
+  for (const candidate of (buckets.sports || [])) {
+    if (selected.length >= targetSize || sportsCount >= sportsLimit) break;
+    if (!selected.includes(candidate)) {
+      selected.push(candidate);
+      sportsCount += 1;
+    }
+  }
+  for (const entry of entries) {
+    if (selected.length >= targetSize) break;
+    if (!selected.includes(entry)) {
+      selected.push(entry);
+    }
+  }
+  return selected.slice(0, targetSize);
+}
+
+function buildOpportunityNarratives(entries = []) {
+  if (!entries.length) return OPPORTUNITY_FALLBACK;
+  return entries.slice(0, 3).map((entry) => {
+    const entity = extractEntity(entry.headline);
+    if (entity) {
+      return `Attention on ${entity} today rewrites the story for anyone holding that name.`;
+    }
+    return `Coverage from ${entry.source} is turning heads and lifting demand for items tied to this moment.`;
+  });
+}
+
+function normalizeFallback(entry) {
+  return {
+    headline: entry.headline,
+    source: entry.source,
+    link: entry.link || "#",
+    publishedLabel: formatDateTime(entry.publishedAt),
+    category: "media",
+    why: entry.description || "",
+    tags: buildTagList(entry, "media"),
   };
 }
 
 function normalizeNewsEntries(entries = []) {
-  const normalized = (entries || [])
+  if (!entries.length) {
+    return FALLBACK_NEWS.map(normalizeFallback);
+  }
+  return entries
     .filter((entry) => entry?.title)
-    .sort(
-      (a, b) =>
-        new Date(b.publishedAt || b.pubDate || Date.now()) -
-        new Date(a.publishedAt || a.pubDate || Date.now())
-    )
     .slice(0, 6)
-      .map((entry) => ({
+    .map((entry) => {
+      const category = categorizeEntry(entry);
+      return {
         headline: entry.title,
         source: formatSource(entry.source || entry.link || "TrendSense desk"),
         link: entry.link || entry.source || "#",
-        timestamp: entry.publishedAt || entry.pubDate || null,
-        timestampLabel: formatTimestamp(entry.publishedAt || entry.pubDate),
-        dateTimeLabel: formatDateTime(entry.publishedAt || entry.pubDate),
-        why: buildWhyLine(entry),
-        context: `${entry.title} ${entry.description || ""}`,
-      }));
-  return normalized;
-}
-
-function buildItemStories(savedItems = [], reports = [], newsEntries = []) {
-  if (!savedItems?.length) {
-    return [];
-  }
-  const stories = savedItems.map((item, idx) => {
-    const report = reports.find((r) => r.id === item.id);
-    if (report?.ts?.eventLinked) {
-      const context = [
-        report.ts.eventHeadline,
-        ...(report.ts.eventHeadlines || []).map((h) => h.title),
-        ...(report.ts.eventReasons || []),
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      const strongTerms = new Set(
-        [
-          item.brand,
-          item.team,
-          item.athlete,
-          item.title,
-          item.celebrity,
-        ]
-          .filter(Boolean)
-          .map((value) => value.toLowerCase())
-      );
-      const hasDirectMatch = Array.from(strongTerms).some((term) =>
-        matchesDirectTerm(term, context)
-      );
-      if (!hasDirectMatch) {
-        return {
-          id: item.id || `item-${idx}`,
-          itemName: item.title || "Saved listing",
-          active: false,
-        };
-      }
-      const headline =
-        report.ts.eventHeadline ||
-        report.ts.eventHeadlines?.[0]?.title ||
-        item.title ||
-        "Market mention";
-      const source =
-        report.ts.eventHeadlines?.[0]?.source ||
-        report.ts.eventHeadlines?.[0]?.link ||
-        "Verified news";
-      const timestamp =
-        report.ts.eventTimestamp ||
-        report.ts.eventHeadlines?.[0]?.publishedAt ||
-        null;
-      const timestampLabel = formatTimestamp(timestamp);
-      const why = buildItemWhy(headline, item);
-      const timingNow =
-        report.ts.trendGuidance?.reason ||
-        "Fresh coverage is keeping this item top of mind.";
-      const timingWait =
-        "Let the current storyline settle before judging sustained interest.";
-      const impactScore = report.ts.eventImpactScore || 0;
-      const guidanceAction = report.ts.trendGuidance?.action || "Hold";
-      return {
-        id: item.id || `item-${idx}`,
-        itemName: item.title || "Saved listing",
-        active: true,
-        headline,
-        source,
-        timestampLabel,
-        why,
-        link: report.ts.eventHeadlines?.[0]?.link || "#",
-        timingNow,
-        timingWait,
-        impactScore,
-        guidanceAction,
-        listingUrl: item.listingUrl || item.url || null,
+        publishedLabel: formatDateTime(entry.publishedAt || entry.pubDate),
+        category,
+        why: buildWhyLine(entry, category),
+        tags: buildTagList(entry, category),
       };
-    }
-      return {
-        id: item.id || `item-${idx}`,
-        itemName: item.title || "Saved listing",
-        active: false,
-        listingUrl: item.listingUrl || item.url || null,
-      };
-  });
-  return stories;
-}
-
-function buildMarketPulse(entries = [], savedKeywords = []) {
-  if (!entries.length) {
-    return FALLBACK_NEWS;
-  }
-  const filtered = entries.filter((entry) =>
-    matchesSellerKeyword(entry.headline, savedKeywords)
-  );
-  if (filtered.length) {
-    return filtered.slice(0, 4);
-  }
-  return FALLBACK_NEWS;
-}
-
-function buildOpportunityPrompts(savedKeywords = []) {
-  const prompts = [];
-  const unique = new Set();
-  savedKeywords.forEach((keyword) => {
-    const label = `Items tied to ${titleCase(keyword)}`;
-    if (!unique.has(label)) {
-      unique.add(label);
-      prompts.push(label);
-    }
-  });
-  if (!prompts.length) {
-    FALLBACK_OPPORTUNITIES.forEach((prompt) => {
-      if (!unique.has(prompt)) {
-        unique.add(prompt);
-        prompts.push(prompt);
-      }
     });
-  }
-  return prompts.slice(0, 4);
 }
 
-function buildUpcomingMoments(entries = []) {
-  const keywords = ["premiere", "launch", "tour", "drop", "auction"];
-  return entries
-    .filter((entry) =>
-      keywords.some((kw) => entry.headline.toLowerCase().includes(kw))
-    )
-    .map((entry) => `${entry.headline} · ${entry.timestampLabel}`);
-}
-
-function buildNegativeSignals(entries = []) {
-  const signals = entries
-    .filter((entry) =>
-      ["reprint", "oversupply", "reissue", "cheap"].some((kw) =>
-        entry.headline.toLowerCase().includes(kw)
-      )
-    )
-    .map((entry) => `${entry.headline} may cool demand.`);
-  return signals.slice(0, 2);
-}
-
-function matchesSellerKeyword(headline = "", savedKeywords = []) {
-  const normalized = new Set(
-    [
-      ...savedKeywords,
-      ...SELLER_FAMILIAR_KEYWORDS,
+function buildItemStories(savedItems = [], reports = []) {
+  if (!savedItems.length) return [];
+  return savedItems.map((item, idx) => {
+    const report = reports.find((r) => r.id === item.id);
+    const base = {
+      id: item.id || `item-${idx}`,
+      itemName: item.title || "Saved listing",
+      active: false,
+      listingUrl: item.listingUrl || item.url || null,
+    };
+    if (!report?.ts?.eventLinked) return base;
+    const context = [
+      report.ts.eventHeadline,
+      ...(report.ts.eventHeadlines || []).map((h) => h.title),
     ]
-      .map((value) => value?.toLowerCase().trim())
       .filter(Boolean)
-  );
-  const text = (headline || "").toLowerCase();
-  return Array.from(normalized).some((keyword) => text.includes(keyword));
+      .join(" ")
+      .toLowerCase();
+    const terms = [item.brand, item.team, item.athlete, item.title]
+      .filter(Boolean)
+      .map((value) => value.toLowerCase());
+    const directMatch = terms.some((term) => matchesDirectTerm(term, context));
+    if (!directMatch) return base;
+    const headline =
+      report.ts.eventHeadline ||
+      report.ts.eventHeadlines?.[0]?.title ||
+      item.title ||
+      "Market mention";
+    const source =
+      report.ts.eventHeadlines?.[0]?.source ||
+      report.ts.eventHeadlines?.[0]?.link ||
+      "Verified news";
+    const timestamp =
+      report.ts.eventTimestamp ||
+      report.ts.eventHeadlines?.[0]?.publishedAt ||
+      null;
+    return {
+      ...base,
+      active: true,
+      headline,
+      source,
+      timestampLabel: formatTimestamp(timestamp),
+      why: buildItemWhy(headline, item),
+      link: report.ts.eventHeadlines?.[0]?.link || "#",
+    };
+  });
+}
+
+function extractEntity(headline = "") {
+  const match = headline.match(/([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)/);
+  return match ? match[0] : null;
 }
 
 function matchesDirectTerm(term = "", text = "") {
-  const normalizedTerm = term?.toLowerCase().trim();
-  if (!normalizedTerm) return false;
-  const escaped = escapeRegExp(normalizedTerm);
-  const regex = new RegExp(`\\b${escaped}\\b`, "i");
+  const normalized = term?.trim();
+  if (!normalized) return false;
+  const regex = new RegExp(`\\b${escapeRegExp(normalized)}\\b`, "i");
   return regex.test(text);
 }
 
-function escapeRegExp(value = "") {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function buildWhyLine(entry, category) {
+  const text = `${entry.title} ${entry.description || ""}`.toLowerCase();
+  const base = entry.title;
+  switch (category) {
+    case "sports":
+      return `Coverage like this pulls vintage team apparel and game-worn pieces back into buyer focus.`;
+    case "fashion":
+      return `High-profile mentions often lift designer names, making secondary-market samples more visible.`;
+    case "culture":
+      return `Cultural buzz around this story can spark renewed curiosity in related collectibles.`;
+    case "business":
+      return `Platform shifts like this push interest toward early or discontinued releases on resale.`;
+    default:
+      if (text.includes("release") || text.includes("premiere")) {
+        return "New drops often resurface past launches into secondary-market view.";
+      }
+      if (text.includes("documentary") || text.includes("finale")) {
+        return "Documentaries and finales bring earlier seasons back into buyer conversations.";
+      }
+      if (text.includes("tournament") || text.includes("playoff")) {
+        return "Competition cycles keep related memorabilia in the buyer spotlight.";
+      }
+      return `${base} keeps this category relevant for resellers today.`;
+  }
 }
 
-function buildSavedKeywords(items = []) {
-  const set = new Set();
-  items.forEach((item) => {
-    [
-      item.brand,
-      item.team,
-      item.athlete,
-      item.celebrity,
-      item.title,
-      item.category,
-      ...(item.tags || []),
-    ]
-      .filter(Boolean)
-      .forEach((value) => set.add(value.toLowerCase()));
+function categorizeEntry(entry) {
+  const text = `${entry.title} ${entry.description || ""}`.toLowerCase();
+  for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+    if (keywords.some((keyword) => text.includes(keyword))) {
+      return category;
+    }
+  }
+  return "media";
+}
+
+function buildTagList(entry, category) {
+  const stopWords = ["source", "inside", "goal", "where", "what", "today", "trend"];
+  const tags = [];
+  const categoryLabel = CATEGORY_DISPLAY[category] || CATEGORY_DISPLAY.media;
+  tags.push({ text: categoryLabel, variant: "category" });
+  const nouns = extractProperNouns(`${entry.headline} ${entry.description || ""}`);
+  nouns.slice(0, 3).forEach((noun) => {
+    const normalized = noun.toLowerCase();
+    if (stopWords.includes(normalized)) return;
+    if (!tags.find((tag) => tag.text === noun)) {
+      tags.push({ text: noun, variant: "entity" });
+    }
   });
-  return Array.from(set);
+  const contexts = extractContexts(entry);
+  contexts.slice(0, 2).forEach((ctx) => {
+    const normalized = ctx.toLowerCase();
+    if (stopWords.includes(normalized)) return;
+    if (!tags.find((tag) => tag.text === ctx)) {
+      tags.push({ text: ctx, variant: "context" });
+    }
+  });
+  return tags;
 }
 
-function buildTodaysCall(itemStories = []) {
-  const activeStories = itemStories.filter((story) => story.active);
-  if (!activeStories.length) {
-      return {
-        status: "standBy",
-        label: "Stand by today",
-        reasonLine:
-          "No major market-moving coverage tied to your listings right now.",
-        affectedItems: [],
-        ctaLabel: "Check back later",
-      };
+function extractContexts(entry) {
+  const contextTerms = [
+    { key: "nfl", label: "NFL" },
+    { key: "mlb", label: "MLB" },
+    { key: "nba", label: "NBA" },
+    { key: "trade", label: "Trade" },
+    { key: "deal", label: "Deal" },
+    { key: "earnings", label: "Earnings" },
+    { key: "licensing", label: "Licensing" },
+    { key: "media rights", label: "Media rights" },
+    { key: "streaming", label: "Streaming" },
+    { key: "apparel", label: "Apparel" },
+    { key: "retail", label: "Retail" },
+    { key: "ai", label: "AI" },
+    { key: "tour", label: "Tour" },
+    { key: "release", label: "Release" },
+  ];
+  const text = `${entry.title} ${entry.description || ""}`.toLowerCase();
+  const found = [];
+  for (const { key, label } of contextTerms) {
+    if (found.length >= 2) break;
+    if (text.includes(key)) {
+      found.push(label);
+    }
   }
-  const uniqueNames = [...new Set(activeStories.map((story) => story.itemName))];
-  const primeStory = activeStories.find(
-    (story) => story.guidanceAction === "Increase" && story.impactScore >= 35
-  );
-  const heroStory = primeStory || activeStories[0];
-  if (primeStory) {
-    return {
-      status: "list",
-      label: "List now",
-      reasonLine: heroStory.why,
-      affectedItems: uniqueNames,
-      ctaLabel: "Review and list",
-    };
-  }
+  return found;
+}
 
-  return {
-    status: "prepare",
-    label: "Prepare, don’t list yet",
-    reasonLine: heroStory.why,
-    affectedItems: uniqueNames,
-    ctaLabel: "Review affected items",
-  };
+function extractProperNouns(text = "") {
+  const matches = [...text.matchAll(/([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)/g)];
+  const seen = new Set();
+  const nouns = [];
+  for (const match of matches) {
+    const normalized = match[0];
+    const key = normalized.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      nouns.push(normalized);
+    }
+    if (nouns.length >= 3) break;
+  }
+  return nouns;
+}
+
+function extractSourceName(source = "") {
+  if (!source) return "";
+  try {
+    const hostname = new URL(source).hostname;
+    const parts = hostname.split(".").filter(Boolean);
+    const candidate =
+      parts[0] === "www" && parts.length > 1 ? parts[1] : parts[0];
+    return candidate.replace(/[^a-z]/gi, "").toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function extractEntities(text = "") {
+  const matches = [...text.matchAll(/([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)/g)];
+  const entities = { person: "", place: "", team: "" };
+  for (const match of matches) {
+    const value = match[0];
+    if (!entities.person) {
+      entities.person = value;
+      continue;
+    }
+    if (!entities.place && /(City|Park|Square|Stadium|Village|Island|Studio|Bridge)/.test(value)) {
+      entities.place = value;
+      continue;
+    }
+    if (!entities.team && /(Team|FC|Club|Crew|League|Sports|Company)/.test(value)) {
+      entities.team = value;
+      continue;
+    }
+  }
+  return entities;
+}
+
+function applyTagStacks(entries = []) {
+  const stackCounts = {};
+  let previousKey = "";
+  return entries.map((entry) => {
+    const tags = buildTagList(entry, entry.category);
+    const key = tags.map((tag) => tag.text).join("|");
+    stackCounts[key] = (stackCounts[key] || 0) + 1;
+    const tagsDimmed = previousKey === key;
+    previousKey = key;
+    return {
+      ...entry,
+      tags,
+      tagsDimmed,
+    };
+  });
+}
+
+function buildItemWhy(headline, item) {
+  const highlighted = item.brand || item.category || item.title;
+  if (highlighted) {
+    return `${highlighted} connects to today’s coverage—this moment keeps it relevant.`;
+  }
+  return `${headline} keeps this kind of item visible right now.`;
 }
 
 function formatSource(source) {
   if (!source) return "TrendSense desk";
-  const trimmed = source.replace(/^https?:\/\//, "").split("/")[0];
-  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+  try {
+    return new URL(source).hostname.replace(/^www\\./, "");
+  } catch {
+    return source;
+  }
 }
 
 function formatTimestamp(dateStr) {
@@ -659,17 +655,6 @@ function formatTimestamp(dateStr) {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  });
-}
-
-function formatDateOnly(dateStr) {
-  if (!dateStr) return "";
-  const parsed = new Date(dateStr);
-  if (Number.isNaN(parsed.getTime())) return "";
-  return parsed.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
   });
 }
 
@@ -686,109 +671,6 @@ function formatDateTime(dateStr) {
   });
 }
 
-function buildWhyLine(entry) {
-  const text = `${entry.title} ${entry.description || ""}`.toLowerCase();
-  if (text.includes("release") || text.includes("premiere")) {
-    return "Release coverage is nudging buyers toward similar items.";
-  }
-  if (text.includes("documentary") || text.includes("finale")) {
-    return "Cultural attention is aligning brands and collectibles with renewed relevance.";
-  }
-  if (text.includes("tournament") || text.includes("playoff")) {
-    return "Competition cycles often drive renewed interest in related memorabilia.";
-  }
-  return "Media attention is keeping this category front of mind for buyers.";
-}
-
-function buildItemWhy(headline, item) {
-  const highlighted = item.brand || item.category || item.title;
-  if (highlighted) {
-    return `${headline} mentions ${highlighted}, so buyers see your listing in the same storyline.`;
-  }
-  return `${headline} is pushing demand for this kind of item right now.`;
-}
-
-function titleCase(str = "") {
-  return str
-    .toString()
-    .split(" ")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
-
-const PERSONALIZED_PATTERNS = [
-  {
-    keywords: ["lego"],
-    suggestion:
-      "Sellers who watch LEGO sets often also track large build kits and designer collaborations.",
-  },
-  {
-    keywords: ["jordan", "sneaker", "nike", "yeezy", "adidas"],
-    suggestion:
-      "Similar sneaker lines and athlete editions—Jordan retros, Nike Airs, and Yeezy drops—keep resale buyers engaged.",
-  },
-  {
-    keywords: ["sports card", "psa", "bgs", "cgc", "nba", "mlb", "nfl"],
-    suggestion:
-      "Sports memorabilia tied to playoff teams or embossed by grading houses stays in demand when seasons heat up.",
-  },
-  {
-    keywords: ["holiday", "christmas", "easter", "super bowl"],
-    suggestion:
-      "Seasonal collectibles—holiday décor, Super Bowl pieces, or festival-themed sets—capture renewed interest each year.",
-  },
-];
-
-function buildPersonalizedSuggestions(items = []) {
-  const suggestions = [];
-  const seen = new Set();
-  const builtText = (item) =>
-    [
-      item.title,
-      item.brand,
-      item.category,
-      item.team,
-      item.athlete,
-      item.tags?.join(" ") || "",
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-
-  items.forEach((item) => {
-    const text = builtText(item);
-    PERSONALIZED_PATTERNS.forEach(({ keywords, suggestion }) => {
-      if (suggestions.length >= 3) return;
-      if (
-        keywords.some((keyword) => text.includes(keyword)) &&
-        !seen.has(suggestion)
-      ) {
-        suggestions.push(suggestion);
-        seen.add(suggestion);
-      }
-    });
-  });
-
-  return suggestions.slice(0, 2);
-}
-
-function MovementArrowIcon() {
-  return (
-    <svg
-      width="28"
-      height="36"
-      viewBox="0 0 28 36"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path
-        d="M2 32L8 24L14 28L20 18L26 10"
-        stroke="#e4d6b2"
-        strokeWidth="1.8"
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
+function escapeRegExp(value = "") {
+  return value.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&");
 }
