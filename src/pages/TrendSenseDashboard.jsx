@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchRSSFeeds } from "../utils/fetchRSSFeeds";
-import { loadListingLibrary } from "../utils/savedListings";
+import { loadListingLibrary, setListingTracked } from "../utils/savedListings";
 import { runTrendSenseInfinity } from "../utils/trendSenseInfinity";
+import { useNavigate } from "react-router-dom";
 import usePaywallGate from "../hooks/usePaywallGate";
 import PremiumModal from "../components/PremiumModal";
 
@@ -27,18 +28,6 @@ const FALLBACK_NEWS = [
     description: "Collectors keep a close eye on cultural heavyweights whenever attention clusters.",
     link: "#",
   },
-];
-
-const HERO_FALLBACK = {
-  title: "Today’s headlines spotlight cultural landmarks and competitive moments.",
-  lead: "Media attention is clustering around franchises and athletes that always bring pieces back into focus.",
-  details: [
-    "Every broadcast finale, playoff shift, and high-profile release draws buyers toward familiar names.",
-  ],
-};
-
-const OPPORTUNITY_FALLBACK = [
-  "Cultural heavyweights and athletic milestones stay worthy of attention whenever coverage intensifies.",
 ];
 
 const CATEGORY_SOURCE_MAP = {
@@ -69,13 +58,16 @@ const CATEGORY_DISPLAY = {
 };
 export default function TrendSenseDashboard() {
   const { gate, paywallState, closePaywall } = usePaywallGate();
+  const navigate = useNavigate();
   const [hasAccess, setHasAccess] = useState(false);
   const [loading, setLoading] = useState(true);
   const [savedItems, setSavedItems] = useState([]);
+  const [glowingIds, setGlowingIds] = useState([]);
   const [reports, setReports] = useState([]);
   const [newsEntries, setNewsEntries] = useState(
     FALLBACK_NEWS.map(normalizeFallback)
   );
+  const previousStatuses = useRef({});
 
   useEffect(() => {
     const allowed = gate("trendsense", () => setHasAccess(true));
@@ -96,7 +88,8 @@ export default function TrendSenseDashboard() {
         library.length ? runTrendSenseInfinity(library) : Promise.resolve(null),
       ]);
       if (cancelled) return;
-      setSavedItems(library);
+      const trackedLibrary = library.filter((item) => item.isTracked !== false);
+      setSavedItems(trackedLibrary);
       setNewsEntries(normalizeNewsEntries(newsFeed));
       setReports(infinityData?.reports || []);
       setLoading(false);
@@ -108,15 +101,41 @@ export default function TrendSenseDashboard() {
   }, [hasAccess]);
 
   const marketPulse = useMemo(() => buildMarketPulse(newsEntries), [newsEntries]);
-  const heroBrief = useMemo(() => buildHeroBrief(marketPulse), [marketPulse]);
-  const opportunityNarratives = useMemo(
-    () => buildOpportunityNarratives(marketPulse),
-    [marketPulse]
-  );
   const itemStories = useMemo(
     () => buildItemStories(savedItems, reports),
     [savedItems, reports]
   );
+  const sortedItemStories = useMemo(() => {
+    return [...itemStories].sort((a, b) => {
+      if (a.active === b.active) return 0;
+      return a.active ? -1 : 1;
+    });
+  }, [itemStories]);
+
+  const handleRemoveFromTracking = (id) => {
+    setListingTracked(id, false);
+    setSavedItems((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  useEffect(() => {
+    const timerIds = [];
+    const newStatusMap = {};
+    itemStories.forEach((story) => {
+      newStatusMap[story.id] = story.active;
+      const wasActive = previousStatuses.current[story.id];
+      if (story.active && !wasActive) {
+        setGlowingIds((prev) => [...prev, story.id]);
+        const timer = setTimeout(() => {
+          setGlowingIds((prev) => prev.filter((id) => id !== story.id));
+        }, 750);
+        timerIds.push(timer);
+      }
+    });
+    previousStatuses.current = newStatusMap;
+    return () => {
+      timerIds.forEach((timer) => clearTimeout(timer));
+    };
+  }, [itemStories]);
 
   if (loading) {
     return <div className="trend-page-loading">Preparing today’s briefing…</div>;
@@ -126,15 +145,11 @@ export default function TrendSenseDashboard() {
     <div className="trend-page trend-briefing">
       <section className="hero-section">
         <h1 className="hero-title text-display">TrendSense</h1>
-        <p className="hero-subhead text-meta">
-          Coverage today centers on the names shaping resale attention.
-        </p>
-        <hr className="hero-divider" />
       </section>
       <div className="hero-gold-separator" aria-hidden="true" />
 
       <section className="attention-strip" aria-label="Live attention">
-        <p className="attention-label text-meta">Attention is clustering around:</p>
+        <p className="attention-label text-meta">ATTENTION IS CLUSTERING AROUND:</p>
         <div className="attention-chips">
           {buildAttentionChips(marketPulse).map((chip) => (
             <span key={chip} className="attention-chip text-meta">
@@ -143,6 +158,84 @@ export default function TrendSenseDashboard() {
           ))}
         </div>
       </section>
+
+      <div className="section-accent" aria-hidden="true" />
+      <section className="live-listings">
+        <div className="section-heading">
+          <p className="section-label text-headline">LIVE LISTINGS</p>
+          <p className="section-subhead text-meta">
+            See how today’s cultural spotlight connects to your saved items.
+          </p>
+        </div>
+        <div className="live-listings-grid">
+          {sortedItemStories.length ? (
+            sortedItemStories.map((story) => (
+              <article
+                key={story.id}
+                className={`live-listing-card ${story.active ? "active" : "quiet"} ${
+                  glowingIds.includes(story.id) ? "glow" : ""
+                }`}
+              >
+                <div className="live-status">
+                  <span className={`status-icon ${story.active ? "active" : "quiet"}`}>
+                    {story.active ? (
+                      <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M4 16L10 10L13.5 13.5L20 7"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        <path
+                          d="M20 7V13.5H13.5"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    ) : (
+                      <span className="minus-sign">—</span>
+                    )}
+                  </span>
+                  <span className="status-label text-meta">
+                    {story.active ? "ACTIVE" : "QUIET"}
+                  </span>
+                </div>
+                <p className="live-listing-name text-headline">
+                  {story.itemName}
+                </p>
+                {story.active && (
+                  <p className="live-listing-context text-body">
+                    {buildListingContextLine(story)}
+                  </p>
+                )}
+                <div className="live-listing-actions">
+                  <button
+                    type="button"
+                    className="live-remove"
+                    onClick={() => handleRemoveFromTracking(story.id)}
+                  >
+                    Remove from tracking
+                  </button>
+                </div>
+              </article>
+            ))
+          ) : (
+            <p className="text-meta">
+              Add items to your watch list to see live attention for each listing.
+            </p>
+          )}
+        </div>
+      </section>
+      <div className="section-divider" aria-hidden="true" />
 
       <section className="market-pulse">
         <div className="section-heading">
@@ -185,85 +278,27 @@ export default function TrendSenseDashboard() {
       </section>
       <div className="market-pulse-divider" aria-hidden="true" />
 
-      <section className="opportunity-section">
-        <div className="section-heading">
-          <p className="section-label text-meta">Spotlighted opportunities</p>
-          <h3 className="text-headline">When the noise spikes, so can your listings</h3>
-        </div>
-        <div className="opportunity-grid">
-          {opportunityNarratives.map((copy) => (
-            <p key={copy} className="opportunity-copy text-body">
-              {copy}
-            </p>
+      <section className="check-closet">
+        <p className="section-intro text-meta">If any of this sounds familiar…</p>
+        <h3 className="text-headline">Check your closet for:</h3>
+        <ul className="closet-bullets">
+          {buildClosetChecklist(marketPulse).map((bullet) => (
+            <li key={bullet} className="text-body">
+              {bullet}
+            </li>
           ))}
-        </div>
-        <div className="opportunity-ctas">
-          <button type="button" className="primary-cta">
-            Add an item to track
-          </button>
-          <button type="button" className="secondary-cta">
-            List with Repost Rocket
-          </button>
-        </div>
+        </ul>
+        <button
+          type="button"
+          className="primary-cta"
+          onClick={() =>
+            navigate("/single-listing", { state: { fromTrendSense: true } })
+          }
+        >
+          Add an item
+        </button>
       </section>
 
-      <section className="listings-section">
-        <div className="section-heading">
-          <p className="section-label">Your Listings</p>
-          <h3 className="text-headline">Your items, viewed through today’s headlines</h3>
-        </div>
-        <div className="listings-grid">
-          {itemStories.map((story) => (
-            <article
-              key={story.id}
-              className={`listing-card ${story.active ? "listing-active" : ""}`}
-            >
-              <div className="listing-header">
-                {story.listingUrl ? (
-                  <a
-                    href={story.listingUrl}
-                    rel="noreferrer"
-                    target="_blank"
-                    className="listing-heading-link text-headline"
-                  >
-                    {story.itemName}
-                  </a>
-                ) : (
-                  <p className="listing-heading text-headline">{story.itemName}</p>
-                )}
-                <p className="listing-status text-meta">
-                  <span
-                    className={`status-indicator ${story.active ? "active" : "quiet"}`}
-                  />
-                  {story.active ? "ACTIVE" : "QUIET"}
-                </p>
-              </div>
-              {story.active && (
-                <div className="listing-details">
-                  <a
-                    href={story.link || "#"}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="listing-headline text-headline"
-                  >
-                    ↗︎ {story.headline}
-                  </a>
-                  <p className="listing-meta text-meta">
-                    {story.source}
-                    {story.timestampLabel ? ` · ${story.timestampLabel}` : ""}
-                  </p>
-                  <p className="listing-why text-body">{story.why}</p>
-                </div>
-              )}
-              <div className="listing-actions">
-                <button type="button" className="remove-tracking">
-                  Remove from tracking
-                </button>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
 
       <PremiumModal
         open={paywallState.open}
@@ -274,18 +309,6 @@ export default function TrendSenseDashboard() {
       />
     </div>
   );
-}
-
-function buildHeroBrief(marketPulse = []) {
-  if (!marketPulse.length) return HERO_FALLBACK;
-  const primary = marketPulse[0];
-  const secondary = marketPulse[1];
-  const detailLines = secondary ? [secondary.why] : [];
-  return {
-    title: primary.headline,
-    lead: primary.why,
-    details: detailLines,
-  };
 }
 
 function buildMarketPulse(entries = []) {
@@ -307,13 +330,16 @@ function buildAttentionChips(entries = []) {
     "today",
     "trend",
     "update",
+    "roster",
+    "power rankings",
   ]);
   for (const entry of entries) {
     for (const tag of entry.tags || []) {
       if (tag.variant === "category") continue;
       const label = tag.text;
-      if (tokenStopWords.has(label.toLowerCase())) continue;
       const normalized = label.toLowerCase();
+      if (tokenStopWords.has(normalized)) continue;
+      if (!isSemanticChip(label)) continue;
       if (seen.has(normalized)) continue;
       seen.add(normalized);
       chips.push(label);
@@ -322,6 +348,88 @@ function buildAttentionChips(entries = []) {
     if (chips.length >= 10) break;
   }
   return chips && chips.length ? chips : ["No major headlines detected"];
+}
+
+const CLOSET_MATCHERS = [
+  {
+    keywords: ["Calvin Klein", "Gucci", "Prada", "Hermès", "Dior", "Louis Vuitton", "Chanel"],
+    build: (match) => `Designer clothing & accessories (${match} coverage today)`,
+  },
+  {
+    keywords: ["LEGO"],
+    build: () => "LEGO sets & collectibles (LEGO coverage today)",
+  },
+  {
+    keywords: ["Nike", "Adidas", "Jordan", "Yeezy"],
+    build: (match) => `Collectible sneakers & sport apparel (${match} coverage today)`,
+  },
+  {
+    keywords: ["NFL", "NBA", "MLB", "NHL"],
+    build: (match) => `${match} team apparel & player memorabilia`,
+  },
+  {
+    keywords: ["Trade", "Deal"],
+    build: () => "Player trading cards & signed memorabilia (trade coverage today)",
+  },
+  {
+    keywords: ["Streaming", "Media rights"],
+    build: () => "Streaming & media merchandise (platform coverage today)",
+  },
+];
+
+function buildClosetChecklist(entries = []) {
+  const tags = new Set();
+  entries.forEach((entry) => {
+    (entry.tags || []).forEach((tag) => {
+      if (tag.variant === "category") return;
+      tags.add(tag.text);
+    });
+  });
+  const normalizedTags = new Set(
+    Array.from(tags).map((tag) => tag.toLowerCase().trim())
+  );
+  const bullets = [];
+  for (const matcher of CLOSET_MATCHERS) {
+    if (bullets.length >= 5) break;
+    const match = matcher.keywords.find((keyword) =>
+      normalizedTags.has(keyword.toLowerCase())
+    );
+    if (match) {
+      const text = matcher.build(match);
+      if (!bullets.includes(text)) {
+        bullets.push(text);
+      }
+    }
+  }
+  if (!bullets.length && tags.size) {
+    const fallback = `${Array.from(tags)[0]} related pieces & collectibles`;
+    bullets.push(fallback);
+  }
+  return bullets.slice(0, 5);
+}
+function isSemanticChip(label = "") {
+  const normalized = label.toLowerCase();
+  if (!label.trim()) return false;
+  if (normalized.includes(" ")) return true;
+  const singleWord = !label.includes(" ");
+  const teamPattern = /^[A-Z][a-z]+s$/;
+  const brandSet = new Set([
+    "nike",
+    "adidas",
+    "gucci",
+    "lego",
+    "supreme",
+    "amazon",
+    "apple",
+    "psa",
+    "bgs",
+    "cgc",
+  ]);
+  const uppercase = label === label.toUpperCase();
+  if (!singleWord) return false;
+  return (
+    teamPattern.test(label) || uppercase || brandSet.has(normalized) || label.length > 5
+  );
 }
 
 function selectBalancedPulse(entries = []) {
@@ -368,17 +476,6 @@ function selectBalancedPulse(entries = []) {
     }
   }
   return selected.slice(0, targetSize);
-}
-
-function buildOpportunityNarratives(entries = []) {
-  if (!entries.length) return OPPORTUNITY_FALLBACK;
-  return entries.slice(0, 3).map((entry) => {
-    const entity = extractEntity(entry.headline);
-    if (entity) {
-      return `Attention on ${entity} today rewrites the story for anyone holding that name.`;
-    }
-    return `Coverage from ${entry.source} is turning heads and lifting demand for items tied to this moment.`;
-  });
 }
 
 function normalizeFallback(entry) {
@@ -462,9 +559,10 @@ function buildItemStories(savedItems = [], reports = []) {
   });
 }
 
-function extractEntity(headline = "") {
-  const match = headline.match(/([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)/);
-  return match ? match[0] : null;
+function buildListingContextLine(story) {
+  const nouns = extractProperNouns(story.headline || "");
+  const entity = nouns[0] || story.source || "today's news";
+  return `Touched by ${entity} coverage today`;
 }
 
 function matchesDirectTerm(term = "", text = "") {
@@ -550,6 +648,13 @@ function extractContexts(entry) {
     { key: "ai", label: "AI" },
     { key: "tour", label: "Tour" },
     { key: "release", label: "Release" },
+    { key: "nike", label: "Nike" },
+    { key: "adidas", label: "Adidas" },
+    { key: "gucci", label: "Gucci" },
+    { key: "lego", label: "LEGO" },
+    { key: "supreme", label: "Supreme" },
+    { key: "amazon", label: "Amazon" },
+    { key: "apple", label: "Apple" },
   ];
   const text = `${entry.title} ${entry.description || ""}`.toLowerCase();
   const found = [];

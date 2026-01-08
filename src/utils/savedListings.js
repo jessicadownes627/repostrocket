@@ -72,3 +72,17 @@ export function sortLibrary(library, method) {
       return library;
   }
 }
+
+export function setListingTracked(id, tracked) {
+  try {
+    const raw = localStorage.getItem("rr_library");
+    if (!raw) return;
+    const library = JSON.parse(raw);
+    const updated = library.map((item) =>
+      item.id === id ? { ...item, isTracked: tracked } : item
+    );
+    localStorage.setItem("rr_library", JSON.stringify(updated));
+  } catch (e) {
+    console.error("Error updating tracking state", e);
+  }
+}

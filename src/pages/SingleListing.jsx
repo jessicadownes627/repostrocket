@@ -199,6 +199,7 @@ export default function SingleListing() {
   const navigate = useNavigate();
   const location = useLocation();
   const fromAnalysis = location.state?.fromAnalysis === true;
+  const fromTrendSense = location.state?.fromTrendSense === true;
 
   // Pull listing data from global store
   const {
@@ -1213,13 +1214,13 @@ useEffect(() => {
   };
 
   useEffect(() => {
-    if (!storeHydrated) return;
+    if (!storeHydrated || fromTrendSense) return;
     if (!listingData?.photos || listingData.photos.length === 0) {
       navigate("/card-prep");
     }
     // run ONLY once on first load
     // DO NOT depend on listingData
-  }, [storeHydrated]);
+  }, [storeHydrated, fromTrendSense, listingData?.photos?.length, navigate]);
 
   useEffect(() => {
     if (!storeHydrated) return;
