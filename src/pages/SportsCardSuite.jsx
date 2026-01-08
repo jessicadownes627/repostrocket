@@ -1,6 +1,6 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { loadListingLibrary } from "../utils/savedListings";
+import { loadListingLibrary, saveListingToLibrary } from "../utils/savedListings";
 import usePaywallGate from "../hooks/usePaywallGate";
 import PremiumModal from "../components/PremiumModal";
 import { useListingStore } from "../store/useListingStore";
@@ -31,7 +31,76 @@ const GRADING_LINKS = [
 export default function SportsCardSuite() {
   const navigate = useNavigate();
   const { gate, paywallState, closePaywall } = usePaywallGate();
-  const { setBatchMode } = useListingStore();
+  const { setBatchMode, listingData } = useListingStore(
+    (state) => ({
+      setBatchMode: state.setBatchMode,
+      listingData: state.listingData,
+    })
+  );
+  const batchItems = listingData?.batchItems || [];
+  const savedDrafts = useListingStore((state) => state.savedDrafts || []);
+  const listingRef = useRef(listingData);
+  const savedListingIds = useRef(new Set());
+  const savedBatchIds = useRef(new Set());
+
+  useEffect(() => {
+    if (!savedDrafts.length) return;
+    savedDrafts.forEach((draft) => {
+      if (draft?.id) {
+        saveListingToLibrary(draft);
+      }
+    });
+  }, [savedDrafts]);
+
+  useEffect(() => {
+    listingRef.current = listingData;
+  }, [listingData]);
+
+  const entryId = listingData?.libraryId || listingData?.id;
+  const listingPhotosLength = listingData?.photos?.length || 0;
+  const listingCardIntelHash = listingData?.cardIntelHash;
+  const listingCardPlayer = listingData?.cardAttributes?.player;
+  const listingTitle = listingData?.title;
+  const listingHasContent =
+    Boolean(listingPhotosLength) ||
+    Boolean(listingCardIntelHash) ||
+    Boolean(listingCardPlayer) ||
+    Boolean(listingTitle);
+
+  useEffect(() => {
+    if (!entryId || !listingHasContent) return;
+    if (savedListingIds.current.has(entryId)) return;
+    const payload = {
+      ...listingRef.current,
+      id: entryId,
+      category: listingRef.current?.category || "Sports Cards",
+    };
+    saveListingToLibrary(payload);
+    savedListingIds.current.add(entryId);
+  }, [
+    entryId,
+    listingPhotosLength,
+    listingCardIntelHash,
+    listingCardPlayer,
+    listingTitle,
+    listingHasContent,
+  ]);
+
+  useEffect(() => {
+    batchItems.forEach((card) => {
+      if (!card?.id || savedBatchIds.current.has(card.id)) return;
+      const hasPhoto = Boolean(card.photos?.length);
+      if (!hasPhoto) return;
+      const entry = {
+        ...card,
+        id: card.id,
+        title: card.title || "Sports Card",
+        category: card.category || "Sports Cards",
+      };
+      saveListingToLibrary(entry);
+      savedBatchIds.current.add(card.id);
+    });
+  }, [batchItems]);
   const slabContext = useMemo(() => {
     const library = loadListingLibrary();
     const authorities = {};

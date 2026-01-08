@@ -31,6 +31,8 @@ export function saveListingToLibrary(item) {
   }
 }
 
+const DRAFTS_KEY = "rr_saved_drafts";
+
 export function loadListingLibrary() {
   try {
     const raw = localStorage.getItem("rr_library");
@@ -85,4 +87,30 @@ export function setListingTracked(id, tracked) {
   } catch (e) {
     console.error("Error updating tracking state", e);
   }
+}
+
+export function loadSavedDrafts() {
+  try {
+    const raw = localStorage.getItem(DRAFTS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+export function getUserInventory(extraEntries = []) {
+  const library = loadListingLibrary();
+  const drafts = loadSavedDrafts();
+  const extras = Array.isArray(extraEntries) ? extraEntries : [];
+  const entries = [...library, ...drafts, ...extras];
+  const map = new Map();
+  for (const item of entries) {
+    if (!item) continue;
+    const id = item.id || item.libraryId || item.listingId;
+    if (!id) continue;
+    if (!map.has(id)) {
+      map.set(id, { ...item, id });
+    }
+  }
+  return Array.from(map.values());
 }

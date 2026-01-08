@@ -9,6 +9,7 @@ import {
   prepareCardIntelPayload,
   finalizeCardIntelResponse,
 } from "../utils/cardIntel";
+import { saveListingToLibrary } from "../utils/savedListings";
 
 const ListingContext = createContext(null);
 const STORAGE_KEY = "rr_draft_listing";
@@ -167,6 +168,24 @@ export function ListingProvider({ children }) {
   }, [premiumUsesRemaining]);
 
   const value = useMemo(() => {
+    const persistSportsCardDraft = (entry) => {
+      if (!entry) return;
+      const normalizedId =
+        entry?.libraryId ||
+        entry?.id ||
+        `sports-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const payload = {
+        ...entry,
+        id: normalizedId,
+        libraryId: normalizedId,
+        type: "sports-card",
+        status: "draft",
+        createdAt: entry.createdAt || Date.now(),
+        incomplete: true,
+      };
+      saveListingToLibrary(payload);
+    };
+
     const applyCardIntelResult = (intel) => {
       if (!intel) return;
       setListingData((prev) => {
@@ -183,6 +202,7 @@ export function ListingProvider({ children }) {
         if (cornerAssets.length) {
           updates.cornerPhotos = cornerAssets;
         }
+        persistSportsCardDraft(updates);
         return updates;
       });
       setLastAnalyzedHash(intel?.imageHash || null);
@@ -443,7 +463,17 @@ export function ListingProvider({ children }) {
 
     const addDraft = (draft) => {
       if (!draft) return;
-      setSavedDrafts((prev) => [{ ...draft, lastEdited: Date.now() }, ...prev]);
+      const id = draft.id || `draft-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const entry = {
+        ...draft,
+        id,
+        type: "sports-card",
+        status: "draft",
+        createdAt: draft.createdAt || Date.now(),
+        incomplete: true,
+      };
+      saveListingToLibrary(entry);
+      setSavedDrafts((prev) => [{ ...draft, lastEdited: Date.now(), id }, ...prev]);
     };
 
     const deleteDraft = (id) => {
@@ -458,6 +488,14 @@ export function ListingProvider({ children }) {
           ...defaultListing,
           ...draft,
           photos: normalizePhotosArray(draft.photos, "item photo"),
+        });
+        saveListingToLibrary({
+          ...draft,
+          id: draft.id,
+          type: "sports-card",
+          status: "draft",
+          createdAt: draft.createdAt || Date.now(),
+          incomplete: true,
         });
       }
       return draft;

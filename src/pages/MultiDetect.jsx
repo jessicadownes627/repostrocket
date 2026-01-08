@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { detectCardsFromImage, cropCards } from "../engines/multiCardDetector";
 import { useListingStore } from "../store/useListingStore";
+import { saveListingToLibrary } from "../utils/savedListings";
 
 export default function MultiDetect() {
   const [preview, setPreview] = useState(null);
@@ -48,6 +49,17 @@ export default function MultiDetect() {
       }));
 
       setBatchItems(batchItems);
+      batchItems.forEach((item) => {
+        if (!item?.id) return;
+        saveListingToLibrary({
+          ...item,
+          id: item.id,
+          type: "sports-card",
+          status: "draft",
+          createdAt: Date.now(),
+          incomplete: true,
+        });
+      });
       setProcessing(false);
 
       navigate("/batch-launch", { state: { items: batchItems } });

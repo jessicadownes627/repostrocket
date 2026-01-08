@@ -2063,6 +2063,31 @@ section {
   flex-direction: column;
   gap: 0.4rem;
 }
+.pulse-domain-header {
+  font-size: 0.75rem;
+  letter-spacing: 0.5em;
+  text-transform: uppercase;
+  margin: 0.8rem 0 0.2rem;
+  color: rgba(244, 227, 191, 0.6);
+}
+.pulse-item-category {
+  font-size: 0.7rem;
+  letter-spacing: 0.45em;
+  text-transform: uppercase;
+  color: rgba(244, 227, 191, 0.55);
+  margin-bottom: 0.2rem;
+}
+.pulse-category-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.pulse-category-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.45em;
+  text-transform: uppercase;
+  color: rgba(244, 227, 191, 0.65);
+}
 
 .pulse-lead {
   padding: 1.3rem 1.3rem 1.1rem;

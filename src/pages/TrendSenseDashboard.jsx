@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchRSSFeeds } from "../utils/fetchRSSFeeds";
-import { loadListingLibrary, setListingTracked } from "../utils/savedListings";
+import { getUserInventory, setListingTracked } from "../utils/savedListings";
 import { runTrendSenseInfinity } from "../utils/trendSenseInfinity";
 import { useNavigate } from "react-router-dom";
 import usePaywallGate from "../hooks/usePaywallGate";
 import PremiumModal from "../components/PremiumModal";
+import { useListingStore } from "../store/useListingStore";
 
 const LIVE_FEEDS = [
   "https://www.espn.com/espn/rss/news",
@@ -56,18 +57,38 @@ const CATEGORY_DISPLAY = {
   policy: "Policy",
   tech: "Tech",
 };
+const MARKET_PULSE_DOMAIN_MAP = {
+  sports: "Sports",
+  culture: "Sports",
+  retail: "Fashion & Retail",
+  media: "Media & Culture",
+  business: "Business",
+  policy: "Policy & Regulation",
+  tech: "Technology",
+  other: "General",
+};
 export default function TrendSenseDashboard() {
   const { gate, paywallState, closePaywall } = usePaywallGate();
   const navigate = useNavigate();
+  const savedDrafts = useListingStore((state) => state.savedDrafts || []);
+  const inventory = useMemo(
+    () => getUserInventory(Array.isArray(savedDrafts) ? savedDrafts : []),
+    [savedDrafts]
+  );
   const [hasAccess, setHasAccess] = useState(false);
   const [loading, setLoading] = useState(true);
   const [savedItems, setSavedItems] = useState([]);
+  const [libraryCount, setLibraryCount] = useState(0);
+  const [inventoryReady, setInventoryReady] = useState(false);
   const [glowingIds, setGlowingIds] = useState([]);
   const [reports, setReports] = useState([]);
   const [newsEntries, setNewsEntries] = useState(
     FALLBACK_NEWS.map(normalizeFallback)
   );
+  const inventoryRef = useRef([]);
+  const inventoryLoadedRef = useRef(false);
   const previousStatuses = useRef({});
+  const [feedsLoaded, setFeedsLoaded] = useState(false);
 
   useEffect(() => {
     const allowed = gate("trendsense", () => setHasAccess(true));
@@ -78,27 +99,48 @@ export default function TrendSenseDashboard() {
   }, [gate]);
 
   useEffect(() => {
+    inventoryRef.current = inventory;
+    const trackedInventory = inventory.filter((item) => item.isTracked !== false);
+    setSavedItems(trackedInventory);
+    setLibraryCount(inventory.length);
+    if (!inventoryLoadedRef.current) {
+      inventoryLoadedRef.current = true;
+      setInventoryReady(true);
+    }
+  }, [inventory]);
+
+  useEffect(() => {
     if (!hasAccess) return;
     let cancelled = false;
     const loadTrendSense = async () => {
       setLoading(true);
-      const library = loadListingLibrary() || [];
-      const [newsFeed, infinityData] = await Promise.all([
-        fetchRSSFeeds(LIVE_FEEDS),
-        library.length ? runTrendSenseInfinity(library) : Promise.resolve(null),
-      ]);
-      if (cancelled) return;
-      const trackedLibrary = library.filter((item) => item.isTracked !== false);
-      setSavedItems(trackedLibrary);
-      setNewsEntries(normalizeNewsEntries(newsFeed));
-      setReports(infinityData?.reports || []);
-      setLoading(false);
+      const inventorySnapshot = inventoryRef.current;
+      try {
+        const [newsFeed, infinityData] = await Promise.all([
+          fetchRSSFeeds(LIVE_FEEDS),
+          inventorySnapshot.length
+            ? runTrendSenseInfinity(inventorySnapshot)
+            : Promise.resolve(null),
+        ]);
+        if (cancelled) return;
+        setNewsEntries(normalizeNewsEntries(newsFeed));
+        setReports(infinityData?.reports || []);
+      } catch (err) {
+        console.error("TrendSense load failed", err);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+          setFeedsLoaded(true);
+        }
+      }
     };
-    loadTrendSense().catch(() => setLoading(false));
+    if (inventoryReady && !feedsLoaded) {
+      loadTrendSense();
+    }
     return () => {
       cancelled = true;
     };
-  }, [hasAccess]);
+  }, [hasAccess, inventoryReady, feedsLoaded]);
 
   const marketPulse = useMemo(() => buildMarketPulse(newsEntries), [newsEntries]);
   const itemStories = useMemo(
@@ -111,6 +153,12 @@ export default function TrendSenseDashboard() {
       return a.active ? -1 : 1;
     });
   }, [itemStories]);
+
+  const displayPulse = useMemo(() => marketPulse.slice(0, 5), [marketPulse]);
+  const dominantDomain = useMemo(
+    () => determineDominantDomain(displayPulse),
+    [displayPulse]
+  );
 
   const handleRemoveFromTracking = (id) => {
     setListingTracked(id, false);
@@ -149,7 +197,7 @@ export default function TrendSenseDashboard() {
       <div className="hero-gold-separator" aria-hidden="true" />
 
       <section className="attention-strip" aria-label="Live attention">
-        <p className="attention-label text-meta">ATTENTION IS CLUSTERING AROUND:</p>
+        <p className="attention-label text-meta">What’s moving the market</p>
         <div className="attention-chips">
           {buildAttentionChips(marketPulse).map((chip) => (
             <span key={chip} className="attention-chip text-meta">
@@ -228,11 +276,11 @@ export default function TrendSenseDashboard() {
                 </div>
               </article>
             ))
-          ) : (
+          ) : libraryCount === 0 ? (
             <p className="text-meta">
               Add items to your watch list to see live attention for each listing.
             </p>
-          )}
+          ) : null}
         </div>
       </section>
       <div className="section-divider" aria-hidden="true" />
@@ -245,7 +293,10 @@ export default function TrendSenseDashboard() {
           </p>
         </div>
         <div className="pulse-list">
-          {marketPulse.slice(0, 5).map((entry) => (
+          {dominantDomain && (
+            <p className="pulse-domain-header text-meta">{dominantDomain}</p>
+          )}
+          {displayPulse.map((entry) => (
             <article key={entry.headline} className="pulse-card">
               <div className="pulse-headline-row">
                 <span className="pulse-bullet" aria-hidden="true" />
@@ -732,6 +783,40 @@ function applyTagStacks(entries = []) {
       tagsDimmed,
     };
   });
+}
+
+function determineDominantDomain(entries = []) {
+  const counts = {};
+  for (const entry of entries) {
+    const domain = getEntryDomain(entry);
+    counts[domain] = (counts[domain] || 0) + 1;
+  }
+  const ordered = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  return ordered.length ? ordered[0][0] : null;
+}
+
+function getEntryDomain(entry) {
+  const category = entry.category || "other";
+  const base = MARKET_PULSE_DOMAIN_MAP[category] || "General";
+  const host = extractHostname(entry.link || entry.source || "");
+  if (isSportsHost(host)) {
+    return "Sports";
+  }
+  return base;
+}
+
+function extractHostname(value = "") {
+  if (!value) return "";
+  try {
+    const parsed = new URL(value);
+    return parsed.hostname.toLowerCase();
+  } catch {
+    return value.toLowerCase();
+  }
+}
+
+function isSportsHost(host = "") {
+  return /espn|nfl|nba|mlb|nhl|sport/i.test(host);
 }
 
 function buildItemWhy(headline, item) {

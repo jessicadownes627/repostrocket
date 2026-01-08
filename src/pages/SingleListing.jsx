@@ -216,6 +216,33 @@ export default function SingleListing() {
     sportsAnalysisError,
     requestSportsAnalysis,
   } = useListingStore();
+  const ensureLibraryEntryId = useCallback(() => {
+    const existingId = listingData?.libraryId || listingData?.id;
+    if (existingId) return existingId;
+    const generatedId = `trend-${Date.now()}-${Math.random()
+      .toString(16)
+      .slice(2)}`;
+    setListingField("libraryId", generatedId);
+    return generatedId;
+  }, [listingData?.libraryId, listingData?.id, setListingField]);
+  const persistListingSnapshot = useCallback(
+    (overrides = {}) => {
+      const id = ensureLibraryEntryId();
+      if (!id) return;
+      const payload = {
+        ...listingData,
+        ...(overrides.data || {}),
+        ...overrides,
+        id,
+        type: "sports-card",
+        status: "draft",
+        createdAt: listingData?.createdAt || Date.now(),
+        incomplete: overrides.incomplete !== false,
+      };
+      saveListingToLibrary(payload);
+    },
+    [ensureLibraryEntryId, listingData]
+  );
   const photoPickerRef = useRef(null);
   const resultsRef = useRef(null);
   const chipFlashTimeouts = useRef({});
@@ -1697,13 +1724,24 @@ useEffect(() => {
       if (cardTitle) {
         setListingField("title", cardTitle);
       }
+      const listingId = listingData?.libraryId || listingData?.id;
+      if (listingId) {
+        saveListingToLibrary({
+          id: listingId,
+          type: "sports-card",
+          status: "draft",
+          createdAt: Date.now(),
+          data: listingData || {},
+        });
+      }
+      persistListingSnapshot();
     } catch (err) {
       console.error("Analyze card failed:", err);
       setCardError(
         "Unable to analyze card details right now. Please try again."
       );
     }
-  }, [displayedPhoto, parseCard, setListingField, setCardError]);
+  }, [displayedPhoto, parseCard, setListingField, setCardError, persistListingSnapshot]);
 
   useEffect(() => {
     if (isSportsAnalysisMode) return;
