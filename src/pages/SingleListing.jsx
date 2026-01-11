@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import LuxeChipGroup from "../components/LuxeChipGroup";
 import LuxeInput from "../components/LuxeInput";
+import { useListingStore } from "../store/useListingStore";
 import "../styles/overrides.css";
 
 const CATEGORY_OPTIONS = ["Sports Cards", "Apparel", "Accessories", "Home Goods", "Other"];
@@ -11,9 +12,10 @@ const TAG_OPTIONS = ["Neutral", "Modern", "Minimal", "Classic", "Statement"];
 export default function SingleListing() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { listingData: storedListingData } = useListingStore();
 
   const mode = location.state?.mode ?? "casual";
-  const listingData = location.state?.listingData ?? null;
+  const listingData = storedListingData || location.state?.listingData || null;
   const isSports = mode === "sports";
 
   /* ---------- shared state ---------- */
@@ -24,6 +26,32 @@ export default function SingleListing() {
   const [category, setCategory] = useState(isSports ? "Sports Cards" : "");
   const [condition, setCondition] = useState("");
   const [tags, setTags] = useState([]);
+
+  const detectedFrontImage = listingData?.frontImage || "";
+  const detectedBackImage = listingData?.backImage || "";
+  const detectedSlabImage = listingData?.slabImage || "";
+  const identity = listingData?.identity || {};
+  const gradeInfo = listingData?.grade || null;
+  const identityTitle = identity?.title || "";
+  const identityPlayer = identity?.player || identity?.character || "";
+  const identityYear = identity?.year || "";
+  const identitySet = identity?.setName || identity?.setBrand || identity?.brand || "";
+  const identityTeam =
+    identity?.team || identity?.franchise || identity?.sport || "";
+  const gradeLabel =
+    typeof gradeInfo === "string"
+      ? gradeInfo
+      : gradeInfo?.label || gradeInfo?.value || gradeInfo?.grade || "";
+  const slabbedFlag =
+    typeof gradeInfo === "object"
+      ? gradeInfo?.slabbed ?? gradeInfo?.slabStatus ?? null
+      : null;
+  const slabStatus =
+    typeof slabbedFlag === "boolean" ? (slabbedFlag ? "Slabbed" : "Raw") : "";
+  const emptyNotDetected = "Not detected yet";
+  const emptyNeedsConfirmation = "Needs confirmation";
+  const gradeDisplay =
+    gradeLabel || slabStatus ? [gradeLabel, slabStatus].filter(Boolean).join(" • ") : "";
 
   /* ---------- hydrate ONCE for sports ---------- */
   useEffect(() => {
@@ -53,51 +81,115 @@ export default function SingleListing() {
         <h1 className="text-center text-3xl mb-10">Single Listing</h1>
 
         <div className="lux-card mb-10">
-          <div className="text-xs uppercase tracking-[0.35em] opacity-60 mb-2">
-            Review & Confirm Detected Card Data
+          <div className="text-xs uppercase tracking-[0.35em] opacity-60 mb-4">
+            Card Identity
           </div>
 
-          <LuxeInput
-            label="Card Title"
-            value={title}
-            onChange={setTitle}
-            placeholder="Detected card title"
-          />
-
-          <div className="mt-6 flex justify-between items-start gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div>
               <div className="text-xs uppercase tracking-[0.3em] opacity-60">
-                Card Grade
+                Card Title
               </div>
-              <div className="text-xl mt-1">
-                {listingData?.gradeLabel ?? "Raw card (no slab detected)"}
+              <div className="text-lg mt-1">
+                {identityTitle || emptyNotDetected}
               </div>
             </div>
-
-            <div className="text-right">
+            <div>
               <div className="text-xs uppercase tracking-[0.3em] opacity-60">
-                Condition
+                Player / Character
               </div>
-              <LuxeChipGroup
-                options={CONDITION_OPTIONS}
-                value={condition}
-                onChange={setCondition}
-              />
+              <div className="text-lg mt-1">
+                {identityPlayer || emptyNotDetected}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-[0.3em] opacity-60">
+                Year
+              </div>
+              <div className="text-lg mt-1">
+                {identityYear || emptyNotDetected}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-[0.3em] opacity-60">
+                Set / Brand
+              </div>
+              <div className="text-lg mt-1">
+                {identitySet || emptyNotDetected}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-[0.3em] opacity-60">
+                Team / Franchise / Sport
+              </div>
+              <div className="text-lg mt-1">
+                {identityTeam || emptyNotDetected}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-[0.3em] opacity-60">
+                Grade / Slab Status
+              </div>
+              <div className="text-lg mt-1">
+                {gradeDisplay || emptyNeedsConfirmation}
+              </div>
             </div>
           </div>
 
-          <LuxeInput
-            label="Card Notes"
-            value={description}
-            onChange={setDescription}
-            placeholder="Detected notes from OCR"
-          />
+          <div className="mt-6">
+            <LuxeInput
+              label="Condition"
+              value={condition}
+              onChange={setCondition}
+            />
+          </div>
         </div>
 
-        <div className="lux-card mb-10">
-          <LuxeInput label="Price" value={price} onChange={setPrice} />
-          <LuxeInput label="Brand" value={brand} onChange={setBrand} />
-        </div>
+        {(detectedFrontImage || detectedBackImage || detectedSlabImage) && (
+          <div className="lux-card mb-10">
+            <div className="text-xs uppercase tracking-[0.35em] opacity-60 mb-4">
+              Detected Images
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {detectedFrontImage && (
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.3em] opacity-60 mb-2">
+                    Front Image
+                  </div>
+                  <img
+                    src={detectedFrontImage}
+                    alt="Detected front"
+                    className="w-full rounded-2xl border border-white/10 object-cover"
+                  />
+                </div>
+              )}
+              {detectedBackImage && (
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.3em] opacity-60 mb-2">
+                    Back Image
+                  </div>
+                  <img
+                    src={detectedBackImage}
+                    alt="Detected back"
+                    className="w-full rounded-2xl border border-white/10 object-cover"
+                  />
+                </div>
+              )}
+              {detectedSlabImage && (
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.3em] opacity-60 mb-2">
+                    Slab Image
+                  </div>
+                  <img
+                    src={detectedSlabImage}
+                    alt="Detected slab"
+                    className="w-full rounded-2xl border border-white/10 object-cover"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         <button
           className="lux-continue-btn w-full py-5 tracking-[0.28em]"

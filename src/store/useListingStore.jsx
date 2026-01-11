@@ -335,8 +335,7 @@ export function ListingProvider({ children }) {
           return false;
         }
         if (existingHash && existingHash !== hash) {
-          console.log("[listingStore] clearing intel after hash mismatch");
-          resetCardIntelState();
+          console.log("[listingStore] hash mismatch — preserving prior intel until new result");
         }
         return true;
       };
