@@ -9,7 +9,9 @@ import {
   prepareCardIntelPayload,
   finalizeCardIntelResponse,
 } from "../utils/cardIntel";
+import { generateDevCardIntelMock } from "../utils/devCardIntelMock";
 import { saveListingToLibrary } from "../utils/savedListings";
+import { resolveCardFacts } from "../utils/cardFactsResolver";
 
 const ListingContext = createContext(null);
 const STORAGE_KEY = "rr_draft_listing";
@@ -58,6 +60,8 @@ export function ListingProvider({ children }) {
   const [analysisInFlight, setAnalysisInFlight] = useState(false);
   const [lastAnalyzedHash, setLastAnalyzedHash] = useState(null);
   const [sportsAnalysisError, setSportsAnalysisError] = useState("");
+  const isNetlifyDevRuntime =
+    typeof process !== "undefined" && process.env?.NETLIFY_DEV === "true";
 
   const resetCardIntelState = () => {
     setListingData((prev) => ({
@@ -130,6 +134,9 @@ export function ListingProvider({ children }) {
 
   // Persist to localStorage when state changes
   useEffect(() => {
+    if (analysisInFlight || import.meta.env.DEV || isNetlifyDevRuntime) {
+      return;
+    }
     try {
       const payload = JSON.stringify({
         selectedPlatforms,
@@ -140,7 +147,7 @@ export function ListingProvider({ children }) {
     } catch (err) {
       console.error("Failed to save draft", err);
     }
-  }, [selectedPlatforms, listingData, batchMode]);
+  }, [selectedPlatforms, listingData, batchMode, analysisInFlight, isNetlifyDevRuntime]);
 
   useEffect(() => {
     try {
@@ -167,46 +174,65 @@ export function ListingProvider({ children }) {
     }
   }, [premiumUsesRemaining]);
 
-  const value = useMemo(() => {
-    const persistSportsCardDraft = (entry) => {
-      if (!entry) return;
-      const normalizedId =
-        entry?.libraryId ||
-        entry?.id ||
-        `sports-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-      const payload = {
-        ...entry,
-        id: normalizedId,
-        libraryId: normalizedId,
-        type: "sports-card",
-        status: "draft",
-        createdAt: entry.createdAt || Date.now(),
-        incomplete: true,
-      };
-      saveListingToLibrary(payload);
-    };
-
-    const applyCardIntelResult = (intel) => {
-      if (!intel) return;
-      setListingData((prev) => {
-        const updates = {
-          ...prev,
-          cardIntel: intel,
-          cardIntelHash: intel?.imageHash || null,
+    const value = useMemo(() => {
+      const persistSportsCardDraft = (entry) => {
+        if (!entry) return;
+        const shouldSkipPersistence =
+          analysisInFlight || import.meta.env.DEV || isNetlifyDevRuntime;
+        if (shouldSkipPersistence) return;
+        const normalizedId =
+          entry?.libraryId ||
+          entry?.id ||
+          `sports-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        const payload = {
+          ...entry,
+          id: normalizedId,
+          libraryId: normalizedId,
+          type: "sports-card",
+          status: "draft",
+          createdAt: entry.createdAt || Date.now(),
+          incomplete: true,
         };
-        const attrs = buildCardAttributesFromIntel(intel);
-        if (attrs) {
-          updates.cardAttributes = attrs;
+        try {
+          saveListingToLibrary(payload);
+        } catch (err) {
+          console.warn(
+            "[persistSportsCardDraft] unable to save listing due to storage limits",
+            err
+          );
         }
-        const cornerAssets = extractCornerPhotoEntries(intel);
-        if (cornerAssets.length) {
-          updates.cornerPhotos = cornerAssets;
-        }
-        persistSportsCardDraft(updates);
-        return updates;
-      });
-      setLastAnalyzedHash(intel?.imageHash || null);
-    };
+      };
+
+      const applyCardIntelResult = (intel) => {
+        if (!intel) return;
+        setListingData((prev) => {
+          const attrs = buildCardAttributesFromIntel(intel);
+          const promotions = resolveCardFacts(intel);
+          const mergedUpdates = {
+            ...prev,
+            ...attrs,
+            ...promotions,
+            cardIntel: intel,
+            cardIntelHash: intel?.imageHash || null,
+            cardAttributes: attrs || prev.cardAttributes,
+          };
+          const cornerAssets = extractCornerPhotoEntries(intel);
+          if (cornerAssets.length) {
+            mergedUpdates.cornerPhotos = cornerAssets;
+          }
+          const assignCandidate = (key, sourceKey) => {
+            const candidateValue = intel?.[sourceKey];
+            if (!candidateValue) return;
+            mergedUpdates[key] = candidateValue;
+          };
+          assignCandidate("player", "player");
+          assignCandidate("team", "team");
+          assignCandidate("year", "year");
+          persistSportsCardDraft(mergedUpdates);
+          return mergedUpdates;
+        });
+        setLastAnalyzedHash(intel?.imageHash || null);
+      };
 
     const setListingField = (key, value) => {
       setListingData((prev) => {
@@ -256,16 +282,7 @@ export function ListingProvider({ children }) {
       setSportsAnalysisError("");
     };
 
-    const shouldSkipCardIntelFetch = import.meta.env.VITE_ALLOW_CARD_INTEL_FETCH === "true" ? false : true;
     const requestSportsAnalysisImpl = async (params) => {
-      if (shouldSkipCardIntelFetch) {
-        console.log("[DEV] Skipping cardIntel fetch — frontend stub");
-        setListingField("cardAttributes", {});
-        setAnalysisSessionId(null);
-        setAnalysisInFlight(false);
-        setSportsAnalysisError("");
-        return { stubbed: true };
-      }
       const incomingForce = params?.force;
       const incomingBypass = params?.bypassAllGuards;
       console.assert(incomingForce === true, "FORCE FLAG LOST BEFORE STORE");
@@ -363,34 +380,47 @@ export function ListingProvider({ children }) {
         console.log("[listingStore] payload sizes (bytes)", {
           frontImage: minimalPayload.frontImage ? minimalPayload.frontImage.length : 0,
         });
-        const response = await fetch("/.netlify/functions/cardIntel", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(minimalPayload),
-        });
-        if (!response.ok) {
-          let text = "";
-          try {
-            text = await response.text();
-          } catch (err) {
-            text = err?.message || "";
-          }
-          console.error("[listingStore] cardIntel function error:", text);
-          setSportsAnalysisError(SPORTS_ANALYSIS_ERROR_MESSAGE);
-          return { error: SPORTS_ANALYSIS_ERROR_MESSAGE };
-        }
+        const slabDetected =
+          Boolean(listingData?.gradingCompany) ||
+          Boolean(listingData?.isGraded) ||
+          Boolean(listingData?.cardAttributes?.isGradedCard) ||
+          Boolean(listingData?.cardIntel?.isGradedCard) ||
+          Boolean(listingData?.cardIntelligence?.graded) ||
+          Boolean(listingData?.cardIntelligence?.slabbed);
+        const useDevHarness = slabDetected;
         let data = null;
-        try {
-          data = await response.json();
-          console.log("[listingStore] step: received cardIntel payload", {
-            keys: Object.keys(data || {}),
+        if (useDevHarness) {
+          console.log("[listingStore] using dev-grade harness for slabbed card");
+          data = await generateDevCardIntelMock(minimalPayload);
+        } else {
+          const response = await fetch("/.netlify/functions/cardIntel", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(minimalPayload),
           });
-        } catch (err) {
-          console.error("[listingStore] failed to parse cardIntel response", err);
-          setSportsAnalysisError(SPORTS_ANALYSIS_ERROR_MESSAGE);
-          return { error: SPORTS_ANALYSIS_ERROR_MESSAGE };
+          if (!response.ok) {
+            let text = "";
+            try {
+              text = await response.text();
+            } catch (err) {
+              text = err?.message || "";
+            }
+            console.error("[listingStore] cardIntel function error:", text);
+            setSportsAnalysisError(SPORTS_ANALYSIS_ERROR_MESSAGE);
+            return { error: SPORTS_ANALYSIS_ERROR_MESSAGE };
+          }
+          try {
+            data = await response.json();
+            console.log("[listingStore] step: received cardIntel payload", {
+              keys: Object.keys(data || {}),
+            });
+          } catch (err) {
+            console.error("[listingStore] failed to parse cardIntel response", err);
+            setSportsAnalysisError(SPORTS_ANALYSIS_ERROR_MESSAGE);
+            return { error: SPORTS_ANALYSIS_ERROR_MESSAGE };
+          }
         }
         if (!data || data.error) {
           setSportsAnalysisError(data?.error || SPORTS_ANALYSIS_ERROR_MESSAGE);

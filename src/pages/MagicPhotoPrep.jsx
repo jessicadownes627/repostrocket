@@ -82,7 +82,10 @@ export default function MagicPhotoPrep() {
   /* ------------------------------------------------------ */
   const goNext = () => {
     if (!previews.length) return;
-    setTimeout(() => navigate("/single-listing"), 150);
+    setTimeout(
+      () => navigate("/single-listing", { state: { mode: "casual" } }),
+      150
+    );
   };
 
   return (

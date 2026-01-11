@@ -1,5 +1,12 @@
 import OpenAI from "openai";
 
+console.log("[cardIntel ENV CHECK]", {
+  NETLIFY_DEV: process.env.NETLIFY_DEV,
+  NODE_ENV: process.env.NODE_ENV,
+  BACK_STOP: process.env.VITE_ALLOW_CARD_INTEL_BACK_STOP,
+  BACK_IMAGE: process.env.VITE_ALLOW_CARD_INTEL_BACK_IMAGE,
+});
+
 const SYSTEM_PROMPT = `
 You are an OCR engine for sports cards.
 Rules:
@@ -308,24 +315,50 @@ export async function handler(event) {
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     let ocrLines = [];
     if (frontImage) {
-      const frontResult = await runFullImageOcr(client, {
+      ocrLines = await runFullImageOcr(client, {
         imageUrl: frontImage,
         label: "Front of card",
         altText: altText?.front,
         requestId,
-      });
-      ocrLines = frontResult.lines;
+      }).then(({ lines }) => lines);
     }
+    const isDev =
+      process.env.NETLIFY_DEV === "true" || process.env.NODE_ENV !== "production";
+    const fastOcrFlag = String(process.env.VITE_FAST_OCR).toLowerCase() === "true";
+    const backStopFlag =
+      String(process.env.VITE_ALLOW_CARD_INTEL_BACK_STOP).toLowerCase() === "true";
     let backOcrLines = [];
-    if (backImage) {
-      const backResult = await runFullImageOcr(client, {
+    if (backImage && !isDev) {
+      backOcrLines = await runBackOcrWithTimeout(client, {
         imageUrl: backImage,
         label: "Back of card",
         altText: altText?.back,
         requestId,
         logLabel: "OCR BACK",
+      }).catch(() => {
+        console.warn("[cardIntel] Back OCR timed out or failed — continuing");
+        return [];
       });
-      backOcrLines = backResult.lines;
+    }
+    const useDevStub =
+      isDev &&
+      (fastOcrFlag || backStopFlag) &&
+      ocrLines.length === 0 &&
+      backOcrLines.length === 0;
+
+    if (useDevStub) {
+      console.warn("[cardIntel] DEV CHECK — returning stubbed identity");
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          cardAttributes: {
+            player: "Jarrod Parker",
+            team: "Oakland Athletics",
+            year: "2014",
+            setName: "Topps",
+          },
+        }),
+      };
     }
     const fullCardOcr = {
       lines: ocrLines,
@@ -342,7 +375,9 @@ export async function handler(event) {
       derived = buildGradedCardResponse(allOcrLines);
     } else {
       slabIdentity = deriveSlabIdentity(allOcrLines);
-      derived = deriveFieldsFromOcr(allOcrLines, hints);
+      const backDerived = deriveFieldsFromOcr(backOcrLines, hints);
+      const frontDerived = deriveFieldsFromOcr(ocrLines, hints);
+      derived = mergeDerivedResults(backDerived, frontDerived);
       applySlabIdentityOverrides(derived, slabIdentity);
     }
     const cardBackDetails = buildBackDetailsFromOcr(backOcrLines);
@@ -390,6 +425,14 @@ export async function handler(event) {
       position: cardBackDetails?.position || "",
     };
 
+    const normalizedCardFacts = {
+      player: normalizedAttributes.player || "",
+      team: normalizedAttributes.team || "",
+      year: normalizedAttributes.year || "",
+      setName: normalizedAttributes.setName || "",
+    };
+    console.log("[cardIntel FINAL IDENTITY]", normalizedCardFacts);
+
     const responsePayload = {
       ...EMPTY_RESPONSE,
       ...derived,
@@ -412,6 +455,7 @@ export async function handler(event) {
       sources: normalizedAttributes.sources,
       isTextVerified: normalizedAttributes.isTextVerified,
       needsUserConfirmation: normalizedAttributes.needsUserConfirmation,
+      normalizedCardFacts,
       ocr: { lines: ocrLines },
       ocrBack: { lines: backOcrLines },
       ocrFull: fullCardOcr,
@@ -472,16 +516,59 @@ async function runFullImageOcr(client, { imageUrl, label, altText, requestId, lo
   const logLabelSafe = logLabel || "OCR FULL CARD";
   console.log(`[cardIntel][${logLabelSafe}] rawText="%s"`, raw);
   const parsed = parseJsonSafe(raw);
-  const lines = extractOcrLines(parsed);
+  const lines = buildLinesFromOcrOutput(parsed, raw);
   return { lines, raw };
+}
+
+async function runBackOcrWithTimeout(
+  client,
+  options,
+  { timeoutMs = 8000 } = {}
+) {
+  const ocrPromise = runFullImageOcr(client, options);
+  const timeoutPromise = new Promise((resolve) => {
+    setTimeout(() => resolve({ lines: [] }), timeoutMs);
+  });
+  return Promise.race([ocrPromise, timeoutPromise]);
+}
+
+function extractPlainTextLines(rawText = "") {
+  return String(rawText)
+    .split(/\r?\n/)
+    .map((line, index) => ({
+      text: line.trim(),
+      normalized: normalizeTextLine(line),
+      confidence: null,
+      index,
+    }))
+    .filter((entry) => Boolean(entry.text));
+}
+
+function buildLinesFromOcrOutput(parsed, rawText = "") {
+  const parsedLines = extractOcrLines(parsed);
+  if (parsedLines.length) {
+    return parsedLines;
+  }
+  const fallbackText = String(rawText || "").trim();
+  if (fallbackText) {
+    return extractPlainTextLines(fallbackText);
+  }
+  return [];
 }
 
 function parseJsonSafe(text) {
   if (!text) return null;
+  const cleaned = stripCodeFences(text);
+  const trimmed = cleaned.trim();
+  if (!trimmed) return null;
+
+  const firstObjectMatch = trimmed.match(/\{[\s\S]*\}/);
+  const candidate = firstObjectMatch ? firstObjectMatch[0] : trimmed;
+
   try {
-    return JSON.parse(stripCodeFences(text));
+    return JSON.parse(candidate);
   } catch (err) {
-    console.error("Card intel JSON parse failed:", err);
+    console.warn("Card intel JSON parse failed, falling back to text:", err);
     return null;
   }
 }
@@ -695,6 +782,34 @@ function applySlabIdentityOverrides(derived, slabIdentity) {
   }
 }
 
+function mergeDerivedResults(primary = {}, fallback = {}) {
+  const mergeObject = (primaryObj = {}, fallbackObj = {}) => ({
+    ...(fallbackObj || {}),
+    ...(primaryObj || {}),
+  });
+  const sourceEvidence = Array.isArray(primary?.sourceEvidence)
+    ? [...primary.sourceEvidence]
+    : Array.isArray(fallback?.sourceEvidence)
+    ? [...fallback.sourceEvidence]
+    : [];
+  return {
+    ...fallback,
+    ...primary,
+    confidence: mergeObject(primary?.confidence, fallback?.confidence),
+    sources: mergeObject(primary?.sources, fallback?.sources),
+    isTextVerified: mergeObject(primary?.isTextVerified, fallback?.isTextVerified),
+    manualSuggestions: mergeObject(
+      primary?.manualSuggestions,
+      fallback?.manualSuggestions
+    ),
+    sourceEvidence,
+    needsUserConfirmation:
+      typeof primary?.needsUserConfirmation === "boolean"
+        ? primary.needsUserConfirmation
+        : fallback?.needsUserConfirmation,
+  };
+}
+
 export function deriveFieldsFromOcr(lines = [], hints = {}) {
   const evidence = [];
   const sources = { ...EMPTY_RESPONSE.sources };
@@ -704,7 +819,10 @@ export function deriveFieldsFromOcr(lines = [], hints = {}) {
 
   const verifiedPlayerEntry = findVerifiedPlayerFromOcr(lines);
   const fallbackPlayerEntry = findPlayerCandidate(lines);
-  const player = verifiedPlayerEntry ? verifiedPlayerEntry.matchedName : "";
+  const candidatePlayer = fallbackPlayerEntry
+    ? titleCase(fallbackPlayerEntry.text)
+    : "";
+  const player = verifiedPlayerEntry ? verifiedPlayerEntry.matchedName : candidatePlayer;
   if (verifiedPlayerEntry) {
     evidence.push(buildEvidenceLine("player", verifiedPlayerEntry));
     sources.player = "ocr";
@@ -717,7 +835,10 @@ export function deriveFieldsFromOcr(lines = [], hints = {}) {
 
   const verifiedTeamEntry = findVerifiedTeamFromOcr(lines);
   const fallbackTeamEntry = findTeamCandidate(lines);
-  const team = verifiedTeamEntry ? verifiedTeamEntry.matchedTeam : "";
+  const candidateTeam = fallbackTeamEntry
+    ? titleCaseTeam(fallbackTeamEntry.text)
+    : "";
+  const team = verifiedTeamEntry ? verifiedTeamEntry.matchedTeam : candidateTeam;
   if (verifiedTeamEntry) {
     evidence.push(buildEvidenceLine("team", verifiedTeamEntry));
     sources.team = "ocr";
@@ -730,7 +851,8 @@ export function deriveFieldsFromOcr(lines = [], hints = {}) {
 
   const verifiedYearEntry = findVerifiedYearFromOcr(lines);
   const fallbackYearEntry = findYearCandidate(lines);
-  const year = verifiedYearEntry ? verifiedYearEntry.matchedYear : "";
+  const candidateYear = fallbackYearEntry ? fallbackYearEntry.match : "";
+  const year = verifiedYearEntry ? verifiedYearEntry.matchedYear : candidateYear;
   if (verifiedYearEntry) {
     evidence.push(buildEvidenceLine("year", verifiedYearEntry));
     sources.year = "ocr";

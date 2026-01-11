@@ -343,7 +343,9 @@ export default function TrendSenseDashboard() {
           type="button"
           className="primary-cta"
           onClick={() =>
-            navigate("/single-listing", { state: { fromTrendSense: true } })
+            navigate("/single-listing", {
+              state: { fromTrendSense: true, mode: "casual" },
+            })
           }
         >
           Add an item
@@ -562,13 +564,43 @@ function normalizeNewsEntries(entries = []) {
     });
 }
 
+function deriveListingName(item = {}) {
+  if (item.title) return item.title;
+  const player =
+    item.cardAttributes?.player ||
+    item.player ||
+    item.cardIntel?.player ||
+    item.cardIntel?.identity?.player;
+  const team =
+    item.cardAttributes?.team ||
+    item.team ||
+    item.cardIntel?.team ||
+    item.cardIntel?.identity?.team;
+  const setName =
+    item.cardAttributes?.setName ||
+    item.cardIntel?.setName ||
+    item.cardAttributes?.setBrand ||
+    item.cardIntel?.setBrand;
+  if (player && team && setName) {
+    return `${player} — ${team} — ${setName} (Draft)`;
+  }
+  const parts = [];
+  if (player) parts.push(player);
+  if (team) parts.push(team);
+  if (setName) parts.push(setName);
+  if (parts.length) {
+    return `${parts.join(" — ")} (Draft)`;
+  }
+  return "Sports Card Draft";
+}
+
 function buildItemStories(savedItems = [], reports = []) {
   if (!savedItems.length) return [];
   return savedItems.map((item, idx) => {
     const report = reports.find((r) => r.id === item.id);
     const base = {
       id: item.id || `item-${idx}`,
-      itemName: item.title || "Saved listing",
+      itemName: deriveListingName(item),
       active: false,
       listingUrl: item.listingUrl || item.url || null,
     };
@@ -856,8 +888,6 @@ function formatDateTime(dateStr) {
     month: "short",
     day: "numeric",
     year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
   });
 }
 

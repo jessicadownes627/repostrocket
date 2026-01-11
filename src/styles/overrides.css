@@ -361,8 +361,11 @@ textarea {
 }
 .live-listing-name {
   margin: 0.2rem 0;
-  font-size: 1.1rem;
+  font-size: 1.35rem;
   color: #f5f0e5;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 .live-listing-context {
   margin: 0;

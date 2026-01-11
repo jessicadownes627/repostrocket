@@ -150,7 +150,8 @@ export default function LaunchDeck() {
     }
   };
 
-  const goBackToEditor = () => navigate("/single-listing");
+  const goBackToEditor = () =>
+    navigate("/single-listing", { state: { mode: "casual" } });
 
   return (
     <div className="min-h-screen bg-[#050807] text-[#E8E1D0] px-6 py-10">
