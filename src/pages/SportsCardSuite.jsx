@@ -197,9 +197,13 @@ export default function SportsCardSuite() {
       <div className="max-w-2xl mx-auto">
         <button
           type="button"
-          onClick={() =>
-            window.history.length > 1 ? navigate(-1) : navigate("/dashboard")
-          }
+          onClick={() => {
+            if (typeof window !== "undefined" && window.history.length > 1) {
+              navigate(-1);
+            } else {
+              navigate("/dashboard");
+            }
+          }}
           className="text-left text-xs uppercase tracking-[0.3em] text-[#E8DCC0] mb-6 hover:text-white transition"
         >
           ← Back
