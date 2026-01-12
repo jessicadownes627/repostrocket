@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import LuxeChipGroup from "../components/LuxeChipGroup";
 import LuxeInput from "../components/LuxeInput";
 import { useListingStore } from "../store/useListingStore";
+import { composeCardTitle } from "../utils/composeCardTitle";
+import { getPhotoUrl } from "../utils/photoHelpers";
 import "../styles/overrides.css";
 
 const CATEGORY_OPTIONS = ["Sports Cards", "Apparel", "Accessories", "Home Goods", "Other"];
@@ -33,12 +35,22 @@ export default function SingleListing() {
   const [condition, setCondition] = useState("");
   const [tags, setTags] = useState([]);
 
-  const detectedFrontImage = listingData?.frontImage || "";
+  const detectedFrontImage =
+    listingData?.editedPhoto ||
+    getPhotoUrl(listingData?.photos?.[0]) ||
+    "";
   const detectedBackImage = listingData?.backImage || "";
   const detectedSlabImage = listingData?.slabImage || "";
   const identityPlayer = reviewIdentity?.player || "";
+  const identitySetName = reviewIdentity?.setName || "";
+  const displayPlayer =
+    identityPlayer && identityPlayer !== identitySetName ? identityPlayer : "";
   const hasIdentityData = reviewIdentity !== null;
-  const displayTitle = "";
+  const displayTitle = composeCardTitle({
+    year: reviewIdentity?.year,
+    setName: reviewIdentity?.setName,
+    player: reviewIdentity?.player,
+  });
 
   /* ---------- hydrate ONCE for sports ---------- */
   useEffect(() => {
@@ -56,27 +68,7 @@ export default function SingleListing() {
      =============== SPORTS REVIEW LAYOUT =====================
      ========================================================= */
   if (isSports) {
-    if (analysisInFlight && !hasIdentityData) {
-      return (
-        <div className="app-wrapper px-6 py-10 max-w-2xl mx-auto">
-          <div className="lux-card">
-            <div className="scan-frame">
-              {detectedFrontImage && (
-                <img
-                  src={detectedFrontImage}
-                  alt="Card under analysis"
-                  className="w-full rounded-2xl border border-white/10 object-cover"
-                />
-              )}
-              <div className="scan-line" />
-            </div>
-            <div className="text-sm uppercase tracking-[0.3em] opacity-60 mt-6 text-center">
-              Analyzing card details…
-            </div>
-          </div>
-        </div>
-      );
-    }
+    const showScanOverlay = analysisInFlight && !hasIdentityData;
     return (
       <div className="app-wrapper px-6 py-10 max-w-2xl mx-auto">
         <button
@@ -88,23 +80,60 @@ export default function SingleListing() {
 
         <h1 className="text-center text-3xl mb-10">Single Listing</h1>
 
-        {hasIdentityData && (
-          <div className="lux-card mb-10">
-            <div className="text-xs uppercase tracking-[0.35em] opacity-60 mb-4">
-              Card Identity
+        <div className="lux-card mb-10">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+            <div className="scan-frame relative">
+              {detectedFrontImage && (
+                <img
+                  src={detectedFrontImage}
+                  alt="Card under analysis"
+                  className="w-full rounded-2xl border border-white/10 object-cover"
+                />
+              )}
+              <div
+                className="absolute inset-0 rounded-2xl"
+                style={{
+                  background:
+                    "linear-gradient(120deg, rgba(255,255,255,0.04), rgba(255,255,255,0))",
+                  opacity: showScanOverlay ? 1 : 0,
+                  transition: "opacity 600ms ease",
+                  pointerEvents: "none",
+                }}
+              />
+              <div
+                className="scan-line"
+                style={{
+                  opacity: showScanOverlay ? 1 : 0,
+                  transition: "opacity 600ms ease",
+                  animation: showScanOverlay ? undefined : "none",
+                }}
+              />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              {identityPlayer && (
+            <div>
+              {displayTitle && (
+                <>
+                  <div className="text-xs uppercase tracking-[0.35em] opacity-60 mb-3">
+                    Card Title
+                  </div>
+                  <div className="text-2xl text-white mb-6">{displayTitle}</div>
+                </>
+              )}
+              {displayPlayer && (
                 <div>
                   <div className="text-xs uppercase tracking-[0.3em] opacity-60">
                     Player / Character
                   </div>
-                  <div className="text-xl mt-1 text-white">{identityPlayer}</div>
+                  <div className="text-xl mt-1 text-white">{displayPlayer}</div>
+                </div>
+              )}
+              {showScanOverlay && (
+                <div className="text-sm uppercase tracking-[0.3em] opacity-60 mt-6">
+                  Analyzing card details…
                 </div>
               )}
             </div>
           </div>
-        )}
+        </div>
 
         <button
           className="lux-continue-btn w-full py-5 tracking-[0.28em]"

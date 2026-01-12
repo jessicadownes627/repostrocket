@@ -4,11 +4,8 @@ import MagicCardPrep from "./MagicCardPrep";
 import { useBatchStore } from "../store/useBatchStore";
 import { useListingStore } from "../store/useListingStore";
 import {
-  analyzeCardImages,
-  buildCardAttributesFromIntel,
-  extractCornerPhotoEntries,
+  prepareCardIntelPayload,
 } from "../utils/cardIntelClient";
-import { buildCardTitle } from "../utils/buildCardTitle";
 import AnalysisProgress from "../components/AnalysisProgress";
 import { getPhotoUrl } from "../utils/photoHelpers";
 import { evaluatePhotoPreflight } from "../utils/photoPreflight";
@@ -18,6 +15,8 @@ import {
   downloadBatchMarketplaceZip,
   getPhotoSignature as getMarketplacePhotoSignature,
 } from "../utils/marketplacePhotoExports";
+import { resolveCardFacts as cardFactsResolver } from "../utils/cardFactsResolver";
+import { composeCardTitle } from "../utils/composeCardTitle";
 import usePaywallGate from "../hooks/usePaywallGate";
 import PremiumModal from "../components/PremiumModal";
 
@@ -218,6 +217,9 @@ export default function BatchCardPrep() {
     : currentCard?.pricing || activeCardIntel?.pricing || null;
   const activeCornerData = activeCardAttributes?.corners || null;
   const activeGrading = activeCardAttributes?.grading || null;
+  const activeReviewIdentity = listingMatchesCard
+    ? listingData.reviewIdentity || currentCard?.reviewIdentity || null
+    : currentCard?.reviewIdentity || null;
   const activePhotos = listingMatchesCard
     ? listingData.photos || currentCard?.photos || []
     : currentCard?.photos || [];
@@ -765,10 +767,12 @@ export default function BatchCardPrep() {
   };
 
   const showAnalysisResults = Boolean(
-    currentCard.approvedForAnalysis &&
-      (activeCardAttributes || activeCardIntel || activePricing)
+    currentCard.approvedForAnalysis && activeReviewIdentity
   );
   const canShowAnalysisView = approving || showAnalysisResults;
+  const activeFrontPhoto = getPhotoUrl(
+    (listingMatchesCard ? listingData?.photos?.[0] : currentCard?.photos?.[0]) || null
+  );
 
   useEffect(() => {
     if (!canShowAnalysisView) {
@@ -812,10 +816,16 @@ export default function BatchCardPrep() {
         secondaryPhotos: secondary,
       };
       const bundle = [...photos, ...secondary];
-      const intel = await analyzeCardImages(payload, { photos: bundle });
-      if (!intel || intel.error) {
+      const prep = await prepareCardIntelPayload(payload, {
+        photos: bundle,
+        requestId: `analysis-${Date.now()}`,
+        includeBackImage: Boolean(secondary.length),
+        disableCrops: true,
+        includeNameZones: false,
+      });
+      if (!prep || prep.error) {
         const message =
-          intel?.error || "Unable to analyze this card. Retake the photos and retry.";
+          prep?.error || "Unable to analyze this card. Retake the photos and retry.";
         setAnalysisError(message);
         updateBatchItem(currentCard.id, {
           approvedForAnalysis: false,
@@ -823,34 +833,48 @@ export default function BatchCardPrep() {
         });
         return;
       }
-      const attributes = buildCardAttributesFromIntel(intel) || null;
-      if (attributes) {
-        setListingField("cardAttributes", attributes);
+      if (prep.cancelled) {
+        updateBatchItem(currentCard.id, {
+          approvedForAnalysis: false,
+          analysisError: "",
+        });
+        return;
       }
-      setListingField("cardIntel", intel);
-      if (intel.pricing) {
-        setListingField("pricing", intel.pricing);
+
+      const minimalPayload = {
+        frontImage: prep.payload?.frontImage || null,
+        requestId: prep.payload?.requestId,
+        imageHash: prep.payload?.imageHash,
+      };
+      const response = await fetch("/.netlify/functions/cardIntel_v2", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(minimalPayload),
+      });
+      if (!response.ok) {
+        const message = "Unable to analyze this card. Retake the photos and retry.";
+        setAnalysisError(message);
+        updateBatchItem(currentCard.id, {
+          approvedForAnalysis: false,
+          analysisError: message,
+        });
+        return;
       }
-      const titleFromIntel =
-        buildCardTitle(attributes || {}) ||
-        listingData.title ||
-        currentCard.title ||
-        "";
-      if (titleFromIntel) {
-        setListingField("title", titleFromIntel);
-      }
-      const latestCorners = Array.isArray(listingData.cornerPhotos)
-        ? listingData.cornerPhotos
-        : [];
-      if (!latestCorners.length) {
-        const extracted = extractCornerPhotoEntries(intel);
-        if (extracted.length) {
-          setListingField("cornerPhotos", extracted);
-        }
-      }
+      const data = await response.json();
+      const ocrLines = Array.isArray(data?.ocrLines) ? data.ocrLines : [];
+      const resolved = cardFactsResolver(ocrLines);
+      const cardTitle = composeCardTitle(resolved);
+      const reviewIdentity = { ...resolved, cardTitle };
+
+      setListingField("cardIntel", data);
+      setListingField("reviewIdentity", reviewIdentity);
       updateBatchItem(currentCard.id, {
         approvedForAnalysis: true,
         analysisError: "",
+        cardIntel: data,
+        reviewIdentity,
       });
     } catch (err) {
       console.error("Batch card analysis failed:", err);
@@ -909,6 +933,13 @@ export default function BatchCardPrep() {
       return (
         <div className="app-wrapper min-h-screen px-6 py-10 flex flex-col bg-black text-white">
           <div className="flex-1 flex flex-col items-center justify-center text-center gap-4 px-4">
+            {activeFrontPhoto && (
+              <img
+                src={activeFrontPhoto}
+                alt="Card under analysis"
+                className="w-full max-w-sm rounded-2xl border border-white/10 object-cover"
+              />
+            )}
             <p className="text-lg text-white/70">Analyzing this card…</p>
             <AnalysisProgress active={approving} />
             {analysisError && (
@@ -918,331 +949,28 @@ export default function BatchCardPrep() {
         </div>
       );
     }
+    const cardTitle = composeCardTitle(activeReviewIdentity);
     return (
       <div className="app-wrapper min-h-screen px-6 py-10 flex flex-col bg-black text-white">
         <div className="max-w-4xl mx-auto w-full px-6 mt-4 pb-6">
           <HeaderBar label="Card Details" />
-
           <div className="lux-card mb-8">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs uppercase opacity-70 tracking-wide mb-3">
-              <span>Detected Attributes</span>
-              <span className="text-white/60 text-[11px]">
-                Verified {verifiedIdentityCount} of {totalIdentityFields} identity fields
-              </span>
-            </div>
-            <p className="text-[11px] text-white/45 mb-4">
-              Only printed text visible in these photos counts toward verification.
-            </p>
-            {!hasVerifiedIdentity && (
-              <div className="rounded-2xl border border-[#f6d48f]/30 bg-gradient-to-r from-[#352217] to-[#1f120c] px-4 py-3 text-sm text-[#FBEACC] mb-4">
-                We couldn’t see the printed card text clearly yet — confirm the remaining rows before launch.
+            {cardTitle && (
+              <>
+                <div className="text-xs uppercase tracking-[0.35em] opacity-60 mb-3">
+                  Card Title
+                </div>
+                <div className="text-2xl text-white mb-6">{cardTitle}</div>
+              </>
+            )}
+            {activeReviewIdentity?.player && (
+              <div>
+                <div className="text-xs uppercase tracking-[0.35em] opacity-60 mb-2">
+                  Player / Character
+                </div>
+                <div className="text-xl text-white">{activeReviewIdentity.player}</div>
               </div>
             )}
-            <div className="space-y-4 text-sm opacity-85">
-              {CARD_IDENTITY_FIELDS.map(({ key, label }) => {
-                const status = cardIdentityStatuses[key] || {};
-                const displayValue = status.verified
-                  ? status.baseValue
-                  : status.hasManual
-                  ? status.manualValue
-                  : "";
-                const manualTag = !status.verified && status.hasManual;
-                const isVerified = Boolean(status.verified);
-                const isSuggested = !isVerified && !status.hasManual && status.hasSuggestion;
-                const isBlank = !isVerified && !status.hasManual && !status.hasSuggestion;
-                const hasEvidence = isVerified && identityEvidenceByField[key]?.length > 0;
-                const showEvidence = hasEvidence && openEvidenceField === key;
-                const isOptionalField = OPTIONAL_IDENTITY_FIELDS.has(key);
-                return (
-                  <div key={key}>
-                    <div className="flex items-center gap-2">
-                      <span className="opacity-60">{label}:</span>
-                      {isVerified && (
-                        <span className="text-[10px] uppercase tracking-[0.35em] text-[#8FF0C5] border border-[#1F4B37] rounded-full px-2 py-0.5 bg-[#081811]">
-                          Verified from card
-                        </span>
-                      )}
-                      {manualTag && (
-                        <span className="text-[10px] uppercase tracking-[0.35em] text-white/70 border border-white/20 rounded-full px-2 py-0.5">
-                          Entered by you
-                        </span>
-                      )}
-                      {isSuggested && (
-                        <span className="text-[10px] uppercase tracking-[0.35em] text-white/70 border border-white/20 rounded-full px-2 py-0.5">
-                          Suggested
-                        </span>
-                      )}
-                    </div>
-                    <div className="pl-4 mt-1 space-y-2">
-                      {isVerified && (
-                        <div className="rounded-2xl border border-[#1F4B37] bg-[#061711] px-4 py-3 text-white/90">
-                          <div className="flex items-start gap-3">
-                            <div className="text-base font-semibold text-white">{displayValue}</div>
-                          </div>
-                          {hasEvidence && (
-                            <>
-                              <button
-                                type="button"
-                                className="mt-2 inline-flex items-center gap-2 text-xs text-[#8FF0C5] hover:text-white transition"
-                                onClick={() =>
-                                  setOpenEvidenceField((prev) => (prev === key ? null : key))
-                                }
-                              >
-                                {showEvidence ? "Hide proof" : "Show proof"}
-                              </button>
-                              {showEvidence && (
-                                <ul className="mt-2 space-y-1 text-xs text-white/70">
-                                  {identityEvidenceByField[key].slice(0, 3).map((line, idx) => (
-                                    <li key={`${key}-evidence-${idx}`} className="flex gap-2">
-                                      <span className="h-1.5 w-1.5 rounded-full bg-[#8FF0C5] mt-1" />
-                                      <span>{line}</span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      )}
-
-                      {!isVerified && status.hasManual && (
-                        <div className="rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-white/85">
-                          <div className="text-xs text-white/60 mb-1">Entered by you</div>
-                          <div>{displayValue}</div>
-                        </div>
-                      )}
-
-                      {isSuggested && (
-                        <div className="rounded-2xl border border-white/15 bg-black/25 px-4 py-3 text-white/80">
-                          <div className="text-xs text-white/60 mb-1">Suggested</div>
-                          <div>{status.suggestion}</div>
-                        </div>
-                      )}
-
-                      {isBlank && (
-                        <div className="rounded-2xl border border-dashed border-white/20 px-4 py-3 text-white/40">
-                          <div className="text-2xl leading-none">—</div>
-                          <div className="text-xs uppercase tracking-[0.3em] mt-1">
-                            {isOptionalField ? "Optional" : "Not verified yet"}
-                          </div>
-                        </div>
-                      )}
-
-                      {status.needsManual && (
-                        <div className="text-xs text-[#F6D48F] space-y-1">
-                          <div>Please confirm this detail before batch launch.</div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="opacity-60">Parallel:</span>
-                  {renderCardConfidence("parallel")}
-                </div>
-                <div className="pl-4">
-                  {activeCardAttributes?.parallel || <span className="opacity-40">—</span>}
-                </div>
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="opacity-60">Card #:</span>
-                  {renderCardConfidence("cardNumber")}
-                </div>
-                <div className="pl-4">
-                  {activeCardAttributes?.cardNumber || <span className="opacity-40">—</span>}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {activeCornerData && (
-            <div className="lux-card mb-8">
-              <div className="flex items-center gap-2 text-xs uppercase opacity-70 tracking-wide mb-2">
-                Corner Inspection
-              </div>
-              <p className="text-xs text-white/55 mb-4">
-                Confidence only reflects image clarity (High = clearly framed, Medium = visible but a bit angled). It does not judge card condition.
-              </p>
-              <div className="space-y-4">
-                {["front", "back"].map((side) => {
-                  const cornerSet = activeCornerData?.[side];
-                  if (!cornerSet) return null;
-                  const condition =
-                    activeCardAttributes?.cornerCondition?.[side];
-                  const prettySide = side === "front" ? "Front" : "Back";
-                  return (
-                    <div key={side}>
-                      <div className="flex items-center gap-2 text-xs uppercase tracking-[0.35em] opacity-70">
-                        {prettySide} Corners
-                        {renderCornerBadge(condition?.confidence)}
-                      </div>
-                      {condition?.description && (
-                        <div className="text-xs opacity-60 mt-1">
-                          Looks {condition.description}.
-                        </div>
-                      )}
-                      <div className="grid grid-cols-2 gap-3 mt-3">
-                        {Object.entries(CORNER_LABELS).map(([key, label]) => {
-                          const entry = cornerSet[key];
-                          return (
-                            <div
-                              key={`${side}-${key}`}
-                              className="text-center text-[11px] uppercase tracking-[0.25em]"
-                            >
-                              <div className="mb-2 rounded-2xl border border-white/10 bg-black/30 overflow-hidden">
-                                {entry?.image ? (
-                                  <img
-                                    src={entry.image}
-                                    alt={`${prettySide} ${label}`}
-                                    className={`w-full h-24 object-cover ${
-                                      entry?.manualOverride ? "ring-1 ring-[#E8D5A8]" : ""
-                                    }`}
-                                  />
-                                ) : (
-                                  <div className="h-24 flex items-center justify-center text-[10px] opacity-40">
-                                    No data
-                                  </div>
-                                )}
-                              </div>
-                              <div className="flex items-center justify-center gap-2 text-[10px] tracking-[0.3em]">
-                                {label}
-                                {renderCornerBadge(entry?.confidence)}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <p className="mt-4 text-xs text-white/55">
-                Corners are auto-detected for condition analysis. Retake if alignment looks off.
-              </p>
-            </div>
-          )}
-
-          <div className="lux-card mb-8">
-            <div className="text-xs uppercase opacity-70 tracking-wide mb-3">
-              Grading Assist
-            </div>
-            {activeGrading ? (
-              <div className="space-y-1 text-sm opacity-85">
-                <div>
-                  <span className="opacity-60">Centering:</span>{" "}
-                  {activeGrading.centering || "—"}
-                </div>
-                <div>
-                  <span className="opacity-60">Corners:</span>{" "}
-                  {activeGrading.corners || "—"}
-                </div>
-                <div>
-                  <span className="opacity-60">Edges:</span>{" "}
-                  {activeGrading.edges || "—"}
-                </div>
-                <div>
-                  <span className="opacity-60">Surface:</span>{" "}
-                  {activeGrading.surface || "—"}
-                </div>
-              </div>
-            ) : (
-              <div className="text-sm text-white/55">
-                No grading data available for this card yet.
-              </div>
-            )}
-          </div>
-
-          {activePricing && (
-            <div className="lux-card mb-8">
-              <div className="text-xs uppercase opacity-70 tracking-wide mb-1">
-                Pricing insights (beta)
-              </div>
-              <p className="text-[11px] text-white/55 mb-2">
-                Approximate ranges pulled when recent sales data is available.
-              </p>
-              <div className="space-y-1 text-sm opacity-85">
-                <div>
-                  <span className="opacity-60">Recent Low:</span>{" "}
-                  {activePricing.low ? `$${activePricing.low}` : "—"}
-                </div>
-                <div>
-                  <span className="opacity-60">Recent Mid:</span>{" "}
-                  {activePricing.mid ? `$${activePricing.mid}` : "—"}
-                </div>
-                <div>
-                  <span className="opacity-60">Recent High:</span>{" "}
-                  {activePricing.high ? `$${activePricing.high}` : "—"}
-                </div>
-                <div className="mt-2">
-                  <span className="opacity-60">Suggested List Price:</span>{" "}
-                  {activePricing.suggestedListPrice
-                    ? `$${activePricing.suggestedListPrice}`
-                    : "—"}
-                </div>
-                <div>
-                  <span className="opacity-60">Confidence:</span>{" "}
-                  {activePricing.confidence || "—"}
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3 mt-4">
-                <button
-                  onClick={() => {
-                    const encoded = encodeURIComponent(listingTitle || "");
-                    if (!encoded) return;
-                    window.open(
-                      `https://www.ebay.com/sch/i.html?_nkw=${encoded}`,
-                      "_blank",
-                      "noopener"
-                    );
-                  }}
-                  className="lux-small-btn"
-                >
-                  Open eBay
-                </button>
-
-                <button
-                  onClick={() => {
-                    const encoded = encodeURIComponent(listingTitle || "");
-                    if (!encoded) return;
-                    window.open(
-                      `https://www.mercari.com/search/?keyword=${encoded}`,
-                      "_blank",
-                      "noopener"
-                    );
-                  }}
-                  className="lux-small-btn"
-                >
-                  Open Mercari
-                </button>
-
-                <button
-                  onClick={() => {
-                    if (!listingTitle) return;
-                    navigator?.clipboard?.writeText?.(listingTitle);
-                  }}
-                  className="lux-small-btn"
-                >
-                  Copy Title
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div className="mt-8">
-            <button
-              type="button"
-              className={`w-full py-4 text-lg font-semibold rounded-2xl lux-continue-btn ${
-                launching ? "opacity-60 cursor-not-allowed" : ""
-              }`}
-              onClick={handleSendToLaunchDeck}
-              disabled={launching}
-            >
-              {launching ? "Sending…" : "Send to Launch Deck →"}
-            </button>
           </div>
         </div>
       </div>

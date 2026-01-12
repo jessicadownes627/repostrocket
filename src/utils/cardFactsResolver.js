@@ -471,19 +471,41 @@ export function resolveCardFacts(intel = {}) {
   const isLineArrayInput = Array.isArray(intel);
   const ocrLines = isLineArrayInput ? normalizeOcrLineInput(intel) : collectOcrLines(intel);
   if (!ocrLines.length) return promotions;
-  const player = ocrLines
+  const lineTexts = ocrLines
     .map((line) => (line?.text ? line.text : ""))
     .map((line) => line.trim())
-    .find((line) => {
-      if (!line) return false;
-      if (line.length <= 3) return false;
-      if (/^\d+$/.test(line)) return false;
-      const words = line.split(/\s+/).filter(Boolean);
-      if (words.length < 2) return false;
-      if (line === line.toUpperCase()) return false;
-      return /[A-Za-z]/.test(line);
-    });
+    .filter(Boolean);
+  const player = lineTexts.find((line) => {
+    if (line.length <= 3) return false;
+    if (/^\d+$/.test(line)) return false;
+    const words = line.split(/\s+/).filter(Boolean);
+    if (words.length < 2) return false;
+    if (line === line.toUpperCase()) return false;
+    return /[A-Za-z]/.test(line);
+  });
   if (player) promotions.player = player;
+
+  const year = lineTexts
+    .map((line) => line.match(/\b(19|20)\d{2}\b/))
+    .filter(Boolean)
+    .map((match) => match[0])
+    .find((value) => {
+      const yearNumber = Number(value);
+      return yearNumber >= 1900 && yearNumber <= 2099;
+    });
+  if (year) promotions.year = year;
+
+  const teamKeywords = [...MLB_TEAMS, ...NFL_TEAMS, ...NBA_TEAMS, ...NHL_TEAMS];
+  const setName = lineTexts.find((line) => {
+    if (!/^[A-Z0-9\s.'&-]+$/.test(line)) return false;
+    const words = line.split(/\s+/).filter(Boolean);
+    if (words.length < 2) return false;
+    const normalized = normalizeLine(line);
+    if (!normalized) return false;
+    if (teamKeywords.some((team) => normalized.includes(team))) return false;
+    return true;
+  });
+  if (setName) promotions.setName = titleCase(setName);
   promotions.graded = false;
   return promotions;
 }
