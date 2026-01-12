@@ -10,7 +10,7 @@ import {
   buildCornerPreviewFromEntries,
   regenerateCornerImage,
   MAX_CORNER_NUDGE_RATIO,
-} from "../utils/cardIntel";
+} from "../utils/cardIntelClient";
 import { evaluatePhotoPreflight } from "../utils/photoPreflight";
 import "../styles/createListing.css";
 

@@ -8,10 +8,9 @@ import {
   extractCornerPhotoEntries,
   prepareCardIntelPayload,
   finalizeCardIntelResponse,
-} from "../utils/cardIntel";
-import { generateDevCardIntelMock } from "../utils/devCardIntelMock";
+} from "../utils/cardIntelClient";
 import { saveListingToLibrary } from "../utils/savedListings";
-import { resolveCardFacts } from "../utils/cardFactsResolver";
+import { resolveCardFacts as cardFactsResolver } from "../utils/cardFactsResolver";
 
 const ListingContext = createContext(null);
 const STORAGE_KEY = "rr_draft_listing";
@@ -52,6 +51,8 @@ const defaultListing = {
 export function ListingProvider({ children }) {
   const [selectedPlatforms, setSelectedPlatforms] = useState([]);
   const [listingData, setListingData] = useState(defaultListing);
+  const [reviewIdentity, setReviewIdentity] = useState(null);
+  const [analysisState, setAnalysisState] = useState("idle");
   const [savedDrafts, setSavedDrafts] = useState([]);
   const [premiumUsesRemaining, setPremiumUsesRemaining] = useState(1);
   const [batchMode, setBatchMode] = useState("general");
@@ -134,9 +135,9 @@ export function ListingProvider({ children }) {
 
   // Persist to localStorage when state changes
   useEffect(() => {
-    if (analysisInFlight || import.meta.env.DEV || isNetlifyDevRuntime) {
-      return;
-    }
+      if (analysisInFlight || import.meta.env.DEV || isNetlifyDevRuntime) {
+        return;
+      }
     try {
       const payload = JSON.stringify({
         selectedPlatforms,
@@ -205,32 +206,96 @@ export function ListingProvider({ children }) {
 
       const applyCardIntelResult = (intel) => {
         if (!intel) return;
+        if (intel?.status === "timeout" || !Array.isArray(intel?.ocrLines) || !intel.ocrLines.length) {
+          setAnalysisState("needsRetry");
+          return;
+        }
+        if (intel?.status && intel.status !== "complete") return;
+        const attrs = buildCardAttributesFromIntel(intel);
+        const ocrLines = Array.isArray(intel?.ocrLines)
+          ? intel.ocrLines
+          : Array.isArray(intel?.ocrFull?.lines)
+          ? intel.ocrFull.lines
+          : [];
+        const promotions = cardFactsResolver(ocrLines);
+        console.log("[listingStore] resolver output", promotions);
+        const resolvedFacts = {
+          player: promotions.player || "",
+          team: promotions.team || "",
+          year: promotions.year || "",
+          setName: promotions.setName || "",
+          sport: promotions.sport || "",
+          graded: typeof promotions.graded === "boolean" ? promotions.graded : null,
+          cardTitle: promotions.cardTitle || "",
+        };
+        const composedTitle = resolvedFacts.cardTitle || "";
+        const composedGradeStatus = resolvedFacts.graded === false ? "Raw" : "";
+        const composedIsGraded = resolvedFacts.graded;
         setListingData((prev) => {
-          const attrs = buildCardAttributesFromIntel(intel);
-          const promotions = resolveCardFacts(intel);
+          const nextIdentity = { ...(prev.identity || {}) };
+          const assignIdentity = (key, value) => {
+            if (value === undefined || value === null || value === "") return;
+            if (nextIdentity[key] !== undefined && nextIdentity[key] !== null && nextIdentity[key] !== "") {
+              return;
+            }
+            nextIdentity[key] = value;
+          };
+          assignIdentity("player", resolvedFacts.player);
+          assignIdentity("year", resolvedFacts.year);
+          assignIdentity("setName", resolvedFacts.setName);
+          assignIdentity("team", resolvedFacts.team);
+          assignIdentity("sport", resolvedFacts.sport);
+          assignIdentity("cardTitle", composedTitle);
+          assignIdentity("title", composedTitle);
+          assignIdentity("gradeStatus", composedGradeStatus);
+          assignIdentity("isGraded", composedIsGraded);
+
           const mergedUpdates = {
             ...prev,
             ...attrs,
-            ...promotions,
             cardIntel: intel,
             cardIntelHash: intel?.imageHash || null,
             cardAttributes: attrs || prev.cardAttributes,
+            identity: nextIdentity,
           };
           const cornerAssets = extractCornerPhotoEntries(intel);
           if (cornerAssets.length) {
             mergedUpdates.cornerPhotos = cornerAssets;
           }
-          const assignCandidate = (key, sourceKey) => {
-            const candidateValue = intel?.[sourceKey];
-            if (!candidateValue) return;
-            mergedUpdates[key] = candidateValue;
+          const assignListingField = (key, value) => {
+            if (!value) return;
+            if (mergedUpdates[key]) return;
+            mergedUpdates[key] = value;
           };
-          assignCandidate("player", "player");
-          assignCandidate("team", "team");
-          assignCandidate("year", "year");
+          assignListingField("player", resolvedFacts.player);
+          assignListingField("team", resolvedFacts.team);
+          assignListingField("year", resolvedFacts.year);
+          assignListingField("setName", resolvedFacts.setName);
+          assignListingField("sport", resolvedFacts.sport);
+          assignListingField("cardTitle", composedTitle);
+          assignListingField("title", composedTitle);
+          if (composedGradeStatus && !mergedUpdates.gradeStatus) {
+            mergedUpdates.gradeStatus = composedGradeStatus;
+          }
+          if (typeof composedIsGraded === "boolean" && mergedUpdates.isGraded === undefined) {
+            mergedUpdates.isGraded = composedIsGraded;
+          }
           persistSportsCardDraft(mergedUpdates);
           return mergedUpdates;
         });
+        setReviewIdentity({
+          requestId: intel?.requestId || null,
+          imageHash: intel?.imageHash || null,
+          cardTitle: composedTitle || null,
+          player: resolvedFacts.player || "",
+          team: resolvedFacts.team || "",
+          year: resolvedFacts.year || "",
+          setName: resolvedFacts.setName || "",
+          sport: resolvedFacts.sport || "",
+          graded: resolvedFacts.graded,
+          gradeStatus: composedGradeStatus,
+        });
+        setAnalysisState("complete");
         setLastAnalyzedHash(intel?.imageHash || null);
       };
 
@@ -320,6 +385,7 @@ export function ListingProvider({ children }) {
       setAnalysisSessionId(sessionId);
       setAnalysisInFlight(true);
       setSportsAnalysisError("");
+      setAnalysisState("analyzing");
       console.log("[listingStore] step: preparing listing payload");
       const payload = {
         ...listingData,
@@ -361,7 +427,7 @@ export function ListingProvider({ children }) {
           return { cancelled: true };
         }
 
-        console.log("[client] calling /.netlify/functions/cardIntel", {
+        console.log("[client] calling /.netlify/functions/cardIntel_v2", {
           requestId: prep.requestId,
           imageHash: prep.imageHash,
         });
@@ -379,60 +445,40 @@ export function ListingProvider({ children }) {
         console.log("[listingStore] payload sizes (bytes)", {
           frontImage: minimalPayload.frontImage ? minimalPayload.frontImage.length : 0,
         });
-        const slabDetected =
-          Boolean(listingData?.gradingCompany) ||
-          Boolean(listingData?.isGraded) ||
-          Boolean(listingData?.cardAttributes?.isGradedCard) ||
-          Boolean(listingData?.cardIntel?.isGradedCard) ||
-          Boolean(listingData?.cardIntelligence?.graded) ||
-          Boolean(listingData?.cardIntelligence?.slabbed);
-        const useDevHarness = slabDetected;
         let data = null;
-        if (useDevHarness) {
-          console.log("[listingStore] using dev-grade harness for slabbed card");
-          data = await generateDevCardIntelMock(minimalPayload);
-        } else {
-          const response = await fetch("/.netlify/functions/cardIntel", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(minimalPayload),
-          });
-          if (!response.ok) {
-            let text = "";
-            try {
-              text = await response.text();
-            } catch (err) {
-              text = err?.message || "";
-            }
-            console.error("[listingStore] cardIntel function error:", text);
-            setSportsAnalysisError(SPORTS_ANALYSIS_ERROR_MESSAGE);
-            return { error: SPORTS_ANALYSIS_ERROR_MESSAGE };
-          }
-          try {
-            data = await response.json();
-            console.log("[listingStore] step: received cardIntel payload", {
-              keys: Object.keys(data || {}),
-            });
-          } catch (err) {
-            console.error("[listingStore] failed to parse cardIntel response", err);
-            setSportsAnalysisError(SPORTS_ANALYSIS_ERROR_MESSAGE);
-            return { error: SPORTS_ANALYSIS_ERROR_MESSAGE };
-          }
-        }
-        if (!data || data.error) {
-          setSportsAnalysisError(data?.error || SPORTS_ANALYSIS_ERROR_MESSAGE);
-          return { error: data?.error || SPORTS_ANALYSIS_ERROR_MESSAGE };
-        }
-
-        console.log("[listingStore] step: finalizing intel with local corners");
-        const intel = await finalizeCardIntelResponse(data, {
-          ...prep,
-          skipCornerAnalysis: true,
+        const response = await fetch("/.netlify/functions/cardIntel_v2", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(minimalPayload),
         });
-        applyCardIntelResult(intel);
-        return { success: true, intel };
+        if (!response.ok) {
+          let text = "";
+          try {
+            text = await response.text();
+          } catch (err) {
+            text = err?.message || "";
+          }
+          console.error("[listingStore] cardIntel function error:", text);
+          setSportsAnalysisError(SPORTS_ANALYSIS_ERROR_MESSAGE);
+          return { error: SPORTS_ANALYSIS_ERROR_MESSAGE };
+        }
+        try {
+          data = await response.json();
+          console.log("[CLIENT] FULL cardIntel_v2 response", data);
+          console.log("[CLIENT] ocrLines value", data?.ocrLines);
+        } catch (err) {
+          console.error("[listingStore] failed to parse cardIntel response", err);
+          setSportsAnalysisError(SPORTS_ANALYSIS_ERROR_MESSAGE);
+          return { error: SPORTS_ANALYSIS_ERROR_MESSAGE };
+        }
+        const ocrLines = Array.isArray(data?.ocrLines) ? data.ocrLines : [];
+        const resolved = cardFactsResolver(ocrLines);
+        console.log("[CLIENT] resolver output", resolved);
+        setReviewIdentity(resolved || null);
+        setAnalysisState("complete");
+        return { success: true, intel: data, resolved };
       } catch (err) {
         console.error("Sports card analysis failed:", err);
         setSportsAnalysisError(SPORTS_ANALYSIS_ERROR_MESSAGE);
@@ -486,6 +532,7 @@ export function ListingProvider({ children }) {
     const resetListing = (mode = "general") => {
       setSelectedPlatforms([]);
       setListingData(defaultListing);
+      setReviewIdentity(null);
       setBatchMode(mode);
       localStorage.removeItem(STORAGE_KEY);
     };
@@ -549,6 +596,8 @@ export function ListingProvider({ children }) {
     return {
       selectedPlatforms,
       listingData,
+      reviewIdentity,
+      analysisState,
       savedDrafts,
       premiumUsesRemaining,
       batchMode,
@@ -576,6 +625,8 @@ export function ListingProvider({ children }) {
   }, [
     selectedPlatforms,
     listingData,
+    reviewIdentity,
+    analysisState,
     savedDrafts,
     premiumUsesRemaining,
     batchMode,

@@ -62,7 +62,7 @@ import { generateMagicDraft } from "../utils/generateMagicDraft";
 import {
   buildCardAttributesFromIntel,
   extractCornerPhotoEntries,
-} from "../utils/cardIntel";
+} from "../utils/cardIntelClient";
 import { buildApparelAttributesFromIntel } from "../utils/apparelIntel";
 import { useListingStore } from "../store/useListingStore";
 import { shareImage } from "../utils/saveImage";

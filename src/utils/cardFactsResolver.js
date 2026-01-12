@@ -185,18 +185,35 @@ function collectOcrLines(intel = {}) {
     source.forEach((entry) => {
       if (!entry) return;
       if (typeof entry === "string") {
-        lines.push(entry);
+        lines.push({ text: entry, confidence: 0 });
       } else if (typeof entry?.text === "string") {
-        lines.push(entry.text);
+        lines.push({ text: entry.text, confidence: Number(entry?.confidence) || 0 });
       }
     });
   };
-  pushLines(intel?.ocrFull?.lines);
-  pushLines(intel?.ocr?.lines);
-  pushLines(intel?.ocrZones?.topBanner?.lines);
-  pushLines(intel?.ocrZones?.bottomCenter?.lines);
-  pushLines(intel?.ocrZones?.bottomLeft?.lines);
-  return lines.map((line) => line.trim()).filter(Boolean);
+  if (Array.isArray(intel?.ocrFull?.lines) && intel.ocrFull.lines.length) {
+    pushLines(intel.ocrFull.lines);
+  } else {
+    pushLines(intel?.ocr?.lines);
+    pushLines(intel?.ocrBack?.lines);
+    pushLines(intel?.ocrZones?.topBanner?.lines);
+    pushLines(intel?.ocrZones?.bottomCenter?.lines);
+    pushLines(intel?.ocrZones?.bottomLeft?.lines);
+  }
+  return lines
+    .map((line) => ({ ...line, text: line.text.trim() }))
+    .filter((line) => line.text);
+}
+
+function normalizeOcrLineInput(input) {
+  if (!Array.isArray(input)) return [];
+  return input
+    .filter((entry) => entry && (typeof entry === "string" || typeof entry.text === "string"))
+    .map((entry) => ({
+      text: (typeof entry === "string" ? entry : entry.text).trim(),
+      confidence: Number(entry?.confidence) || 0,
+    }))
+    .filter((entry) => entry.text);
 }
 
 function titleCase(value = "") {
@@ -211,162 +228,262 @@ function normalizeLine(line = "") {
   return line.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
 }
 
-function findTeamFromOcr(lines) {
+function pickTeamFromOcr(lines) {
   const allTeams = [...MLB_TEAMS, ...NFL_TEAMS, ...NBA_TEAMS, ...NHL_TEAMS];
+  let best = null;
   for (const line of lines) {
-    const normalized = normalizeLine(line);
-    if (!normalized) continue;
-    for (const team of allTeams) {
-      if (normalized.includes(team)) {
-        return titleCase(normalized);
-      }
+    const raw = line.text.replace(/\s+/g, " ").trim();
+    if (!raw) continue;
+    if (/\d/.test(raw)) continue;
+    if (!/^[A-Z][A-Z\s.'&-]+$/.test(raw)) continue;
+    const words = raw.split(/\s+/).filter(Boolean);
+    const wordCount = words.length;
+    const normalized = normalizeLine(raw);
+    if (!allTeams.some((team) => normalized.includes(team))) continue;
+    const candidate = {
+      text: raw,
+      confidence: line.confidence,
+      length: raw.length,
+      wordCount,
+    };
+    if (!best) {
+      best = candidate;
+      continue;
+    }
+    if (candidate.wordCount > best.wordCount) {
+      best = candidate;
+      continue;
+    }
+    if (candidate.wordCount === best.wordCount && candidate.confidence > best.confidence) {
+      best = candidate;
+      continue;
+    }
+    if (
+      candidate.wordCount === best.wordCount &&
+      candidate.confidence === best.confidence &&
+      candidate.length > best.length
+    ) {
+      best = candidate;
     }
   }
-  return "";
+  return best?.text || "";
 }
 
-function findBrandFromOcr(lines) {
+function pickTeamFromOcrAllCaps(lines) {
+  let best = null;
+  for (const line of lines) {
+    const raw = line.text.replace(/\s+/g, " ").trim();
+    if (!raw) continue;
+    if (/\d/.test(raw)) continue;
+    if (!/^[A-Z][A-Z\s.'&-]+$/.test(raw)) continue;
+    const wordCount = raw.split(/\s+/).filter(Boolean).length;
+    const candidate = { text: raw, wordCount, confidence: line.confidence };
+    if (!best) {
+      best = candidate;
+      continue;
+    }
+    if (candidate.wordCount > best.wordCount) {
+      best = candidate;
+      continue;
+    }
+    if (candidate.wordCount === best.wordCount && candidate.confidence > best.confidence) {
+      best = candidate;
+    }
+  }
+  return best?.text || "";
+}
+
+function pickBrandFromOcr(lines) {
   const brands = [
-    "upper deck",
-    "topps",
-    "panini",
-    "bowman",
-    "donruss",
-    "fleer",
-    "score",
-    "leaf",
-    "skybox",
+    { key: "upper deck", label: "Upper Deck" },
+    { key: "topps", label: "Topps" },
+    { key: "panini", label: "Panini" },
+    { key: "donruss", label: "Donruss" },
+    { key: "optic", label: "Optic" },
+    { key: "bowman", label: "Bowman" },
+    { key: "fleer", label: "Fleer" },
+    { key: "score", label: "Score" },
   ];
-  for (const line of lines) {
-    const normalized = normalizeLine(line);
-    if (!normalized) continue;
+  let best = null;
+  const isAllCapsLine = (text) => /^[A-Z0-9\s.'&-]+$/.test(text);
+  const stripYearTokens = (text) =>
+    text.replace(/\b(19|20)\d{2}\b/g, "").replace(/\s+/g, " ").trim();
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const raw = line.text.replace(/\s+/g, " ").trim();
+    if (!raw) continue;
+    const normalized = normalizeLine(raw);
+    const wordCount = raw.split(/\s+/).filter(Boolean).length;
+    const isAllCaps = isAllCapsLine(raw);
+    if (!isAllCaps) continue;
+    const allCapsMultiWord = isAllCaps && wordCount >= 2;
+
+    const nextLine = lines[index + 1];
+    let combinedRaw = "";
+    let combinedNormalized = "";
+    let combinedAllCapsMultiWord = false;
+    let combinedWordCount = 0;
+    if (nextLine) {
+      const nextRaw = nextLine.text.replace(/\s+/g, " ").trim();
+      if (nextRaw && isAllCapsLine(nextRaw)) {
+        combinedRaw = `${raw} ${nextRaw}`.replace(/\s+/g, " ").trim();
+        combinedNormalized = normalizeLine(combinedRaw);
+        combinedWordCount = combinedRaw.split(/\s+/).filter(Boolean).length;
+        combinedAllCapsMultiWord = combinedWordCount >= 2;
+      }
+    }
+
     for (const brand of brands) {
-      if (normalized === brand || normalized.includes(brand)) {
-        return titleCase(brand);
+      const matchesSingle =
+        normalized && (normalized === brand.key || normalized.includes(brand.key));
+      const matchesCombined =
+        combinedNormalized &&
+        (combinedNormalized === brand.key || combinedNormalized.includes(brand.key));
+      if (!matchesSingle && !matchesCombined) continue;
+      const useCombined = matchesCombined && combinedAllCapsMultiWord;
+      const useRawPhrase = !useCombined && allCapsMultiWord;
+      const candidateRaw = useCombined ? combinedRaw : raw;
+      const candidatePhrase = stripYearTokens(candidateRaw);
+      if (!candidatePhrase) continue;
+      const candidateWordCount = useCombined
+        ? combinedWordCount
+        : candidatePhrase.split(/\s+/).filter(Boolean).length;
+      const candidateLabel =
+        (useCombined || useRawPhrase) && candidatePhrase
+          ? titleCase(candidatePhrase)
+          : brand.label;
+      const score = candidateWordCount * 10 + (useCombined ? 5 : 0);
+      const candidate = {
+        label: candidateLabel,
+        confidence: line.confidence,
+        score,
+        wordCount: candidateWordCount,
+      };
+      if (!best) {
+        best = candidate;
+        continue;
+      }
+      if (candidate.score > best.score) {
+        best = candidate;
+        continue;
+      }
+      if (candidate.score === best.score && candidate.confidence > best.confidence) {
+        best = candidate;
       }
     }
   }
-  return "";
+  return best?.label || "";
 }
 
-function findYearFromOcr(lines) {
+function pickYearFromOcr(lines) {
+  let bestYear = null;
   for (const line of lines) {
-    const trimmed = line.trim();
-    if (/^(19|20)\d{2}$/.test(trimmed)) {
-      return trimmed;
-    }
+    const trimmed = line.text.trim();
+    const matches = trimmed.match(/\b(19|20)\d{2}\b/g);
+    if (!matches) continue;
+    matches.forEach((match) => {
+      const yearNumber = Number(match);
+      if (yearNumber < 1950 || yearNumber > 2026) return;
+      if (!bestYear || yearNumber > Number(bestYear)) {
+        bestYear = match;
+      }
+    });
   }
-  for (const line of lines) {
-    const trimmed = line.trim();
-    const match = trimmed.match(/^'?\s*(\d{2})\s*$/);
-    if (match) {
-      const year = Number(match[1]);
-      const century = year >= 30 ? 1900 : 2000;
-      return String(century + year);
-    }
-  }
-  return "";
+  return bestYear || "";
 }
 
-function findPlayerFromOcr(lines, teamLine, brandLine) {
+function isAllCapsName(text) {
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length < 2) return false;
+  if (words.length > 4) return false;
+  return words.every((word) => /^[A-Z][A-Z'.-]*$/.test(word));
+}
+
+function normalizeAllCapsName(text) {
+  const suffixes = new Set(["JR", "SR", "II", "III", "IV", "V"]);
+  const words = text.split(/\s+/).filter(Boolean);
+  return words
+    .map((word) => {
+      const cleaned = word.replace(/\./g, "");
+      if (suffixes.has(cleaned)) {
+        if (cleaned === "JR") return "Jr.";
+        if (cleaned === "SR") return "Sr.";
+        return cleaned;
+      }
+      return titleCase(cleaned);
+    })
+    .join(" ");
+}
+
+function pickPlayerFromOcr(lines, teamLine, brandLine) {
+  let best = null;
+  const normalizedTeam = normalizeLine(teamLine);
+  const normalizedBrand = normalizeLine(brandLine);
+  const counts = new Map();
+  const candidates = [];
   for (const line of lines) {
-    const cleaned = normalizeLine(line);
-    if (!cleaned) continue;
-    if (teamLine && cleaned === normalizeLine(teamLine)) continue;
-    if (brandLine && cleaned.includes(normalizeLine(brandLine))) continue;
-    if (/\d/.test(cleaned)) continue;
-    const words = cleaned.split(" ").filter(Boolean);
-    if (words.length < 2 || words.length > 3) continue;
-    if (words.some((word) => word.length < 2)) continue;
-    return titleCase(cleaned);
+    const raw = line.text.replace(/\s+/g, " ").trim();
+    if (!raw) continue;
+    if (/\d/.test(raw)) continue;
+    const allCapsName = isAllCapsName(raw);
+    if (!allCapsName) continue;
+    const normalized = normalizeLine(raw);
+    if (normalizedTeam && normalized === normalizedTeam) continue;
+    if (normalizedBrand && normalized.includes(normalizedBrand)) continue;
+    const displayValue = allCapsName ? normalizeAllCapsName(raw) : raw;
+    const key = normalizeLine(displayValue);
+    counts.set(key, (counts.get(key) || 0) + 1);
+    candidates.push({
+      key,
+      text: displayValue,
+      confidence: line.confidence,
+      length: raw.length,
+    });
   }
-  return "";
+  for (const candidate of candidates) {
+    const duplicateCount = counts.get(candidate.key) || 0;
+    if (!best) {
+      best = { ...candidate, duplicateCount };
+      continue;
+    }
+    if (duplicateCount > best.duplicateCount) {
+      best = { ...candidate, duplicateCount };
+      continue;
+    }
+    if (duplicateCount === best.duplicateCount && candidate.length > best.length) {
+      best = { ...candidate, duplicateCount };
+      continue;
+    }
+    if (
+      duplicateCount === best.duplicateCount &&
+      candidate.length === best.length &&
+      candidate.confidence > best.confidence
+    ) {
+      best = { ...candidate, duplicateCount };
+    }
+  }
+  return best?.text || "";
 }
 
 export function resolveCardFacts(intel = {}) {
   const promotions = {};
   if (!intel) return promotions;
-
-  if (intel.player && isVerifiedField(intel, "player")) {
-    promotions.player = intel.player;
-  }
-
-  const teamValue = intel.team;
-  const teamVerified = isVerifiedField(intel, "team");
-  if (teamValue && teamVerified) {
-    promotions.team = teamValue;
-    if (!promotions.league || !promotions.sport) {
-      const inferred = matchesLeague(teamValue);
-      if (inferred) {
-        promotions.league = promotions.league || inferred.league;
-        promotions.sport = promotions.sport || inferred.sport;
-      }
-    }
-  }
-
-  if (intel.league && isVerifiedField(intel, "league")) {
-    promotions.league = intel.league;
-  }
-  if (intel.sport && isVerifiedField(intel, "sport")) {
-    promotions.sport = intel.sport;
-  }
-
-  const setName = intel.setName || intel.setBrand;
-  if (setName && (isVerifiedField(intel, "setName") || isVerifiedField(intel, "setBrand"))) {
-    promotions.setName = setName;
-    if (!promotions.setBrand && intel.setBrand) {
-      promotions.setBrand = intel.setBrand;
-    }
-  }
-
-  const position = intel.position || intel.role || intel.primaryPosition;
-  if (position && isVerifiedField(intel, "position")) {
-    promotions.position = normalizePosition(position);
-  }
-
-  if (intel.year && isVerifiedField(intel, "year")) {
-    promotions.year = intel.year;
-  }
-
-  const needsOcrFallback =
-    !promotions.player &&
-    !promotions.team &&
-    !promotions.setName &&
-    !promotions.year;
-  if (needsOcrFallback) {
-    const ocrLines = collectOcrLines(intel);
-    if (ocrLines.length) {
-      const teamLine = !promotions.team ? findTeamFromOcr(ocrLines) : "";
-      const brandLine = !promotions.setName ? findBrandFromOcr(ocrLines) : "";
-      const yearValue = !promotions.year ? findYearFromOcr(ocrLines) : "";
-      const playerLine =
-        !promotions.player && (teamLine || brandLine || yearValue)
-          ? findPlayerFromOcr(ocrLines, teamLine, brandLine)
-          : "";
-      const signalCount = [teamLine, brandLine, yearValue, playerLine].filter(Boolean).length;
-      if (signalCount < 2) {
-        return promotions;
-      }
-      if (!promotions.team && teamLine) {
-        promotions.team = teamLine;
-        const inferred = matchesLeague(teamLine);
-        if (inferred) {
-          promotions.league = promotions.league || inferred.league;
-          promotions.sport = promotions.sport || inferred.sport;
-        }
-      }
-      if (!promotions.setName && brandLine) {
-        promotions.setName = brandLine;
-        promotions.setBrand = brandLine;
-      }
-      if (!promotions.year && yearValue) {
-        promotions.year = yearValue;
-      }
-      if (!promotions.player && playerLine) {
-        promotions.player = playerLine;
-      }
-    }
-  }
-
+  const isLineArrayInput = Array.isArray(intel);
+  const ocrLines = isLineArrayInput ? normalizeOcrLineInput(intel) : collectOcrLines(intel);
+  if (!ocrLines.length) return promotions;
+  const player = ocrLines
+    .map((line) => (line?.text ? line.text : ""))
+    .map((line) => line.trim())
+    .find((line) => {
+      if (!line) return false;
+      if (line.length <= 3) return false;
+      if (/^\d+$/.test(line)) return false;
+      const words = line.split(/\s+/).filter(Boolean);
+      if (words.length < 2) return false;
+      if (line === line.toUpperCase()) return false;
+      return /[A-Za-z]/.test(line);
+    });
+  if (player) promotions.player = player;
+  promotions.graded = false;
   return promotions;
 }

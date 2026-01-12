@@ -118,6 +118,43 @@ textarea {
   }
 }
 
+.scan-frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: 24px;
+}
+
+.scan-line {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.45);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.35);
+  animation: scanSweep 2.8s ease-in-out infinite;
+}
+
+@keyframes scanSweep {
+  0% {
+    top: 12%;
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.6;
+  }
+  50% {
+    top: 50%;
+    opacity: 0.9;
+  }
+  85% {
+    opacity: 0.6;
+  }
+  100% {
+    top: 88%;
+    opacity: 0;
+  }
+}
+
 @keyframes launchPulse {
   0% {
     box-shadow:

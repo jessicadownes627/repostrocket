@@ -1,6 +1,5 @@
 import { fileToDataUrl, getPhotoUrl, normalizePhotosArray } from "./photoHelpers";
 import { cropToCardBounds } from "./cardCropper";
-import { generateDevCardIntelMock } from "./devCardIntelMock";
 
 const EMPTY_INTEL = {
   player: "",
@@ -295,9 +294,6 @@ export async function finalizeCardIntelResponse(data, meta = {}) {
       merged.notes = cornerInsights.condition.summary;
     }
   }
-  if (import.meta.env.DEV) {
-    logGradeDetectionProof(data, merged);
-  }
   return merged;
 }
 
@@ -321,47 +317,31 @@ export async function analyzeCardImages(item = {}, options = {}) {
   const { payload, imageHash, requestId } = prep;
 
   try {
-    let data = null;
-    if (import.meta.env.DEV) {
-      data = await generateDevCardIntelMock(payload);
-    } else {
-      console.log("[cardIntel] frontend request start", {
-        method: "POST",
-        path: "/.netlify/functions/cardIntel",
-        requestId,
-        imageHash,
-      });
-      console.log("cardIntel fetch fired", { requestId, imageHash });
-      const response = await fetch("/.netlify/functions/cardIntel", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
+    const response = await fetch("/.netlify/functions/cardIntel_v2", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
 
-      if (!response.ok) {
-        let text = "";
-        try {
-          text = await response.text();
-        } catch {
-          text = "";
-        }
-        console.error("Card intel function error:", text);
-        return { ...EMPTY_INTEL, error: DEFAULT_ANALYSIS_ERROR_MESSAGE };
-      }
-
+    if (!response.ok) {
+      let text = "";
       try {
-        data = await response.json();
-        console.log("[cardIntel] frontend request completed", {
-          requestId,
-          imageHash,
-          keys: Object.keys(data || {}),
-        });
-      } catch (err) {
-        console.error("Card intel JSON parse error:", err);
-        return { ...EMPTY_INTEL, error: DEFAULT_ANALYSIS_ERROR_MESSAGE };
+        text = await response.text();
+      } catch {
+        text = "";
       }
+      console.error("Card intel function error:", text);
+      return { ...EMPTY_INTEL, error: DEFAULT_ANALYSIS_ERROR_MESSAGE };
+    }
+
+    let data = null;
+    try {
+      data = await response.json();
+    } catch (err) {
+      console.error("Card intel JSON parse error:", err);
+      return { ...EMPTY_INTEL, error: DEFAULT_ANALYSIS_ERROR_MESSAGE };
     }
 
     if (!data || data.error) {
@@ -384,42 +364,6 @@ function ensureConfidence(confidence = {}) {
     if (!next[key]) next[key] = "low";
   });
   return next;
-}
-
-function logGradeDetectionProof(rawData, merged) {
-  const collectLines = (source) =>
-    Array.isArray(source?.lines) ? source.lines : [];
-  const rawLines = [
-    ...collectLines(rawData?.ocrFull),
-    ...collectLines(rawData?.ocr),
-    ...collectLines(rawData?.cardBackDetails),
-  ]
-    .map((line) => line?.text)
-    .filter(Boolean);
-  console.log("[cardIntel][OCR RAW]", {
-    requestId: rawData?.requestId,
-    lines: rawLines,
-  });
-  console.log("[cardIntel][GRADE DETECTION]", {
-    authority: merged.gradingAuthority || merged.grading?.authority || "",
-    grade: merged.grade || merged.grading?.grade || "",
-    gradeValue: merged.gradeValue || merged.grading?.value || "",
-  });
-}
-
-function runDevGradeHarness() {
-  const sampleLines = ["PSA", "MINT 9", "PSA 9 MINT"];
-  console.log("[cardIntel][DEV GRADE HARNESS] input", sampleLines);
-  const simulatedOutput = {
-    authority: "PSA",
-    grade: "Mint",
-    gradeValue: "9",
-  };
-  console.log("[cardIntel][DEV GRADE HARNESS] output", simulatedOutput);
-}
-
-if (import.meta.env.DEV) {
-  runDevGradeHarness();
 }
 
 export function buildCardAttributesFromIntel(intel) {

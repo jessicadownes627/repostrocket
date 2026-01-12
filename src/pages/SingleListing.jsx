@@ -12,7 +12,13 @@ const TAG_OPTIONS = ["Neutral", "Modern", "Minimal", "Classic", "Statement"];
 export default function SingleListing() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { listingData: storedListingData } = useListingStore();
+  const {
+    listingData: storedListingData,
+    analysisInFlight,
+    reviewIdentity,
+    analysisState,
+    requestSportsAnalysis,
+  } = useListingStore();
 
   const mode = location.state?.mode ?? "casual";
   const listingData = storedListingData || location.state?.listingData || null;
@@ -30,28 +36,9 @@ export default function SingleListing() {
   const detectedFrontImage = listingData?.frontImage || "";
   const detectedBackImage = listingData?.backImage || "";
   const detectedSlabImage = listingData?.slabImage || "";
-  const identity = listingData?.identity || {};
-  const gradeInfo = listingData?.grade || null;
-  const identityTitle = identity?.title || "";
-  const identityPlayer = identity?.player || identity?.character || "";
-  const identityYear = identity?.year || "";
-  const identitySet = identity?.setName || identity?.setBrand || identity?.brand || "";
-  const identityTeam =
-    identity?.team || identity?.franchise || identity?.sport || "";
-  const gradeLabel =
-    typeof gradeInfo === "string"
-      ? gradeInfo
-      : gradeInfo?.label || gradeInfo?.value || gradeInfo?.grade || "";
-  const slabbedFlag =
-    typeof gradeInfo === "object"
-      ? gradeInfo?.slabbed ?? gradeInfo?.slabStatus ?? null
-      : null;
-  const slabStatus =
-    typeof slabbedFlag === "boolean" ? (slabbedFlag ? "Slabbed" : "Raw") : "";
-  const emptyNotDetected = "Not detected yet";
-  const emptyNeedsConfirmation = "Needs confirmation";
-  const gradeDisplay =
-    gradeLabel || slabStatus ? [gradeLabel, slabStatus].filter(Boolean).join(" • ") : "";
+  const identityPlayer = reviewIdentity?.player || "";
+  const hasIdentityData = reviewIdentity !== null;
+  const displayTitle = "";
 
   /* ---------- hydrate ONCE for sports ---------- */
   useEffect(() => {
@@ -69,6 +56,27 @@ export default function SingleListing() {
      =============== SPORTS REVIEW LAYOUT =====================
      ========================================================= */
   if (isSports) {
+    if (analysisInFlight && !hasIdentityData) {
+      return (
+        <div className="app-wrapper px-6 py-10 max-w-2xl mx-auto">
+          <div className="lux-card">
+            <div className="scan-frame">
+              {detectedFrontImage && (
+                <img
+                  src={detectedFrontImage}
+                  alt="Card under analysis"
+                  className="w-full rounded-2xl border border-white/10 object-cover"
+                />
+              )}
+              <div className="scan-line" />
+            </div>
+            <div className="text-sm uppercase tracking-[0.3em] opacity-60 mt-6 text-center">
+              Analyzing card details…
+            </div>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="app-wrapper px-6 py-10 max-w-2xl mx-auto">
         <button
@@ -80,111 +88,18 @@ export default function SingleListing() {
 
         <h1 className="text-center text-3xl mb-10">Single Listing</h1>
 
-        <div className="lux-card mb-10">
-          <div className="text-xs uppercase tracking-[0.35em] opacity-60 mb-4">
-            Card Identity
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <div>
-              <div className="text-xs uppercase tracking-[0.3em] opacity-60">
-                Card Title
-              </div>
-              <div className="text-lg mt-1">
-                {identityTitle || emptyNotDetected}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs uppercase tracking-[0.3em] opacity-60">
-                Player / Character
-              </div>
-              <div className="text-lg mt-1">
-                {identityPlayer || emptyNotDetected}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs uppercase tracking-[0.3em] opacity-60">
-                Year
-              </div>
-              <div className="text-lg mt-1">
-                {identityYear || emptyNotDetected}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs uppercase tracking-[0.3em] opacity-60">
-                Set / Brand
-              </div>
-              <div className="text-lg mt-1">
-                {identitySet || emptyNotDetected}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs uppercase tracking-[0.3em] opacity-60">
-                Team / Franchise / Sport
-              </div>
-              <div className="text-lg mt-1">
-                {identityTeam || emptyNotDetected}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs uppercase tracking-[0.3em] opacity-60">
-                Grade / Slab Status
-              </div>
-              <div className="text-lg mt-1">
-                {gradeDisplay || emptyNeedsConfirmation}
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-6">
-            <LuxeInput
-              label="Condition"
-              value={condition}
-              onChange={setCondition}
-            />
-          </div>
-        </div>
-
-        {(detectedFrontImage || detectedBackImage || detectedSlabImage) && (
+        {hasIdentityData && (
           <div className="lux-card mb-10">
             <div className="text-xs uppercase tracking-[0.35em] opacity-60 mb-4">
-              Detected Images
+              Card Identity
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {detectedFrontImage && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              {identityPlayer && (
                 <div>
-                  <div className="text-[11px] uppercase tracking-[0.3em] opacity-60 mb-2">
-                    Front Image
+                  <div className="text-xs uppercase tracking-[0.3em] opacity-60">
+                    Player / Character
                   </div>
-                  <img
-                    src={detectedFrontImage}
-                    alt="Detected front"
-                    className="w-full rounded-2xl border border-white/10 object-cover"
-                  />
-                </div>
-              )}
-              {detectedBackImage && (
-                <div>
-                  <div className="text-[11px] uppercase tracking-[0.3em] opacity-60 mb-2">
-                    Back Image
-                  </div>
-                  <img
-                    src={detectedBackImage}
-                    alt="Detected back"
-                    className="w-full rounded-2xl border border-white/10 object-cover"
-                  />
-                </div>
-              )}
-              {detectedSlabImage && (
-                <div>
-                  <div className="text-[11px] uppercase tracking-[0.3em] opacity-60 mb-2">
-                    Slab Image
-                  </div>
-                  <img
-                    src={detectedSlabImage}
-                    alt="Detected slab"
-                    className="w-full rounded-2xl border border-white/10 object-cover"
-                  />
+                  <div className="text-xl mt-1 text-white">{identityPlayer}</div>
                 </div>
               )}
             </div>

@@ -12,7 +12,7 @@ import { buildApparelAttributesFromIntel } from "../utils/apparelIntel";
 import {
   buildCardAttributesFromIntel,
   extractCornerPhotoEntries,
-} from "../utils/cardIntel";
+} from "../utils/cardIntelClient";
 import LuxeChipGroup from "../components/LuxeChipGroup";
 import LuxeInput from "../components/LuxeInput";
 import { useCardParser } from "../hooks/useCardParser";

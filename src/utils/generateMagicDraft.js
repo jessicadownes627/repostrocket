@@ -1,7 +1,7 @@
 import { runMagicFill } from "./runMagicFill";
 import { parseMagicFillOutput } from "../engines/MagicFillEngine";
 import { fileToDataUrl } from "./photoHelpers";
-import { analyzeCardImages } from "./cardIntel";
+import { analyzeCardImages } from "./cardIntelClient";
 import { analyzeApparelImages } from "./apparelIntel";
 
 async function ensureDataUrlFromSource(source) {

@@ -7,7 +7,7 @@ import {
   analyzeCardImages,
   buildCardAttributesFromIntel,
   extractCornerPhotoEntries,
-} from "../utils/cardIntel";
+} from "../utils/cardIntelClient";
 import { buildCardTitle } from "../utils/buildCardTitle";
 import AnalysisProgress from "../components/AnalysisProgress";
 import { getPhotoUrl } from "../utils/photoHelpers";
