@@ -485,27 +485,145 @@ export function resolveCardFacts(intel = {}) {
   });
   if (player) promotions.player = player;
 
-  const year = lineTexts
+  const yearCandidates = lineTexts
     .map((line) => line.match(/\b(19|20)\d{2}\b/))
     .filter(Boolean)
     .map((match) => match[0])
-    .find((value) => {
+    .filter((value) => {
       const yearNumber = Number(value);
       return yearNumber >= 1900 && yearNumber <= 2099;
     });
-  if (year) promotions.year = year;
+  if (yearCandidates.length) {
+    const oldest = Math.min(...yearCandidates.map(Number));
+    promotions.year = String(oldest);
+  }
+  if (!promotions.year) {
+    const brandKeywords = [
+      "upper deck",
+      "topps",
+      "panini",
+      "donruss",
+      "bowman",
+      "fleer",
+      "score",
+      "optic",
+    ];
+    const brandLineIndexes = [];
+    lineTexts.forEach((line, idx) => {
+      const normalized = normalizeLine(line);
+      if (brandKeywords.some((brand) => normalized.includes(brand))) {
+        brandLineIndexes.push(idx);
+      }
+    });
+    const isStandaloneTwoDigit = (line) => /^\d{2}$/.test(line.trim());
+    const twoDigitCandidates = [];
+    const addCandidate = (value) => {
+      const num = Number(value);
+      if (Number.isNaN(num)) return;
+      if (num >= 50 || num <= 26) {
+        const normalized = num >= 50 ? 1900 + num : 2000 + num;
+        twoDigitCandidates.push(normalized);
+      }
+    };
+    if (brandLineIndexes.length) {
+      brandLineIndexes.forEach((idx) => {
+        [idx - 1, idx, idx + 1].forEach((nearIdx) => {
+          if (nearIdx < 0 || nearIdx >= lineTexts.length) return;
+          const line = lineTexts[nearIdx];
+          if (isStandaloneTwoDigit(line)) {
+            addCandidate(line);
+          }
+        });
+      });
+    }
+    if (twoDigitCandidates.length) {
+      const oldest = Math.min(...twoDigitCandidates);
+      promotions.year = String(oldest);
+    }
+  }
 
   const teamKeywords = [...MLB_TEAMS, ...NFL_TEAMS, ...NBA_TEAMS, ...NHL_TEAMS];
-  const setName = lineTexts.find((line) => {
+  const teamTokenMap = new Map([
+    ["mets", "New York Mets"],
+    ["orioles", "Baltimore Orioles"],
+    ["athletics", "Oakland Athletics"],
+    ["yankees", "New York Yankees"],
+    ["red sox", "Boston Red Sox"],
+    ["white sox", "Chicago White Sox"],
+    ["cubs", "Chicago Cubs"],
+    ["dodgers", "Los Angeles Dodgers"],
+    ["giants", "San Francisco Giants"],
+    ["cardinals", "St. Louis Cardinals"],
+    ["padres", "San Diego Padres"],
+    ["brewers", "Milwaukee Brewers"],
+    ["pirates", "Pittsburgh Pirates"],
+    ["phillies", "Philadelphia Phillies"],
+    ["braves", "Atlanta Braves"],
+    ["nationals", "Washington Nationals"],
+    ["marlins", "Miami Marlins"],
+    ["rays", "Tampa Bay Rays"],
+    ["blue jays", "Toronto Blue Jays"],
+    ["guardians", "Cleveland Guardians"],
+    ["twins", "Minnesota Twins"],
+    ["tigers", "Detroit Tigers"],
+    ["royals", "Kansas City Royals"],
+    ["rockies", "Colorado Rockies"],
+    ["diamondbacks", "Arizona Diamondbacks"],
+    ["rangers", "Texas Rangers"],
+    ["astros", "Houston Astros"],
+    ["angels", "Los Angeles Angels"],
+    ["mariners", "Seattle Mariners"],
+    ["reds", "Cincinnati Reds"],
+  ]);
+  const teamCandidate = lineTexts.find((line) => {
     if (!/^[A-Z0-9\s.'&-]+$/.test(line)) return false;
     const words = line.split(/\s+/).filter(Boolean);
-    if (words.length < 2) return false;
+    if (words.length < 1) return false;
     const normalized = normalizeLine(line);
     if (!normalized) return false;
-    if (teamKeywords.some((team) => normalized.includes(team))) return false;
-    return true;
+    return teamTokenMap.has(normalized) || teamKeywords.some((team) => normalized.includes(team));
   });
-  if (setName) promotions.setName = titleCase(setName);
-  promotions.graded = false;
+  if (teamCandidate) {
+    const normalized = normalizeLine(teamCandidate);
+    promotions.team = teamTokenMap.get(normalized) || titleCase(teamCandidate);
+  }
+
+  const brandKeywords = [
+    "upper deck",
+    "topps",
+    "panini",
+    "donruss",
+    "bowman",
+    "fleer",
+    "score",
+    "optic",
+  ];
+  const noiseWords = new Set(["base", "series", "edition"]);
+  const setCandidates = lineTexts
+    .filter((line) => /^[A-Z0-9\s.'&-]+$/.test(line))
+    .filter((line) => {
+      const normalized = normalizeLine(line);
+      if (!normalized) return false;
+      return brandKeywords.some((brand) => normalized.includes(brand));
+    })
+    .map((line) => {
+      const cleaned = line
+        .split(/\s+/)
+        .filter((word) => !noiseWords.has(word.toLowerCase()))
+        .join(" ");
+      const candidate = cleaned || line;
+      const wordCount = candidate.split(/\s+/).filter(Boolean).length;
+      return { raw: candidate, wordCount };
+    });
+  if (setCandidates.length) {
+    const maxWords = Math.max(...setCandidates.map((c) => c.wordCount));
+    const longest = setCandidates.find((c) => c.wordCount === maxWords);
+    if (longest) promotions.setName = titleCase(longest.raw);
+  }
+
+  if (promotions.team && !promotions.sport) {
+    const inferred = matchesLeague(promotions.team);
+    if (inferred?.sport) promotions.sport = inferred.sport;
+  }
   return promotions;
 }
