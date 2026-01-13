@@ -37,19 +37,47 @@ export default function SingleListing() {
 
   const detectedFrontImage =
     listingData?.editedPhoto ||
+    listingData?.frontImage ||
     getPhotoUrl(listingData?.photos?.[0]) ||
     "";
   const detectedBackImage = listingData?.backImage || "";
   const detectedSlabImage = listingData?.slabImage || "";
-  const identityPlayer = reviewIdentity?.player || "";
-  const identitySetName = reviewIdentity?.setName || "";
+  const identityPlayer =
+    reviewIdentity?.player ||
+    listingData?.identity?.player ||
+    listingData?.player ||
+    "";
+  const identitySetName =
+    reviewIdentity?.setName ||
+    listingData?.identity?.setName ||
+    listingData?.setName ||
+    "";
+  const identityTeam =
+    reviewIdentity?.team ||
+    listingData?.identity?.team ||
+    listingData?.team ||
+    "";
+  const identityYear =
+    reviewIdentity?.year ||
+    listingData?.identity?.year ||
+    listingData?.year ||
+    "";
+  const identitySport =
+    reviewIdentity?.sport ||
+    listingData?.identity?.sport ||
+    listingData?.sport ||
+    "";
   const displayPlayer =
     identityPlayer && identityPlayer !== identitySetName ? identityPlayer : "";
+  const cornersReviewed =
+    Array.isArray(listingData?.cornerPhotos) && listingData.cornerPhotos.length > 0;
   const hasIdentityData = reviewIdentity !== null;
+  const showGraded = reviewIdentity?.graded === true;
+  const titleSetName =
+    identitySetName && identitySetName !== identityPlayer ? identitySetName : "";
   const displayTitle = composeCardTitle({
-    year: reviewIdentity?.year,
-    setName: reviewIdentity?.setName,
-    player: reviewIdentity?.player,
+    setName: titleSetName,
+    player: identityPlayer,
   });
 
   /* ---------- hydrate ONCE for sports ---------- */
@@ -68,7 +96,8 @@ export default function SingleListing() {
      =============== SPORTS REVIEW LAYOUT =====================
      ========================================================= */
   if (isSports) {
-    const showScanOverlay = analysisInFlight && !hasIdentityData;
+    const analysisComplete = !analysisInFlight && hasIdentityData;
+    const showScanOverlay = !analysisComplete;
     return (
       <div className="app-wrapper px-6 py-10 max-w-2xl mx-auto">
         <button
@@ -81,35 +110,43 @@ export default function SingleListing() {
         <h1 className="text-center text-3xl mb-10">Single Listing</h1>
 
         <div className="lux-card mb-10">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-            <div className="scan-frame relative">
-              {detectedFrontImage && (
-                <img
-                  src={detectedFrontImage}
-                  alt="Card under analysis"
-                  className="w-full rounded-2xl border border-white/10 object-cover"
-                />
-              )}
-              <div
-                className="absolute inset-0 rounded-2xl"
-                style={{
-                  background:
-                    "linear-gradient(120deg, rgba(255,255,255,0.04), rgba(255,255,255,0))",
-                  opacity: showScanOverlay ? 1 : 0,
-                  transition: "opacity 600ms ease",
-                  pointerEvents: "none",
-                }}
+          <div className="scan-frame relative w-full max-w-[360px] mx-auto">
+            {detectedFrontImage && (
+              <img
+                src={detectedFrontImage}
+                alt="Card under analysis"
+                className="w-full rounded-2xl border border-white/10 object-cover"
               />
-              <div
-                className="scan-line"
-                style={{
-                  opacity: showScanOverlay ? 1 : 0,
-                  transition: "opacity 600ms ease",
-                  animation: showScanOverlay ? undefined : "none",
-                }}
-              />
+            )}
+            <div
+              className="absolute inset-0 rounded-2xl"
+              style={{
+                background:
+                  "linear-gradient(120deg, rgba(255,255,255,0.04), rgba(255,255,255,0))",
+                opacity: showScanOverlay ? 1 : 0,
+                transition: "opacity 600ms ease",
+                pointerEvents: "none",
+              }}
+            />
+            <div
+              className="scan-line"
+              style={{
+                opacity: showScanOverlay ? 1 : 0,
+                transition: "opacity 600ms ease",
+                animation: showScanOverlay ? undefined : "none",
+              }}
+            />
+          </div>
+          {!analysisComplete && (
+            <div className="text-sm uppercase tracking-[0.3em] opacity-60 mt-6 text-center">
+              Analyzing card details…
             </div>
-            <div>
+          )}
+        </div>
+
+        {analysisComplete && (
+          <>
+            <div className="lux-card mb-10">
               {displayTitle && (
                 <>
                   <div className="text-xs uppercase tracking-[0.35em] opacity-60 mb-3">
@@ -118,29 +155,75 @@ export default function SingleListing() {
                   <div className="text-2xl text-white mb-6">{displayTitle}</div>
                 </>
               )}
-              {displayPlayer && (
-                <div>
-                  <div className="text-xs uppercase tracking-[0.3em] opacity-60">
-                    Player / Character
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {displayPlayer && (
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.3em] opacity-60">
+                      Player
+                    </div>
+                    <div className="text-lg mt-1 text-white">{displayPlayer}</div>
                   </div>
-                  <div className="text-xl mt-1 text-white">{displayPlayer}</div>
-                </div>
-              )}
-              {showScanOverlay && (
-                <div className="text-sm uppercase tracking-[0.3em] opacity-60 mt-6">
-                  Analyzing card details…
+                )}
+                {identityTeam && (
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.3em] opacity-60">
+                      Team
+                    </div>
+                    <div className="text-lg mt-1 text-white/85">{identityTeam}</div>
+                  </div>
+                )}
+                {identityYear && (
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.3em] opacity-60">
+                      Year
+                    </div>
+                    <div className="text-lg mt-1 text-white/85">{identityYear}</div>
+                  </div>
+                )}
+                {identitySetName && (
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.3em] opacity-60">
+                      Set
+                    </div>
+                    <div className="text-lg mt-1 text-white/85">{identitySetName}</div>
+                  </div>
+                )}
+                {identitySport && (
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.3em] opacity-60">
+                      Sport
+                    </div>
+                    <div className="text-lg mt-1 text-white/85">{identitySport}</div>
+                  </div>
+                )}
+              </div>
+              {(showGraded || cornersReviewed) && (
+                <div className="mt-6">
+                  {showGraded && (
+                    <>
+                      <div className="text-xs uppercase tracking-[0.35em] opacity-60 mb-2">
+                        Condition
+                      </div>
+                      <div className="text-sm text-white/85">Graded</div>
+                    </>
+                  )}
+                  {cornersReviewed && (
+                    <div className="text-xs uppercase tracking-[0.3em] opacity-60 mt-2">
+                      Corners reviewed
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-          </div>
-        </div>
 
-        <button
-          className="lux-continue-btn w-full py-5 tracking-[0.28em]"
-          onClick={() => navigate("/launch")}
-        >
-          Verify & Lock Listing →
-        </button>
+            <button
+              className="lux-continue-btn w-full py-5 tracking-[0.28em]"
+              onClick={() => navigate("/launch")}
+            >
+              Verify & Lock Listing →
+            </button>
+          </>
+        )}
       </div>
     );
   }
