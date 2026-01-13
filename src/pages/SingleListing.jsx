@@ -202,70 +202,58 @@ export default function SingleListing() {
                 </>
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {displayPlayer && (
-                  <div>
-                    <div className="text-xs uppercase tracking-[0.3em] opacity-60">
-                      Player
-                    </div>
-                    <div className="text-lg mt-1 text-white">{displayPlayer}</div>
+                <div>
+                  <div className="text-xs uppercase tracking-[0.3em] opacity-60">
+                    Player
                   </div>
-                )}
-                {identityTeam && (
-                  <div>
-                    <div className="text-xs uppercase tracking-[0.3em] opacity-60">
-                      Team
-                    </div>
-                    <div className="text-lg mt-1 text-white/85">{identityTeam}</div>
+                  <div className="text-lg mt-1 text-white">
+                    {displayPlayer || <span className="text-white/35">—</span>}
                   </div>
-                )}
-                {identityYear && (
-                  <div>
-                    <div className="text-xs uppercase tracking-[0.3em] opacity-60">
-                      Year
-                    </div>
-                    <div className="text-lg mt-1 text-white/85">{identityYear}</div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-[0.3em] opacity-60">
+                    Year
                   </div>
-                )}
-                {identitySetName && (
-                  <div>
-                    <div className="text-xs uppercase tracking-[0.3em] opacity-60">
-                      Set
-                    </div>
-                    <div className="text-lg mt-1 text-white/85">{identitySetName}</div>
+                  <div className="text-lg mt-1 text-white/85">
+                    {identityYear || <span className="text-white/35">—</span>}
                   </div>
-                )}
-                {identitySport && (
-                  <div>
-                    <div className="text-xs uppercase tracking-[0.3em] opacity-60">
-                      Sport
-                    </div>
-                    <div className="text-lg mt-1 text-white/85">{identitySport}</div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-[0.3em] opacity-60">
+                    Set
                   </div>
-                )}
-                {gradeLabel && (
-                  <div>
-                    <div className="text-xs uppercase tracking-[0.3em] opacity-60">
-                      Grade
-                    </div>
-                    <div className="text-lg mt-1 text-white/85">{gradeLabel}</div>
+                  <div className="text-lg mt-1 text-white/85">
+                    {identitySetName || <span className="text-white/35">—</span>}
                   </div>
-                )}
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-[0.3em] opacity-60">
+                    Team
+                  </div>
+                  <div className="text-lg mt-1 text-white/85">
+                    {identityTeam || <span className="text-white/35">—</span>}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-[0.3em] opacity-60">
+                    Sport
+                  </div>
+                  <div className="text-lg mt-1 text-white/85">
+                    {identitySport || <span className="text-white/35">—</span>}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-[0.3em] opacity-60">
+                    Condition / Grade
+                  </div>
+                  <div className="text-lg mt-1 text-white/85">
+                    {gradeLabel || <span className="text-white/35">—</span>}
+                  </div>
+                </div>
               </div>
-              {(showGraded || cornersReviewed) && (
-                <div className="mt-6">
-                  {showGraded && (
-                    <>
-                      <div className="text-xs uppercase tracking-[0.35em] opacity-60 mb-2">
-                        Condition
-                      </div>
-                      <div className="text-sm text-white/85">{gradeLabel || "Graded"}</div>
-                    </>
-                  )}
-                  {cornersReviewed && (
-                    <div className="text-xs uppercase tracking-[0.3em] opacity-60 mt-2">
-                      Corners reviewed
-                    </div>
-                  )}
+              {cornersReviewed && (
+                <div className="text-xs uppercase tracking-[0.3em] opacity-60 mt-4">
+                  Corners reviewed
                 </div>
               )}
             </div>
