@@ -67,12 +67,29 @@ export default function SingleListing() {
     listingData?.identity?.sport ||
     listingData?.sport ||
     "";
+  const gradeCompany =
+    listingData?.gradingCompany ||
+    listingData?.cardAttributes?.gradingAuthority ||
+    listingData?.cardAttributes?.grading?.authority ||
+    "";
+  const gradeValue =
+    listingData?.gradeValue ||
+    listingData?.cardAttributes?.gradeValue ||
+    listingData?.cardAttributes?.grading?.value ||
+    listingData?.cardAttributes?.grade ||
+    "";
+  const showGraded = reviewIdentity?.graded === true;
+  const gradeLabel =
+    showGraded && (gradeCompany || gradeValue)
+      ? [gradeCompany, gradeValue].filter(Boolean).join(" ")
+      : showGraded
+      ? "Graded"
+      : "";
   const displayPlayer =
     identityPlayer && identityPlayer !== identitySetName ? identityPlayer : "";
   const cornersReviewed =
     Array.isArray(listingData?.cornerPhotos) && listingData.cornerPhotos.length > 0;
   const hasIdentityData = reviewIdentity !== null;
-  const showGraded = reviewIdentity?.graded === true;
   const titleSetName =
     identitySetName && identitySetName !== identityPlayer ? identitySetName : "";
   const displayTitle = composeCardTitle({
@@ -115,7 +132,7 @@ export default function SingleListing() {
               <img
                 src={detectedFrontImage}
                 alt="Card under analysis"
-                className="w-full rounded-2xl border border-white/10 object-cover"
+                className="w-full max-h-[50vh] rounded-2xl border border-white/10 object-cover"
               />
             )}
             <div
@@ -137,6 +154,29 @@ export default function SingleListing() {
               }}
             />
           </div>
+          {Array.isArray(listingData?.cornerPhotos) &&
+            listingData.cornerPhotos.length > 0 && (
+              <div className="grid grid-cols-2 gap-3 mt-5">
+                {listingData.cornerPhotos.slice(0, 4).map((entry, idx) => (
+                  <div
+                    key={`corner-${idx}`}
+                    className="rounded-xl border border-white/10 bg-black/30 overflow-hidden"
+                  >
+                    {entry?.url ? (
+                      <img
+                        src={entry.url}
+                        alt={entry?.label || "Corner detail"}
+                        className="w-full h-20 object-cover"
+                      />
+                    ) : (
+                      <div className="h-20 flex items-center justify-center text-[10px] opacity-40">
+                        No data
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           {!analysisComplete && (
             <div className="text-sm uppercase tracking-[0.3em] opacity-60 mt-6 text-center">
               Analyzing card details…
@@ -146,7 +186,13 @@ export default function SingleListing() {
 
         {analysisComplete && (
           <>
-            <div className="lux-card mb-10">
+            <div
+              className="lux-card mb-10"
+              style={{
+                opacity: analysisComplete ? 1 : 0,
+                transition: "opacity 500ms ease",
+              }}
+            >
               {displayTitle && (
                 <>
                   <div className="text-xs uppercase tracking-[0.35em] opacity-60 mb-3">
@@ -196,6 +242,14 @@ export default function SingleListing() {
                     <div className="text-lg mt-1 text-white/85">{identitySport}</div>
                   </div>
                 )}
+                {gradeLabel && (
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.3em] opacity-60">
+                      Grade
+                    </div>
+                    <div className="text-lg mt-1 text-white/85">{gradeLabel}</div>
+                  </div>
+                )}
               </div>
               {(showGraded || cornersReviewed) && (
                 <div className="mt-6">
@@ -204,7 +258,7 @@ export default function SingleListing() {
                       <div className="text-xs uppercase tracking-[0.35em] opacity-60 mb-2">
                         Condition
                       </div>
-                      <div className="text-sm text-white/85">Graded</div>
+                      <div className="text-sm text-white/85">{gradeLabel || "Graded"}</div>
                     </>
                   )}
                   {cornersReviewed && (

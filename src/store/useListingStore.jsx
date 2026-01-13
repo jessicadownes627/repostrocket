@@ -476,7 +476,17 @@ export function ListingProvider({ children }) {
         const ocrLines = Array.isArray(data?.ocrLines) ? data.ocrLines : [];
         const resolved = cardFactsResolver(ocrLines);
         console.log("[CLIENT] resolver output", resolved);
-        setReviewIdentity(resolved || null);
+        const hasIdentityFields = Boolean(
+          resolved?.player ||
+            resolved?.setName ||
+            resolved?.team ||
+            resolved?.year ||
+            resolved?.sport ||
+            resolved?.cardTitle
+        );
+        setReviewIdentity((prev) =>
+          hasIdentityFields ? resolved : prev || resolved || null
+        );
         setAnalysisState("complete");
         return { success: true, intel: data, resolved };
       } catch (err) {
