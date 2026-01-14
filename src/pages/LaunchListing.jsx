@@ -2,10 +2,11 @@ import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useListingStore } from "../store/useListingStore";
 import { buildCardTitle } from "../utils/buildCardTitle";
+import { composeCardTitle } from "../utils/composeCardTitle";
 import { shareImage, getImageSaveLabel } from "../utils/saveImage";
 
 export default function LaunchListing() {
-  const { listingData } = useListingStore();
+  const { listingData, reviewIdentity } = useListingStore();
   const saveImageLabel = getImageSaveLabel();
   const navigate = useNavigate();
 
@@ -22,12 +23,16 @@ export default function LaunchListing() {
     (pricing && pricing.suggestedListPrice) || rawPrice || "";
 
   const baseTitle = useMemo(() => {
+    if (reviewIdentity) {
+      const identityTitle = composeCardTitle(reviewIdentity);
+      if (identityTitle) return identityTitle;
+    }
     if (cardAttributes) {
       const cardTitle = buildCardTitle(cardAttributes);
       if (cardTitle) return cardTitle;
     }
     return rawTitle;
-  }, [rawTitle, cardAttributes]);
+  }, [rawTitle, cardAttributes, reviewIdentity]);
 
   const ebayTitle = useMemo(() => {
     if (!baseTitle) return "";
@@ -50,6 +55,18 @@ export default function LaunchListing() {
 
   const summaryDescription = useMemo(() => {
     if (description && description.length > 0) return description;
+    if (reviewIdentity) {
+      const identityLines = [
+        reviewIdentity.player && `Player: ${reviewIdentity.player}`,
+        reviewIdentity.setName && `Set: ${reviewIdentity.setName}`,
+        reviewIdentity.year && `Year: ${reviewIdentity.year}`,
+        reviewIdentity.team && `Team: ${reviewIdentity.team}`,
+        reviewIdentity.sport && `Sport: ${reviewIdentity.sport}`,
+      ].filter(Boolean);
+      if (identityLines.length) {
+        return identityLines.join("\n");
+      }
+    }
     if (cardAttributes?.grading) {
       const g = cardAttributes.grading;
       return [
@@ -62,7 +79,7 @@ export default function LaunchListing() {
         .join("\n");
     }
     return "";
-  }, [description, cardAttributes]);
+  }, [description, cardAttributes, reviewIdentity]);
 
   const copyText = (text) => {
     if (!text) return;

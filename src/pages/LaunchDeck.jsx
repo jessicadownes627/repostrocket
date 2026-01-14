@@ -6,12 +6,13 @@ import { buildPlatformPreview } from "../utils/platformPreview";
 import { formatDescriptionByPlatform } from "../utils/formatDescriptionByPlatform";
 import { generateResizedVariants } from "../utils/imageTools";
 import { photoEntryToDataUrl } from "../utils/photoHelpers";
+import { composeCardTitle } from "../utils/composeCardTitle";
 import "../styles/overrides.css";
 
 export default function LaunchDeck() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { listingData } = useListingStore();
+  const { listingData, reviewIdentity } = useListingStore();
   const [platformImages, setPlatformImages] = useState({});
 
   const locationItems = location.state?.items;
@@ -23,16 +24,37 @@ export default function LaunchDeck() {
       : [];
 
   const activeListing = listings.length ? listings[0] : null;
-  const platformPreview = activeListing
-    ? buildPlatformPreview(activeListing, platformImages)
+  const resolvedIdentity = activeListing?.reviewIdentity || reviewIdentity || null;
+  const identityTitle = resolvedIdentity ? composeCardTitle(resolvedIdentity) : "";
+  const identityDescription = resolvedIdentity
+    ? [
+        resolvedIdentity.player && `Player: ${resolvedIdentity.player}`,
+        resolvedIdentity.setName && `Set: ${resolvedIdentity.setName}`,
+        resolvedIdentity.year && `Year: ${resolvedIdentity.year}`,
+        resolvedIdentity.team && `Team: ${resolvedIdentity.team}`,
+        resolvedIdentity.sport && `Sport: ${resolvedIdentity.sport}`,
+      ]
+        .filter(Boolean)
+        .join("\n")
+    : "";
+  const normalizedListing = activeListing
+    ? {
+        ...activeListing,
+        title: identityTitle || activeListing.title,
+        description: activeListing.description || identityDescription,
+        reviewIdentity: resolvedIdentity,
+      }
+    : null;
+  const platformPreview = normalizedListing
+    ? buildPlatformPreview(normalizedListing, platformImages)
     : null;
 
   const platformDescriptions =
-    activeListing && platformPreview
+    normalizedListing && platformPreview
       ? formatDescriptionByPlatform({
-          ...activeListing,
+          ...normalizedListing,
           description:
-            platformPreview.summaryDescription || activeListing.description,
+            platformPreview.summaryDescription || normalizedListing.description,
         })
       : null;
 
@@ -191,7 +213,7 @@ export default function LaunchDeck() {
               <div key={platformKey} className="space-y-8">
                 <PreviewCard
                   platform={platformKey}
-                  item={activeListing}
+                  item={normalizedListing}
                   platformTitle={
                     platformPreview?.titles
                       ? platformPreview.titles[platformKey]

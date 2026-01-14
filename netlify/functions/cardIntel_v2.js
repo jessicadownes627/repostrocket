@@ -21,7 +21,7 @@ export async function handler(event) {
     }
 
     const body = JSON.parse(event.body || "{}");
-    const { frontImage, requestId, imageHash } = body || {};
+    const { frontImage, requestId, imageHash, nameZoneCrops } = body || {};
     if (!frontImage) {
       return {
         statusCode: 400,
@@ -47,6 +47,28 @@ export async function handler(event) {
     const raw = response.output_text || "";
     const parsed = parseJsonSafe(raw);
     const lines = Array.isArray(parsed?.lines) ? parsed.lines.filter(Boolean) : [];
+    let slabLabelLines = [];
+    const slabLabelImage = nameZoneCrops?.slabLabel?.image || null;
+    if (slabLabelImage) {
+      const slabResponse = await client.responses.create({
+        model: "gpt-4o-mini",
+        input: [
+          { role: "system", content: SYSTEM_PROMPT },
+          {
+            role: "user",
+            content: [
+              { type: "input_text", text: "Slab label OCR (top center)." },
+              { type: "input_image", image_url: slabLabelImage },
+            ],
+          },
+        ],
+      });
+      const slabRaw = slabResponse.output_text || "";
+      const slabParsed = parseJsonSafe(slabRaw);
+      slabLabelLines = Array.isArray(slabParsed?.lines)
+        ? slabParsed.lines.filter(Boolean)
+        : [];
+    }
 
     return {
       statusCode: 200,
@@ -55,6 +77,7 @@ export async function handler(event) {
         requestId: requestId || null,
         imageHash: imageHash || null,
         ocrLines: lines,
+        slabLabelLines,
       }),
     };
   } catch (err) {

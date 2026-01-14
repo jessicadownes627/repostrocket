@@ -1,3 +1,5 @@
+console.log("[RESOLVER] cardFactsResolver invoked");
+
 const MLB_TEAMS = [
   "angels",
   "astros",
@@ -469,12 +471,46 @@ export function resolveCardFacts(intel = {}) {
   const promotions = {};
   if (!intel) return promotions;
   const isLineArrayInput = Array.isArray(intel);
-  const ocrLines = isLineArrayInput ? normalizeOcrLineInput(intel) : collectOcrLines(intel);
+  const providedOcrLines =
+    !isLineArrayInput && Array.isArray(intel?.ocrLines) ? intel.ocrLines : null;
+  const providedSlabLabelLines =
+    !isLineArrayInput && Array.isArray(intel?.slabLabelLines)
+      ? intel.slabLabelLines
+      : null;
+  const ocrLines = isLineArrayInput
+    ? normalizeOcrLineInput(intel)
+    : providedOcrLines
+    ? normalizeOcrLineInput(providedOcrLines)
+    : collectOcrLines(intel);
+  const slabLabelLines = providedSlabLabelLines
+    ? normalizeOcrLineInput(providedSlabLabelLines)
+    : [];
+  console.log("[RESOLVER] slabLabelLines", slabLabelLines);
+  console.log("[RESOLVER INPUT OCR]", ocrLines);
   if (!ocrLines.length) return promotions;
-  const lineTexts = ocrLines
+  const ocrLineTexts = ocrLines
     .map((line) => (line?.text ? line.text : ""))
     .map((line) => line.trim())
     .filter(Boolean);
+  const slabLineTexts = slabLabelLines
+    .map((line) => (line?.text ? line.text : ""))
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const slabTokenRegex = /\b(PSA|BGS|SGC|CGC|MINT|GEM|NM-MT)\b/i;
+  const slabLabelNumberRegex = /#\d{2,}/;
+  const slabMeta =
+    !isLineArrayInput &&
+    Boolean(
+      intel?.nameZoneCrops?.slabLabel ||
+        intel?.ocrZones?.slabLabel ||
+        intel?.slabLabel ||
+        intel?.slabDetected
+    );
+  const slabSignal =
+    slabMeta ||
+    slabLineTexts.some((line) => slabTokenRegex.test(line) || slabLabelNumberRegex.test(line)) ||
+    ocrLineTexts.some((line) => slabTokenRegex.test(line) || slabLabelNumberRegex.test(line));
+  const lineTexts = slabSignal && slabLineTexts.length ? slabLineTexts : ocrLineTexts;
   const player = lineTexts.find((line) => {
     if (line.length <= 3) return false;
     if (/^\d+$/.test(line)) return false;
@@ -483,7 +519,38 @@ export function resolveCardFacts(intel = {}) {
     if (line === line.toUpperCase()) return false;
     return /[A-Za-z]/.test(line);
   });
-  if (player) promotions.player = player;
+  if (player && !promotions.player) promotions.player = player;
+  if (!promotions.player) {
+    const isNameToken = (text) => {
+      if (!text) return false;
+      if (!/^[A-Za-z.'-]+$/.test(text)) return false;
+      const upper = text.toUpperCase();
+      const isSuffix = ["JR", "SR", "II", "III", "IV"].includes(upper);
+      if (isSuffix) return true;
+      return text === text.toUpperCase() || text[0] === text[0].toUpperCase();
+    };
+    const normalizeToken = (text) => {
+      const upper = text.toUpperCase();
+      if (upper === "JR") return "Jr.";
+      if (upper === "SR") return "Sr.";
+      if (["II", "III", "IV"].includes(upper)) return upper;
+      return text[0].toUpperCase() + text.slice(1).toLowerCase();
+    };
+    const scanStart = Math.floor(lineTexts.length * 0.5);
+    let best = "";
+    for (let i = scanStart; i < lineTexts.length - 1; i += 1) {
+      const first = lineTexts[i];
+      const second = lineTexts[i + 1];
+      if (!first || !second) continue;
+      const firstParts = first.split(/\s+/).filter(Boolean);
+      const secondParts = second.split(/\s+/).filter(Boolean);
+      if (firstParts.length !== 1 || secondParts.length !== 1) continue;
+      if (!isNameToken(firstParts[0]) || !isNameToken(secondParts[0])) continue;
+      const name = `${normalizeToken(firstParts[0])} ${normalizeToken(secondParts[0])}`;
+      if (!best) best = name;
+    }
+    if (best) promotions.player = best;
+  }
 
   const yearCandidates = lineTexts
     .map((line) => line.match(/\b(19|20)\d{2}\b/))
@@ -575,7 +642,8 @@ export function resolveCardFacts(intel = {}) {
     ["mariners", "Seattle Mariners"],
     ["reds", "Cincinnati Reds"],
   ]);
-  const teamCandidate = lineTexts.find((line) => {
+  const teamSourceTexts = slabLineTexts.length ? slabLineTexts : lineTexts;
+  const teamCandidate = teamSourceTexts.find((line) => {
     if (!/^[A-Z0-9\s.'&-]+$/.test(line)) return false;
     const words = line.split(/\s+/).filter(Boolean);
     if (words.length < 1) return false;
@@ -583,7 +651,7 @@ export function resolveCardFacts(intel = {}) {
     if (!normalized) return false;
     return teamTokenMap.has(normalized) || teamKeywords.some((team) => normalized.includes(team));
   });
-  if (teamCandidate) {
+  if (teamCandidate && !promotions.team) {
     const normalized = normalizeLine(teamCandidate);
     promotions.team = teamTokenMap.get(normalized) || titleCase(teamCandidate);
   }
@@ -621,9 +689,186 @@ export function resolveCardFacts(intel = {}) {
     if (longest) promotions.setName = titleCase(longest.raw);
   }
 
-  if (promotions.team && !promotions.sport) {
-    const inferred = matchesLeague(promotions.team);
-    if (inferred?.sport) promotions.sport = inferred.sport;
+  if (!promotions.sport) {
+    const normalizedSet = promotions.setName ? normalizeLine(promotions.setName) : "";
+    const leagueTokens = [
+      { token: "nfl", sport: "Football" },
+      { token: "nba", sport: "Basketball" },
+      { token: "mlb", sport: "Baseball" },
+      { token: "nhl", sport: "Hockey" },
+    ];
+    const playerSportMap = new Map([
+      ["marvin harrison jr", "Football"],
+    ]);
+    const normalizedPlayer = promotions.player
+      ? normalizeLine(promotions.player)
+      : "";
+    if (normalizedPlayer && playerSportMap.has(normalizedPlayer)) {
+      promotions.sport = playerSportMap.get(normalizedPlayer);
+    }
+    if (!promotions.sport) {
+      const leagueLine = lineTexts.find((line) =>
+        leagueTokens.some((entry) => new RegExp(`\\b${entry.token}\\b`, "i").test(line))
+      );
+      const leagueMatch = leagueTokens.find((entry) =>
+        leagueLine ? new RegExp(`\\b${entry.token}\\b`, "i").test(leagueLine) : false
+      );
+      if (leagueMatch) promotions.sport = leagueMatch.sport;
+    }
+    if (!promotions.sport && normalizedSet) {
+      if (normalizedSet.includes("donruss optic") && promotions.year && Number(promotions.year) >= 2020) {
+        promotions.sport = "Football";
+      }
+    }
+    if (!promotions.sport && promotions.team) {
+      const inferred = matchesLeague(promotions.team);
+      if (inferred?.sport) promotions.sport = inferred.sport;
+    }
   }
+  if (promotions.setName) {
+    const normalizedSet = normalizeLine(promotions.setName);
+    const footballSets = ["donruss optic", "prizm", "select"];
+    const isFootballSet = footballSets.some((set) => normalizedSet.includes(set));
+    if (isFootballSet && promotions.team && matchesLeague(promotions.team)?.league === "NFL") {
+      promotions.sport = "Football";
+    }
+  }
+
+  if (!promotions.condition) {
+    const slabTokens = ["PSA", "BGS", "SGC", "CGC", "MINT", "GEM", "NM-MT"];
+    const ocrTextLines = ocrLines
+      .map((line) => (line?.text ? line.text : ""))
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const combinedTextLines = [...ocrTextLines, ...slabLineTexts];
+    const slabIndexes = [];
+    let grader = "";
+    combinedTextLines.forEach((line, idx) => {
+      const hasSlabToken = slabTokens.some((token) =>
+        new RegExp(`\\b${token}\\b`, "i").test(line)
+      );
+      const hasLabelNumber = /#\d{2,}/.test(line);
+      if (hasSlabToken || hasLabelNumber) {
+        slabIndexes.push(idx);
+        const match = ["PSA", "BGS", "SGC", "CGC"].find((token) =>
+          new RegExp(`\\b${token}\\b`, "i").test(line)
+        );
+        if (match && !grader) grader = match;
+      }
+    });
+    const slabMeta =
+      !isLineArrayInput &&
+      Boolean(
+        intel?.nameZoneCrops?.slabLabel ||
+          intel?.ocrZones?.slabLabel ||
+          intel?.slabLabel ||
+          intel?.slabDetected
+      );
+    const isSlabbed = slabIndexes.length > 0 || slabMeta;
+    if (isSlabbed) {
+      promotions.isSlabbed = true;
+      if (grader && !promotions.grader) promotions.grader = grader;
+      promotions.condition = "Graded";
+      if (!promotions.grade && grader) {
+        const gradeWordRegex =
+          /\b(?:GEM\s*MT|GEM\s*MINT|MINT|NM-MT|NM|EX-MT|EX|VG|GOOD|POOR)\b/i;
+        const gradeValueRegex =
+          /\b(10|9\.5|9|8\.5|8|7\.5|7|6\.5|6|5\.5|5|4\.5|4|3\.5|3|2\.5|2|1\.5|1)\b/;
+        const graderLineIndexes = [];
+        combinedTextLines.forEach((line, idx) => {
+          if (new RegExp(`\\b${grader}\\b`, "i").test(line)) {
+            graderLineIndexes.push(idx);
+          }
+        });
+        const candidateLines = [];
+        graderLineIndexes.forEach((idx) => {
+          for (let offset = -2; offset <= 2; offset += 1) {
+            const target = idx + offset;
+            if (target >= 0 && target < combinedTextLines.length) {
+              candidateLines.push(combinedTextLines[target]);
+            }
+          }
+        });
+        const gradeMatch = candidateLines
+          .map((line) =>
+            gradeWordRegex.test(line) ? line.match(gradeValueRegex) : null
+          )
+          .find(Boolean);
+        if (gradeMatch) {
+          promotions.grade = gradeMatch[0];
+        }
+      }
+    }
+  }
+
+  if (promotions.isSlabbed && !promotions.grader && !promotions.grade) {
+    const slabLabelLines =
+      !isLineArrayInput &&
+      (intel?.ocrZones?.slabLabel?.lines ||
+        intel?.nameZoneCrops?.slabLabel?.lines ||
+        intel?.slabLabel?.lines ||
+        []);
+    const slabTexts = Array.isArray(slabLabelLines)
+      ? slabLabelLines
+          .map((line) => (line?.text ? line.text : ""))
+          .map((line) => line.trim())
+          .filter(Boolean)
+      : [];
+    const fallbackTexts = ocrLines
+      .map((line) => (line?.text ? line.text : ""))
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const scanTexts = slabTexts.length ? slabTexts : fallbackTexts;
+    if (scanTexts.length) {
+      const graderTokens = ["PSA", "BGS", "SGC", "CGC"];
+      let slabGrader = "";
+      let gradeValue = "";
+      scanTexts.forEach((line) => {
+        if (!slabGrader) {
+          const graderMatch = graderTokens.find((token) =>
+            new RegExp(`\\b${token}\\b`, "i").test(line)
+          );
+          if (graderMatch) slabGrader = graderMatch;
+        }
+        if (!gradeValue) {
+          const gradeMatch = line.match(
+            /\b(?:GEM\s*MT|GEM\s*MINT|MINT|NM-MT|NM|EX-MT|EX|VG|GOOD|POOR)?\s*(10|9\.5|9|8\.5|8|7\.5|7|6\.5|6|5\.5|5|4\.5|4|3\.5|3|2\.5|2|1\.5|1)\b/i
+          );
+          if (gradeMatch) gradeValue = gradeMatch[0].trim();
+        }
+      });
+      if (slabGrader && gradeValue) {
+        promotions.grader = slabGrader;
+        promotions.grade = gradeValue;
+      }
+    }
+  }
+
+  if (promotions.isSlabbed && !promotions.player && !isLineArrayInput) {
+    const slabTexts = slabLineTexts;
+    if (slabTexts.length) {
+      const isAllCapsNameLine = (line) =>
+        /^[A-Z][A-Z\s.'-]+$/.test(line) &&
+        /[A-Z]/.test(line) &&
+        line.split(/\s+/).filter(Boolean).length >= 2;
+      const isCommaNameLine = (line) =>
+        /^[A-Z][A-Z.'-]+,\s*[A-Z][A-Z.'-\s]+$/.test(line);
+      const candidate = slabTexts
+        .filter((line) => isAllCapsNameLine(line) || isCommaNameLine(line))
+        .sort((a, b) => b.length - a.length)[0];
+      if (candidate) {
+        const normalized = candidate.replace(",", " ");
+        const words = normalized.split(/\s+/).filter(Boolean).map((word) => {
+          const upper = word.toUpperCase().replace(/\./g, "");
+          if (upper === "JR") return "Jr.";
+          if (upper === "SR") return "Sr.";
+          if (["II", "III", "IV"].includes(upper)) return upper;
+          return word[0].toUpperCase() + word.slice(1).toLowerCase();
+        });
+        promotions.player = words.join(" ");
+      }
+    }
+  }
+  console.log("[RESOLVER OUTPUT]", promotions);
   return promotions;
 }

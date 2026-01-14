@@ -78,12 +78,13 @@ export default function SingleListing() {
     listingData?.cardAttributes?.grading?.value ||
     listingData?.cardAttributes?.grade ||
     "";
-  const showGraded = reviewIdentity?.graded === true;
+  const isSlabbed = reviewIdentity?.isSlabbed === true;
+  const showGraded = isSlabbed || reviewIdentity?.graded === true;
   const gradeLabel =
     showGraded && (gradeCompany || gradeValue)
       ? [gradeCompany, gradeValue].filter(Boolean).join(" ")
       : showGraded
-      ? "Graded"
+      ? "Graded (details pending)"
       : "";
   const displayPlayer =
     identityPlayer && identityPlayer !== identitySetName ? identityPlayer : "";

@@ -413,7 +413,7 @@ export function ListingProvider({ children }) {
           requestId: sessionId,
           includeBackImage: Boolean(back.length),
           disableCrops: true,
-          includeNameZones: false,
+          includeNameZones: true,
         });
         if (!prep || prep.error) {
           console.error("[listingStore] failed to prepare payload", prep?.error);
@@ -434,6 +434,7 @@ export function ListingProvider({ children }) {
         const minimalPayload = {
           frontImage: prep.payload?.frontImage || null,
           backImage: prep.payload?.backImage || null,
+          nameZoneCrops: prep.payload?.nameZoneCrops || null,
           altText: {
             front: prep.payload?.altText?.front || "",
             back: prep.payload?.altText?.back || "",
@@ -474,7 +475,10 @@ export function ListingProvider({ children }) {
           return { error: SPORTS_ANALYSIS_ERROR_MESSAGE };
         }
         const ocrLines = Array.isArray(data?.ocrLines) ? data.ocrLines : [];
-        const resolved = cardFactsResolver(ocrLines);
+        const slabLabelLines = Array.isArray(data?.slabLabelLines)
+          ? data.slabLabelLines
+          : [];
+        const resolved = cardFactsResolver({ ocrLines, slabLabelLines });
         console.log("[CLIENT] resolver output", resolved);
         const hasIdentityFields = Boolean(
           resolved?.player ||
