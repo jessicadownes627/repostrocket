@@ -794,7 +794,7 @@ export function resolveCardFacts(intel = {}) {
       .map((line) => (line?.text ? line.text : ""))
       .map((line) => line.trim())
       .filter(Boolean);
-    const combinedTextLines = [...ocrTextLines, ...slabLineTexts];
+    const combinedTextLines = slabLineTexts.length ? slabLineTexts : ocrTextLines;
     const slabIndexes = [];
     let grader = "";
     combinedTextLines.forEach((line, idx) => {
@@ -829,14 +829,21 @@ export function resolveCardFacts(intel = {}) {
         const gradeValueRegex =
           /\b(10|9\.5|9|8\.5|8|7\.5|7|6\.5|6|5\.5|5|4\.5|4|3\.5|3|2\.5|2|1\.5|1)\b/;
         const graderLineIndexes = [];
+        const gradeWordIndexes = [];
         combinedTextLines.forEach((line, idx) => {
           if (new RegExp(`\\b${grader}\\b`, "i").test(line)) {
             graderLineIndexes.push(idx);
           }
+          if (gradeWordRegex.test(line)) {
+            gradeWordIndexes.push(idx);
+          }
         });
         const candidateLines = [];
-        graderLineIndexes.forEach((idx) => {
-          for (let offset = -2; offset <= 2; offset += 1) {
+        const pivotIndexes = graderLineIndexes.length
+          ? graderLineIndexes
+          : gradeWordIndexes;
+        pivotIndexes.forEach((idx) => {
+          for (let offset = -3; offset <= 3; offset += 1) {
             const target = idx + offset;
             if (target >= 0 && target < combinedTextLines.length) {
               candidateLines.push(combinedTextLines[target]);
@@ -845,7 +852,9 @@ export function resolveCardFacts(intel = {}) {
         });
         const gradeMatch = candidateLines
           .map((line) =>
-            gradeWordRegex.test(line) ? line.match(gradeValueRegex) : null
+            gradeWordRegex.test(line) || new RegExp(`\\b${grader}\\b`, "i").test(line)
+              ? line.match(gradeValueRegex)
+              : null
           )
           .find(Boolean);
         if (gradeMatch) {
@@ -865,6 +874,7 @@ export function resolveCardFacts(intel = {}) {
         /\b(10|9\.5|9|8\.5|8|7\.5|7|6\.5|6|5\.5|5|4\.5|4|3\.5|3|2\.5|2|1\.5|1)\b/;
       let slabGrader = "";
       const graderIndexes = [];
+      const gradeWordIndexes = [];
       scanTexts.forEach((line, idx) => {
         const graderMatch = graderTokens.find((token) =>
           new RegExp(`\\b${token}\\b`, "i").test(line)
@@ -873,11 +883,15 @@ export function resolveCardFacts(intel = {}) {
           slabGrader = slabGrader || graderMatch;
           graderIndexes.push(idx);
         }
+        if (gradeWordRegex.test(line)) {
+          gradeWordIndexes.push(idx);
+        }
       });
       if (slabGrader && graderIndexes.length) {
         const candidateLines = [];
-        graderIndexes.forEach((idx) => {
-          for (let offset = -2; offset <= 2; offset += 1) {
+        const pivotIndexes = graderIndexes.length ? graderIndexes : gradeWordIndexes;
+        pivotIndexes.forEach((idx) => {
+          for (let offset = -3; offset <= 3; offset += 1) {
             const target = idx + offset;
             if (target >= 0 && target < scanTexts.length) {
               candidateLines.push(scanTexts[target]);
@@ -886,7 +900,9 @@ export function resolveCardFacts(intel = {}) {
         });
         const gradeMatch = candidateLines
           .map((line) =>
-            gradeWordRegex.test(line) ? line.match(gradeValueRegex) : null
+            gradeWordRegex.test(line) || new RegExp(`\\b${slabGrader}\\b`, "i").test(line)
+              ? line.match(gradeValueRegex)
+              : null
           )
           .find(Boolean);
         if (gradeMatch) {
@@ -894,6 +910,38 @@ export function resolveCardFacts(intel = {}) {
           setIfEmpty("grade", gradeMatch[0]);
         }
       }
+    }
+  }
+
+  if (resolved.isSlabbed && !resolved.grader && !resolved.grade && slabLineTexts.length) {
+    const gradeWordRegex =
+      /\b(?:GEM\s*MT|GEM\s*MINT|MINT|NM-MT|NM|EX-MT|EX|VG|GOOD|POOR)\b/i;
+    const gradeValueRegex =
+      /\b(10|9\.5|9|8\.5|8|7\.5|7|6\.5|6|5\.5|5|4\.5|4|3\.5|3|2\.5|2|1\.5|1)\b/;
+    const gradeWordIndexes = [];
+    const gradeValueIndexes = [];
+    slabLineTexts.forEach((line, idx) => {
+      if (gradeWordRegex.test(line)) gradeWordIndexes.push(idx);
+      if (gradeValueRegex.test(line)) gradeValueIndexes.push(idx);
+    });
+    const match = gradeWordIndexes
+      .map((wordIdx) => {
+        const valueIdx = gradeValueIndexes.find(
+          (idx) => Math.abs(idx - wordIdx) <= 3
+        );
+        if (valueIdx === undefined) return null;
+        const gradeMatch = slabLineTexts[valueIdx].match(gradeValueRegex);
+        const wordMatch = slabLineTexts[wordIdx].match(gradeWordRegex);
+        if (!gradeMatch || !wordMatch) return null;
+        return {
+          grade: gradeMatch[0],
+          condition: titleCase(wordMatch[0].replace(/\s+/g, " ")),
+        };
+      })
+      .find(Boolean);
+    if (match) {
+      setIfEmpty("grade", match.grade);
+      setIfEmpty("condition", match.condition);
     }
   }
   console.log("[RESOLVER OUTPUT]", resolved);

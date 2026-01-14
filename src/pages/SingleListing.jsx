@@ -80,12 +80,11 @@ export default function SingleListing() {
     "";
   const isSlabbed = reviewIdentity?.isSlabbed === true;
   const showGraded = isSlabbed || reviewIdentity?.graded === true;
-  const gradeLabel =
-    showGraded && (gradeCompany || gradeValue)
-      ? [gradeCompany, gradeValue].filter(Boolean).join(" ")
-      : showGraded
-      ? "Graded (details pending)"
-      : "";
+  const gradeLabel = reviewIdentity?.grade
+    ? [reviewIdentity?.condition, reviewIdentity?.grade].filter(Boolean).join(" ")
+    : reviewIdentity?.condition === "Graded"
+    ? "Graded (details pending)"
+    : "";
   const displayPlayer =
     identityPlayer && identityPlayer !== identitySetName ? identityPlayer : "";
   const cornersReviewed =
