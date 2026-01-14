@@ -857,17 +857,29 @@ export function resolveCardFacts(intel = {}) {
   if (!resolved.team && resolved.isSlabbed === false) {
     const teamPairs = [
       { city: "arizona", mascot: "cardinals", team: "Arizona Cardinals" },
+      { city: "baltimore", mascot: "orioles", team: "Baltimore Orioles" },
     ];
-    const tokens = new Set();
-    ocrLineTexts.forEach((line) => {
-      normalizeLine(line)
-        .split(/\s+/)
-        .filter(Boolean)
-        .forEach((token) => tokens.add(token));
-    });
-    const match = teamPairs.find(
-      (pair) => tokens.has(pair.city) && tokens.has(pair.mascot)
+    const normalizedLines = ocrLineTexts.map((line) =>
+      normalizeLine(line).split(/\s+/).filter(Boolean)
     );
+    const isPairWithinRange = (pair) => {
+      const lineCount = normalizedLines.length;
+      for (let i = 0; i < lineCount; i += 1) {
+        const current = new Set(normalizedLines[i] || []);
+        if (current.has(pair.city) && current.has(pair.mascot)) return true;
+        for (let j = Math.max(0, i - 2); j <= Math.min(lineCount - 1, i + 2); j += 1) {
+          const other = new Set(normalizedLines[j] || []);
+          if (
+            (current.has(pair.city) && other.has(pair.mascot)) ||
+            (current.has(pair.mascot) && other.has(pair.city))
+          ) {
+            return true;
+          }
+        }
+      }
+      return false;
+    };
+    const match = teamPairs.find((pair) => isPairWithinRange(pair));
     if (match) setIfEmpty("team", match.team);
   }
   if (resolved.team) {
