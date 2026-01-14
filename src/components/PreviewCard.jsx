@@ -82,8 +82,11 @@ export default function PreviewCard({
     platformDescription ||
     item.description ||
     "Description not added yet.";
-  const cornerPhotos = Array.isArray(item.cornerPhotos)
-    ? item.cornerPhotos
+  const frontCorners = Array.isArray(item.frontCorners)
+    ? item.frontCorners
+    : [];
+  const backCorners = Array.isArray(item.backCorners)
+    ? item.backCorners
     : [];
 
   return (
@@ -144,22 +147,50 @@ export default function PreviewCard({
           ) : (
             <div className="w-20 h-20 rounded-[14px] bg-black/40 border border-[rgba(255,255,255,0.05)]" />
           )}
-          {cornerPhotos.length > 0 && (
-            <div className="grid grid-cols-2 gap-1 w-20">
-              {cornerPhotos.slice(0, 4).map((corner, idx) => (
-                <div
-                  key={corner?.url || corner?.id || idx}
-                  className="w-9 h-9 rounded-[8px] overflow-hidden border border-[rgba(255,255,255,0.08)] bg-black/40"
-                >
-                  {corner?.url ? (
-                    <img
-                      src={corner.url}
-                      alt={`Corner ${idx + 1}`}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : null}
-                </div>
-              ))}
+          {frontCorners.length > 0 && (
+            <div>
+              <div className="text-[9px] uppercase tracking-[0.25em] text-white/50 mb-1">
+                Front Corners
+              </div>
+              <div className="grid grid-cols-2 gap-1 w-20">
+                {frontCorners.slice(0, 4).map((corner, idx) => (
+                  <div
+                    key={corner?.url || corner?.id || `front-${idx}`}
+                    className="w-9 h-9 rounded-[8px] overflow-hidden border border-[rgba(255,255,255,0.08)] bg-black/40"
+                  >
+                    {corner?.url ? (
+                      <img
+                        src={corner.url}
+                        alt={corner?.label || `Front corner ${idx + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {backCorners.length > 0 && (
+            <div>
+              <div className="text-[9px] uppercase tracking-[0.25em] text-white/50 mb-1">
+                Back Corners
+              </div>
+              <div className="grid grid-cols-2 gap-1 w-20">
+                {backCorners.slice(0, 4).map((corner, idx) => (
+                  <div
+                    key={corner?.url || corner?.id || `back-${idx}`}
+                    className="w-9 h-9 rounded-[8px] overflow-hidden border border-[rgba(255,255,255,0.08)] bg-black/40"
+                  >
+                    {corner?.url ? (
+                      <img
+                        src={corner.url}
+                        alt={corner?.label || `Back corner ${idx + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : null}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>

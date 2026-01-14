@@ -15,7 +15,8 @@ export default function LaunchListing() {
     description = "",
     price: rawPrice = "",
     cardAttributes = null,
-    cornerPhotos = [],
+    frontCorners = [],
+    backCorners = [],
   } = listingData || {};
 
   const pricing = cardAttributes?.pricing || null;
@@ -68,12 +69,14 @@ export default function LaunchListing() {
   const summaryDescription = useMemo(() => {
     if (description && description.length > 0) return description;
     if (reviewIdentity) {
+      const identityTeam = reviewIdentity?.team || "";
+      const identitySport = reviewIdentity?.sport || "";
       const identityLines = [
         reviewIdentity.player && `Player: ${reviewIdentity.player}`,
         reviewIdentity.setName && `Set: ${reviewIdentity.setName}`,
         reviewIdentity.year && `Year: ${reviewIdentity.year}`,
-        reviewIdentity.team && `Team: ${reviewIdentity.team}`,
-        reviewIdentity.sport && `Sport: ${reviewIdentity.sport}`,
+        identityTeam && `Team: ${identityTeam}`,
+        identitySport && `Sport: ${identitySport}`,
         resolvedGrade && `Condition: ${resolvedGrade}`,
       ].filter(Boolean);
       if (identityLines.length) {
@@ -114,8 +117,9 @@ export default function LaunchListing() {
 
   const encodedTitle = encodeURIComponent(baseTitle || "");
   const handleDownloadCorners = async () => {
-    if (!cornerPhotos.length) return;
-    const payload = cornerPhotos
+    const mergedCorners = [...frontCorners, ...backCorners];
+    if (!mergedCorners.length) return;
+    const payload = mergedCorners
       .filter((entry) => entry?.url)
       .map((entry, idx) => ({
         dataUrl: entry.url,
@@ -259,7 +263,7 @@ export default function LaunchListing() {
             </div>
           </div>
 
-          {cornerPhotos.length > 0 && (
+          {(frontCorners.length > 0 || backCorners.length > 0) && (
             <div>
               <div className="text-xs uppercase tracking-[0.18em] opacity-70 mb-1">
                 Corner Detail Photos
@@ -267,23 +271,54 @@ export default function LaunchListing() {
               <div className="opacity-50 text-xs mt-1 mb-2">
                 Optional detail shots you can upload to any marketplace.
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {cornerPhotos.map((entry, idx) => (
-                  <div
-                    key={`${entry.label}-${idx}`}
-                    className="rounded-xl border border-[rgba(255,255,255,0.12)] overflow-hidden bg-black/30"
-                  >
-                    <img
-                      src={entry.url}
-                      alt={entry.altText || entry.label}
-                      className="w-full h-24 object-cover"
-                    />
-                    <div className="text-[10px] uppercase tracking-[0.25em] text-center py-1 opacity-70">
-                      {entry.label || `Corner ${idx + 1}`}
-                    </div>
+              {frontCorners.length > 0 && (
+                <div className="mb-4">
+                  <div className="text-[10px] uppercase tracking-[0.25em] opacity-70 mb-2">
+                    Front Corners
                   </div>
-                ))}
-              </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {frontCorners.slice(0, 4).map((entry, idx) => (
+                      <div
+                        key={`${entry.label || "front"}-${idx}`}
+                        className="rounded-xl border border-[rgba(255,255,255,0.12)] overflow-hidden bg-black/30"
+                      >
+                        <img
+                          src={entry.url}
+                          alt={entry.altText || entry.label}
+                          className="w-full h-24 object-cover"
+                        />
+                        <div className="text-[10px] uppercase tracking-[0.25em] text-center py-1 opacity-70">
+                          {entry.label || `Front corner ${idx + 1}`}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {backCorners.length > 0 && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-[0.25em] opacity-70 mb-2">
+                    Back Corners
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {backCorners.slice(0, 4).map((entry, idx) => (
+                      <div
+                        key={`${entry.label || "back"}-${idx}`}
+                        className="rounded-xl border border-[rgba(255,255,255,0.12)] overflow-hidden bg-black/30"
+                      >
+                        <img
+                          src={entry.url}
+                          alt={entry.altText || entry.label}
+                          className="w-full h-24 object-cover"
+                        />
+                        <div className="text-[10px] uppercase tracking-[0.25em] text-center py-1 opacity-70">
+                          {entry.label || `Back corner ${idx + 1}`}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <button
                 className="lux-small-btn mt-3"
                 onClick={handleDownloadCorners}

@@ -39,13 +39,23 @@ export default function LaunchDeck() {
           .join(" ")
       : "";
   const identityTitle = resolvedIdentity ? composeCardTitle(resolvedIdentity) : "";
+  const identityTeam =
+    resolvedIdentity?.team ||
+    listingData?.team ||
+    activeListing?.team ||
+    "";
+  const identitySport =
+    resolvedIdentity?.sport ||
+    listingData?.sport ||
+    activeListing?.sport ||
+    "";
   const identityDescription = resolvedIdentity
     ? [
         resolvedIdentity.player && `Player: ${resolvedIdentity.player}`,
         resolvedIdentity.setName && `Set: ${resolvedIdentity.setName}`,
         resolvedIdentity.year && `Year: ${resolvedIdentity.year}`,
-        resolvedIdentity.team && `Team: ${resolvedIdentity.team}`,
-        resolvedIdentity.sport && `Sport: ${resolvedIdentity.sport}`,
+        identityTeam && `Team: ${identityTeam}`,
+        identitySport && `Sport: ${identitySport}`,
         resolvedGrade && `Condition: ${resolvedGrade}`,
       ]
         .filter(Boolean)
@@ -57,6 +67,22 @@ export default function LaunchDeck() {
         title: identityTitle || activeListing.title,
         description: activeListing.description || identityDescription,
         condition: resolvedGrade || activeListing.condition,
+        team: identityTeam || activeListing.team,
+        sport: identitySport || activeListing.sport,
+        frontCorners:
+          Array.isArray(activeListing.frontCorners) &&
+          activeListing.frontCorners.length > 0
+            ? activeListing.frontCorners
+            : Array.isArray(listingData?.frontCorners)
+            ? listingData.frontCorners
+            : [],
+        backCorners:
+          Array.isArray(activeListing.backCorners) &&
+          activeListing.backCorners.length > 0
+            ? activeListing.backCorners
+            : Array.isArray(listingData?.backCorners)
+            ? listingData.backCorners
+            : [],
         reviewIdentity: resolvedIdentity,
       }
     : null;
