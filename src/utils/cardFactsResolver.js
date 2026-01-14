@@ -475,6 +475,19 @@ export function resolveCardFacts(intel = {}) {
     if (value === undefined || value === null || value === "") return;
     resolved[key] = value;
   };
+  const brandTokens = new Set([
+    "upper",
+    "deck",
+    "topps",
+    "panini",
+    "donruss",
+    "bowman",
+    "fleer",
+    "score",
+    "optic",
+    "prizm",
+    "select",
+  ]);
   const isLineArrayInput = Array.isArray(intel);
   const providedOcrLines =
     !isLineArrayInput && Array.isArray(intel?.ocrLines) ? intel.ocrLines : null;
@@ -517,6 +530,44 @@ export function resolveCardFacts(intel = {}) {
     ocrLineTexts.some((line) => slabTokenRegex.test(line) || slabLabelNumberRegex.test(line));
   const lineTexts = slabSignal && slabLineTexts.length ? slabLineTexts : ocrLineTexts;
   setIfEmpty("isSlabbed", slabSignal);
+  const brandKeywords = [
+    "upper deck",
+    "topps",
+    "panini",
+    "donruss",
+    "bowman",
+    "fleer",
+    "score",
+    "optic",
+  ];
+  const excludedPlayerLines = new Set();
+  const excludedPlayerTokens = new Set();
+  const addExcludedTokens = (line) => {
+    normalizeLine(line)
+      .split(/\s+/)
+      .filter(Boolean)
+      .forEach((token) => excludedPlayerTokens.add(token));
+  };
+  const isBrandFragmentLine = (line) => {
+    const normalized = normalizeLine(line).replace(/\s+/g, "");
+    if (!normalized) return false;
+    return Array.from(brandTokens).some(
+      (token) =>
+        normalized.includes(token) ||
+        (normalized.length >= 3 && token.includes(normalized))
+    );
+  };
+  const excludeLine = (line) => {
+    if (!line) return;
+    excludedPlayerLines.add(line);
+    addExcludedTokens(line);
+  };
+  lineTexts.forEach((line) => {
+    const normalized = normalizeLine(line);
+    if (brandKeywords.some((brand) => normalized.includes(brand))) {
+      excludeLine(line);
+    }
+  });
   if (slabSignal && !resolved.grader) {
     const graderTokens = ["PSA", "BGS", "SGC", "CGC"];
     const findGrader = (texts) =>
@@ -544,7 +595,12 @@ export function resolveCardFacts(intel = {}) {
     const isCommaNameLine = (line) =>
       /^[A-Z][A-Z.'-]+,\s*[A-Z][A-Z.'-\s]+$/.test(line);
     const candidate = slabLineTexts
-      .filter((line) => isAllCapsNameLine(line) || isCommaNameLine(line))
+      .filter((line) => {
+        if (excludedPlayerLines.has(line)) return false;
+        if (isBrandFragmentLine(line)) return false;
+        if (!/[aeiou]/i.test(line)) return false;
+        return isAllCapsNameLine(line) || isCommaNameLine(line);
+      })
       .sort((a, b) => b.length - a.length)[0];
     if (candidate) {
       const normalized = candidate.replace(",", " ");
@@ -560,11 +616,16 @@ export function resolveCardFacts(intel = {}) {
   }
 
   const player = ocrLineTexts.find((line) => {
+    if (excludedPlayerLines.has(line)) return false;
     if (line.length <= 3) return false;
     if (/^\d+$/.test(line)) return false;
     const words = line.split(/\s+/).filter(Boolean);
     if (words.length < 2) return false;
+    if (!/[aeiou]/i.test(line)) return false;
     if (line === line.toUpperCase()) return false;
+    if (isBrandFragmentLine(line)) return false;
+    const normalizedTokens = normalizeLine(line).split(/\s+/).filter(Boolean);
+    if (normalizedTokens.every((token) => excludedPlayerTokens.has(token))) return false;
     return /[A-Za-z]/.test(line);
   });
   setIfEmpty("player", player);
@@ -590,10 +651,18 @@ export function resolveCardFacts(intel = {}) {
       const first = ocrLineTexts[i];
       const second = ocrLineTexts[i + 1];
       if (!first || !second) continue;
+      if (excludedPlayerLines.has(first) || excludedPlayerLines.has(second)) continue;
       const firstParts = first.split(/\s+/).filter(Boolean);
       const secondParts = second.split(/\s+/).filter(Boolean);
       if (firstParts.length !== 1 || secondParts.length !== 1) continue;
       if (!isNameToken(firstParts[0]) || !isNameToken(secondParts[0])) continue;
+      if (!/[aeiou]/i.test(first) || !/[aeiou]/i.test(second)) continue;
+      if (isBrandFragmentLine(first) || isBrandFragmentLine(second)) continue;
+      const normalizedPairTokens = [
+        ...normalizeLine(first).split(/\s+/),
+        ...normalizeLine(second).split(/\s+/),
+      ].filter(Boolean);
+      if (normalizedPairTokens.every((token) => excludedPlayerTokens.has(token))) continue;
       const name = `${normalizeToken(firstParts[0])} ${normalizeToken(secondParts[0])}`;
       if (!best) best = name;
     }
@@ -613,16 +682,6 @@ export function resolveCardFacts(intel = {}) {
     setIfEmpty("year", String(oldest));
   }
   if (!resolved.year) {
-    const brandKeywords = [
-      "upper deck",
-      "topps",
-      "panini",
-      "donruss",
-      "bowman",
-      "fleer",
-      "score",
-      "optic",
-    ];
     const brandLineIndexes = [];
     lineTexts.forEach((line, idx) => {
       const normalized = normalizeLine(line);
@@ -657,16 +716,6 @@ export function resolveCardFacts(intel = {}) {
     }
   }
 
-  const brandKeywords = [
-    "upper deck",
-    "topps",
-    "panini",
-    "donruss",
-    "bowman",
-    "fleer",
-    "score",
-    "optic",
-  ];
   const noiseWords = new Set(["base", "series", "edition"]);
   const setCandidates = lineTexts
     .filter((line) => /^[A-Z0-9\s.'&-]+$/.test(line))
@@ -804,6 +853,26 @@ export function resolveCardFacts(intel = {}) {
   if (teamCandidate && !resolved.team) {
     const normalized = normalizeLine(teamCandidate);
     setIfEmpty("team", teamTokenMap.get(normalized) || titleCase(teamCandidate));
+  }
+  if (!resolved.team && resolved.isSlabbed === false) {
+    const teamPairs = [
+      { city: "arizona", mascot: "cardinals", team: "Arizona Cardinals" },
+    ];
+    const tokens = new Set();
+    ocrLineTexts.forEach((line) => {
+      normalizeLine(line)
+        .split(/\s+/)
+        .filter(Boolean)
+        .forEach((token) => tokens.add(token));
+    });
+    const match = teamPairs.find(
+      (pair) => tokens.has(pair.city) && tokens.has(pair.mascot)
+    );
+    if (match) setIfEmpty("team", match.team);
+  }
+  if (resolved.team) {
+    const inferred = matchesLeague(resolved.team);
+    if (inferred?.sport) setIfEmpty("sport", inferred.sport);
   }
 
   if (!resolved.condition) {

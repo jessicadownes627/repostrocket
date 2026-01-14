@@ -31,6 +31,8 @@ const defaultListing = {
   photos: [],
   secondaryPhotos: [],
   cornerPhotos: [],
+  frontCorners: [],
+  backCorners: [],
   editedPhoto: null,
   editHistory: [],
   resizedPhotos: {
@@ -71,8 +73,24 @@ export function ListingProvider({ children }) {
       cardAttributes: null,
       cardIntelHash: null,
       cornerPhotos: [],
+      frontCorners: [],
+      backCorners: [],
     }));
     setLastAnalyzedHash(null);
+  };
+
+  const splitCornerEntries = (entries = []) => {
+    const frontCorners = [];
+    const backCorners = [];
+    entries.forEach((entry) => {
+      const side = (entry?.side || "").toLowerCase();
+      if (side.includes("front")) {
+        frontCorners.push(entry);
+      } else if (side.includes("back")) {
+        backCorners.push(entry);
+      }
+    });
+    return { frontCorners, backCorners };
   };
 
   // Restore from localStorage on mount
@@ -260,7 +278,12 @@ export function ListingProvider({ children }) {
           };
           const cornerAssets = extractCornerPhotoEntries(intel);
           if (cornerAssets.length) {
+            const existingFront = Array.isArray(prev.frontCorners) ? prev.frontCorners : [];
+            const existingBack = Array.isArray(prev.backCorners) ? prev.backCorners : [];
+            const { frontCorners, backCorners } = splitCornerEntries(cornerAssets);
             mergedUpdates.cornerPhotos = cornerAssets;
+            mergedUpdates.frontCorners = frontCorners.length ? frontCorners : existingFront;
+            mergedUpdates.backCorners = backCorners.length ? backCorners : existingBack;
           }
           const assignListingField = (key, value) => {
             if (!value) return;
@@ -319,6 +342,8 @@ export function ListingProvider({ children }) {
             cardAttributes: null,
             cardIntelHash: null,
             cornerPhotos: [],
+            frontCorners: [],
+            backCorners: [],
           };
         }
         if (key === "secondaryPhotos") {
@@ -334,10 +359,19 @@ export function ListingProvider({ children }) {
             cardAttributes: null,
             cardIntelHash: null,
             cornerPhotos: [],
+            frontCorners: [],
+            backCorners: [],
           };
         }
         if (key === "cornerPhotos" && Array.isArray(value)) {
           nextValue = value.filter(Boolean);
+          const { frontCorners, backCorners } = splitCornerEntries(nextValue);
+          return {
+            ...prev,
+            [key]: nextValue,
+            frontCorners,
+            backCorners,
+          };
         }
         return { ...prev, [key]: nextValue };
       });
@@ -392,6 +426,12 @@ export function ListingProvider({ children }) {
         category: "Sports Cards",
         photos: front,
         secondaryPhotos: back,
+        frontCorners: Array.isArray(listingData?.frontCorners)
+          ? listingData.frontCorners
+          : [],
+        backCorners: Array.isArray(listingData?.backCorners)
+          ? listingData.backCorners
+          : [],
       };
       const photoBundle = [...front, ...back];
       const onHashDecision = (hash) => {
@@ -435,6 +475,8 @@ export function ListingProvider({ children }) {
           frontImage: prep.payload?.frontImage || null,
           backImage: prep.payload?.backImage || null,
           nameZoneCrops: prep.payload?.nameZoneCrops || null,
+          frontCorners: Array.isArray(payload?.frontCorners) ? payload.frontCorners : [],
+          backCorners: Array.isArray(payload?.backCorners) ? payload.backCorners : [],
           altText: {
             front: prep.payload?.altText?.front || "",
             back: prep.payload?.altText?.back || "",

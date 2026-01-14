@@ -82,6 +82,9 @@ export default function PreviewCard({
     platformDescription ||
     item.description ||
     "Description not added yet.";
+  const cornerPhotos = Array.isArray(item.cornerPhotos)
+    ? item.cornerPhotos
+    : [];
 
   return (
     <div
@@ -130,16 +133,36 @@ export default function PreviewCard({
 
       {/* Body */}
       <div className="flex gap-4 items-start">
-        {/* Thumbnail */}
-        {previewPhoto ? (
-          <img
-            src={previewPhoto}
-            alt={`${label} preview`}
-            className="w-20 h-20 object-cover rounded-[14px] border border-[rgba(232,213,168,0.25)] shadow-[0_3px_10px_rgba(0,0,0,0.50)]"
-          />
-        ) : (
-          <div className="w-20 h-20 rounded-[14px] bg-black/40 border border-[rgba(255,255,255,0.05)]" />
-        )}
+        {/* Thumbnail + corners */}
+        <div className="flex flex-col gap-2">
+          {previewPhoto ? (
+            <img
+              src={previewPhoto}
+              alt={`${label} preview`}
+              className="w-20 h-20 object-cover rounded-[14px] border border-[rgba(232,213,168,0.25)] shadow-[0_3px_10px_rgba(0,0,0,0.50)]"
+            />
+          ) : (
+            <div className="w-20 h-20 rounded-[14px] bg-black/40 border border-[rgba(255,255,255,0.05)]" />
+          )}
+          {cornerPhotos.length > 0 && (
+            <div className="grid grid-cols-2 gap-1 w-20">
+              {cornerPhotos.slice(0, 4).map((corner, idx) => (
+                <div
+                  key={corner?.url || corner?.id || idx}
+                  className="w-9 h-9 rounded-[8px] overflow-hidden border border-[rgba(255,255,255,0.08)] bg-black/40"
+                >
+                  {corner?.url ? (
+                    <img
+                      src={corner.url}
+                      alt={`Corner ${idx + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Text content */}
         <div className="flex-1">

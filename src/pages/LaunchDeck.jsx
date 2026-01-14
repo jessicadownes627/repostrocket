@@ -209,13 +209,7 @@ export default function LaunchDeck() {
           Launch Your Listing
         </h1>
         <p className="text-sm opacity-70 mt-1 mb-2">
-          Send this listing to any marketplace below. You can launch to one, several, or come back later.
-        </p>
-        <p className="text-xs opacity-60 mb-4">
-          Repost Rocket is not competing with eBay, Mercari, or Poshmark — we simply help each platform receive a clean, ready-to-post listing faster.
-        </p>
-        <p className="text-xs opacity-50">
-          Each marketplace card is opt-in. Choose where to open next; every action runs independently and opens the marketplace in a new tab.
+          Choose where to post your prepared listing.
         </p>
       </div>
 

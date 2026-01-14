@@ -92,8 +92,13 @@ export default function SingleListing() {
     : "Graded (details pending)";
   const displayPlayer =
     identityPlayer && identityPlayer !== identitySetName ? identityPlayer : "";
-  const cornersReviewed =
-    Array.isArray(listingData?.cornerPhotos) && listingData.cornerPhotos.length > 0;
+  const frontCorners = Array.isArray(listingData?.frontCorners)
+    ? listingData.frontCorners
+    : [];
+  const backCorners = Array.isArray(listingData?.backCorners)
+    ? listingData.backCorners
+    : [];
+  const cornersReviewed = frontCorners.length > 0 || backCorners.length > 0;
   const hasIdentityData = reviewIdentity !== null;
   const titleSetName =
     identitySetName && identitySetName !== identityPlayer ? identitySetName : "";
@@ -159,18 +164,21 @@ export default function SingleListing() {
               }}
             />
           </div>
-          {Array.isArray(listingData?.cornerPhotos) &&
-            listingData.cornerPhotos.length > 0 && (
-              <div className="grid grid-cols-2 gap-3 mt-5">
-                {listingData.cornerPhotos.slice(0, 4).map((entry, idx) => (
+          {frontCorners.length > 0 && (
+            <div className="mt-5">
+              <div className="text-xs uppercase tracking-[0.3em] opacity-60 mb-2">
+                Front Corners
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {frontCorners.slice(0, 4).map((entry, idx) => (
                   <div
-                    key={`corner-${idx}`}
+                    key={`front-corner-${idx}`}
                     className="rounded-xl border border-white/10 bg-black/30 overflow-hidden"
                   >
                     {entry?.url ? (
                       <img
                         src={entry.url}
-                        alt={entry?.label || "Corner detail"}
+                        alt={entry?.label || "Front corner detail"}
                         className="w-full h-20 object-cover"
                       />
                     ) : (
@@ -181,7 +189,35 @@ export default function SingleListing() {
                   </div>
                 ))}
               </div>
-            )}
+            </div>
+          )}
+          {backCorners.length > 0 && (
+            <div className="mt-5">
+              <div className="text-xs uppercase tracking-[0.3em] opacity-60 mb-2">
+                Back Corners
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {backCorners.slice(0, 4).map((entry, idx) => (
+                  <div
+                    key={`back-corner-${idx}`}
+                    className="rounded-xl border border-white/10 bg-black/30 overflow-hidden"
+                  >
+                    {entry?.url ? (
+                      <img
+                        src={entry.url}
+                        alt={entry?.label || "Back corner detail"}
+                        className="w-full h-20 object-cover"
+                      />
+                    ) : (
+                      <div className="h-20 flex items-center justify-center text-[10px] opacity-40">
+                        No data
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {!analysisComplete && (
             <div className="text-sm uppercase tracking-[0.3em] opacity-60 mt-6 text-center">
               Analyzing card details…
