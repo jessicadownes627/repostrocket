@@ -517,6 +517,24 @@ export function resolveCardFacts(intel = {}) {
     ocrLineTexts.some((line) => slabTokenRegex.test(line) || slabLabelNumberRegex.test(line));
   const lineTexts = slabSignal && slabLineTexts.length ? slabLineTexts : ocrLineTexts;
   setIfEmpty("isSlabbed", slabSignal);
+  if (slabSignal && !resolved.grader) {
+    const graderTokens = ["PSA", "BGS", "SGC", "CGC"];
+    const findGrader = (texts) =>
+      texts.find((line) =>
+        graderTokens.some((token) => new RegExp(`\\b${token}\\b`, "i").test(line))
+      );
+    const slabGraderLine = findGrader(slabLineTexts);
+    const ocrGraderLine = findGrader(ocrLineTexts);
+    const grader =
+      graderTokens.find((token) =>
+        slabGraderLine ? new RegExp(`\\b${token}\\b`, "i").test(slabGraderLine) : false
+      ) ||
+      graderTokens.find((token) =>
+        ocrGraderLine ? new RegExp(`\\b${token}\\b`, "i").test(ocrGraderLine) : false
+      ) ||
+      "";
+    setIfEmpty("grader", grader);
+  }
 
   if (!resolved.player && slabLineTexts.length) {
     const isAllCapsNameLine = (line) =>

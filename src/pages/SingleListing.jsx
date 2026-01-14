@@ -81,10 +81,15 @@ export default function SingleListing() {
   const isSlabbed = reviewIdentity?.isSlabbed === true;
   const showGraded = isSlabbed || reviewIdentity?.graded === true;
   const gradeLabel = reviewIdentity?.grade
-    ? [reviewIdentity?.condition, reviewIdentity?.grade].filter(Boolean).join(" ")
-    : reviewIdentity?.condition === "Graded"
-    ? "Graded (details pending)"
-    : "";
+    ? [
+        reviewIdentity?.isSlabbed
+          ? `Mint ${reviewIdentity?.grade}`
+          : [reviewIdentity?.condition, reviewIdentity?.grade].filter(Boolean).join(" "),
+        reviewIdentity?.isSlabbed ? reviewIdentity?.grader : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : "Graded (details pending)";
   const displayPlayer =
     identityPlayer && identityPlayer !== identitySetName ? identityPlayer : "";
   const cornersReviewed =
