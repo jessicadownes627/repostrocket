@@ -52,21 +52,13 @@ export default function SingleListing() {
     listingData?.identity?.setName ||
     listingData?.setName ||
     "";
-  const identityTeam =
-    reviewIdentity?.team ||
-    listingData?.identity?.team ||
-    listingData?.team ||
-    "";
+  const identityTeam = reviewIdentity?.team || "";
   const identityYear =
     reviewIdentity?.year ||
     listingData?.identity?.year ||
     listingData?.year ||
     "";
-  const identitySport =
-    reviewIdentity?.sport ||
-    listingData?.identity?.sport ||
-    listingData?.sport ||
-    "";
+  const identitySport = reviewIdentity?.sport || "";
   const gradeCompany =
     listingData?.gradingCompany ||
     listingData?.cardAttributes?.gradingAuthority ||
@@ -80,16 +72,16 @@ export default function SingleListing() {
     "";
   const isSlabbed = reviewIdentity?.isSlabbed === true;
   const showGraded = isSlabbed || reviewIdentity?.graded === true;
-  const gradeLabel = reviewIdentity?.grade
-    ? [
-        reviewIdentity?.isSlabbed
-          ? `Mint ${reviewIdentity?.grade}`
-          : [reviewIdentity?.condition, reviewIdentity?.grade].filter(Boolean).join(" "),
-        reviewIdentity?.isSlabbed ? reviewIdentity?.grader : null,
-      ]
-        .filter(Boolean)
-        .join(" · ")
-    : "Graded (details pending)";
+  const gradeLabel = reviewIdentity?.isSlabbed
+    ? reviewIdentity?.grade
+      ? [
+          `Mint ${reviewIdentity?.grade}`,
+          reviewIdentity?.grader,
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      : "Graded (details pending)"
+    : "Raw";
   const displayPlayer =
     identityPlayer && identityPlayer !== identitySetName ? identityPlayer : "";
   const frontCorners = Array.isArray(listingData?.frontCorners)
