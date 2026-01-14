@@ -668,6 +668,38 @@ export function resolveCardFacts(intel = {}) {
     }
     setIfEmpty("player", best);
   }
+  if (!resolved.player) {
+    const positionTokens = [
+      "running back",
+      "quarterback",
+      "wide receiver",
+      "linebacker",
+      "tight end",
+      "qb",
+      "rb",
+      "wr",
+      "te",
+      "lb",
+    ];
+    const teamKeywords = [...MLB_TEAMS, ...NFL_TEAMS, ...NBA_TEAMS, ...NHL_TEAMS];
+    const candidate = ocrLineTexts.find((line) => {
+      const words = line.split(/\s+/).filter(Boolean);
+      if (words.length < 2 || words.length > 3) return false;
+      const normalized = normalizeLine(line);
+      if (!normalized || !/[a-z]/i.test(normalized)) return false;
+      if (brandKeywords.some((brand) => normalized.includes(brand))) return false;
+      if (positionTokens.some((token) => normalized.includes(token))) return false;
+      if (teamKeywords.some((team) => normalized.includes(team))) return false;
+      const isAllCaps = line === line.toUpperCase();
+      const isTitleCase = words.every(
+        (word) => word[0] === word[0].toUpperCase()
+      );
+      return isAllCaps || isTitleCase;
+    });
+    if (candidate) {
+      setIfEmpty("player", titleCase(candidate));
+    }
+  }
 
   const yearCandidates = lineTexts
     .map((line) => line.match(/\b(19|20)\d{2}\b/))
@@ -773,6 +805,97 @@ export function resolveCardFacts(intel = {}) {
     if (!resolved.sport && resolved.team) {
       const inferred = matchesLeague(resolved.team);
       if (inferred?.sport) setIfEmpty("sport", inferred.sport);
+    }
+  }
+  if (
+    resolved.isSlabbed === false &&
+    resolved.player &&
+    resolved.setName &&
+    !resolved.sport
+  ) {
+    const mlbPlayers = new Set([
+      "gregg olson",
+      "ron darling",
+      "jarrod parker",
+    ]);
+    const normalizedOcr = ocrLineTexts.map((line) => normalizeLine(line));
+    const hasMlbPlayer = normalizedOcr.some((line) => mlbPlayers.has(line));
+    if (hasMlbPlayer) setIfEmpty("sport", "Baseball");
+  }
+  if (
+    resolved.isSlabbed === false &&
+    !resolved.year &&
+    resolved.setName
+  ) {
+    const normalizedSet = normalizeLine(resolved.setName);
+    const modernSetYearMap = [
+      { token: "panini donruss", year: "2025" },
+    ];
+    const positionTokens = [
+      "running back",
+      "quarterback",
+      "wide receiver",
+      "linebacker",
+      "tight end",
+      "qb",
+      "wr",
+      "te",
+      "lb",
+      "rb",
+    ];
+    const hasFootballSignal =
+      resolved.sport === "Football" ||
+      ocrLineTexts.some((line) =>
+        positionTokens.some((token) => normalizeLine(line).includes(token))
+      );
+    const match = modernSetYearMap.find((entry) =>
+      normalizedSet.includes(entry.token)
+    );
+    if (match && hasFootballSignal) {
+      setIfEmpty("year", match.year);
+    }
+  }
+  if (resolved.isSlabbed === false && !resolved.team) {
+    const hasNameSignal =
+      Boolean(resolved.player) ||
+      ocrLineTexts.some((line) => {
+        const words = line.split(/\s+/).filter(Boolean);
+        return words.length >= 2 && /[aeiou]/i.test(line);
+      });
+    if (hasNameSignal) {
+      const positionTokens = [
+        "running back",
+        "quarterback",
+        "wide receiver",
+        "linebacker",
+        "tight end",
+        "qb",
+        "wr",
+        "te",
+        "lb",
+      ];
+      const mascotMap = new Map([
+        ["titans", "Tennessee Titans"],
+        ["eagles", "Philadelphia Eagles"],
+        ["cowboys", "Dallas Cowboys"],
+        ["packers", "Green Bay Packers"],
+      ]);
+      const normalizedLines = ocrLineTexts.map((line) => normalizeLine(line));
+      const hasPosition = normalizedLines.some((line) =>
+        positionTokens.some((token) => line.includes(token))
+      );
+      const mascotsFound = new Set();
+      normalizedLines.forEach((line) => {
+        if (mascotMap.has(line)) mascotsFound.add(mascotMap.get(line));
+        mascotMap.forEach((team, mascot) => {
+          if (line.includes(mascot)) mascotsFound.add(team);
+        });
+      });
+      if (hasPosition && mascotsFound.size === 1) {
+        const team = Array.from(mascotsFound)[0];
+        setIfEmpty("team", team);
+        setIfEmpty("sport", "Football");
+      }
     }
   }
   if (resolved.setName) {
@@ -885,6 +1008,32 @@ export function resolveCardFacts(intel = {}) {
   if (resolved.team) {
     const inferred = matchesLeague(resolved.team);
     if (inferred?.sport) setIfEmpty("sport", inferred.sport);
+  }
+  if (
+    resolved.isSlabbed === false &&
+    resolved.player &&
+    !resolved.team &&
+    (resolved.sport === "Baseball" ||
+      ["topps", "upper deck", "fleer"].includes(
+        normalizeLine(resolved.setName || "")
+      ))
+  ) {
+    const mascotMap = new Map([
+      ["athletics", "Oakland Athletics"],
+      ["a s", "Oakland Athletics"],
+      ["yankees", "New York Yankees"],
+      ["red sox", "Boston Red Sox"],
+    ]);
+    const mascotsFound = new Set();
+    ocrLineTexts.forEach((line) => {
+      const normalized = normalizeLine(line);
+      if (mascotMap.has(normalized)) mascotsFound.add(mascotMap.get(normalized));
+    });
+    if (mascotsFound.size === 1) {
+      const team = Array.from(mascotsFound)[0];
+      setIfEmpty("team", team);
+      setIfEmpty("sport", "Baseball");
+    }
   }
 
   if (!resolved.condition) {

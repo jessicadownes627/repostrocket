@@ -384,6 +384,7 @@ export function ListingProvider({ children }) {
     const requestSportsAnalysisImpl = async (params) => {
       const incomingForce = params?.force;
       const incomingBypass = params?.bypassAllGuards;
+      const scanSide = params?.scanSide;
       console.assert(incomingForce === true, "FORCE FLAG LOST BEFORE STORE");
       console.log("[listingStore] requestSportsAnalysis entered");
       console.log("[listingStore] flags received (raw):", {
@@ -475,6 +476,7 @@ export function ListingProvider({ children }) {
           frontImage: prep.payload?.frontImage || null,
           backImage: prep.payload?.backImage || null,
           nameZoneCrops: prep.payload?.nameZoneCrops || null,
+          scanSide,
           frontCorners: Array.isArray(payload?.frontCorners) ? payload.frontCorners : [],
           backCorners: Array.isArray(payload?.backCorners) ? payload.backCorners : [],
           altText: {
@@ -522,6 +524,18 @@ export function ListingProvider({ children }) {
           : [];
         const resolved = cardFactsResolver({ ocrLines, slabLabelLines });
         console.log("[CLIENT] resolver output", resolved);
+        const hasPositionSignal = ocrLines.some((line) => {
+          const text = typeof line === "string" ? line : line?.text || "";
+          return /\b(RUNNING BACK|QUARTERBACK|WIDE RECEIVER|LINEBACKER|TIGHT END|QB|WR|RB|TE|LB)\b/i.test(
+            text
+          );
+        });
+        const hasPartialMetadata =
+          resolved?.player &&
+          (resolved?.team || hasPositionSignal) &&
+          !resolved?.setName &&
+          !resolved?.year;
+        const metadataCompleteness = hasPartialMetadata ? "partial" : "complete";
         const hasIdentityFields = Boolean(
           resolved?.player ||
             resolved?.setName ||
@@ -530,9 +544,19 @@ export function ListingProvider({ children }) {
             resolved?.sport ||
             resolved?.cardTitle
         );
-        setReviewIdentity((prev) =>
-          hasIdentityFields ? resolved : prev || resolved || null
-        );
+        setReviewIdentity((prev) => {
+          if (!hasIdentityFields) return prev || resolved || null;
+          if (scanSide === "back" && prev) {
+            const merged = { ...prev, metadataCompleteness };
+            Object.entries(resolved).forEach(([key, value]) => {
+              if (value === "" || value === null || value === undefined) return;
+              if (merged[key] !== undefined && merged[key] !== null && merged[key] !== "") return;
+              merged[key] = value;
+            });
+            return merged;
+          }
+          return { ...resolved, metadataCompleteness };
+        });
         setAnalysisState("complete");
         return { success: true, intel: data, resolved };
       } catch (err) {

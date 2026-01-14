@@ -21,11 +21,14 @@ export async function handler(event) {
     }
 
     const body = JSON.parse(event.body || "{}");
-    const { frontImage, requestId, imageHash, nameZoneCrops } = body || {};
-    if (!frontImage) {
+    const { frontImage, backImage, requestId, imageHash, nameZoneCrops, scanSide } =
+      body || {};
+    const targetImage =
+      scanSide === "back" && backImage ? backImage : frontImage;
+    if (!targetImage) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: "Front image is required" }),
+        body: JSON.stringify({ error: "Target image is required" }),
       };
     }
 
@@ -37,8 +40,14 @@ export async function handler(event) {
         {
           role: "user",
           content: [
-            { type: "input_text", text: "Front of card for OCR." },
-            { type: "input_image", image_url: frontImage },
+            {
+              type: "input_text",
+              text:
+                scanSide === "back"
+                  ? "Back of card for OCR."
+                  : "Front of card for OCR.",
+            },
+            { type: "input_image", image_url: targetImage },
           ],
         },
       ],

@@ -32,6 +32,7 @@ export default function SingleListing() {
   const [price, setPrice] = useState("");
   const [brand, setBrand] = useState("");
   const [category, setCategory] = useState(isSports ? "Sports Cards" : "");
+  const [scanHintIndex, setScanHintIndex] = useState(0);
   const [condition, setCondition] = useState("");
   const [tags, setTags] = useState([]);
 
@@ -82,6 +83,10 @@ export default function SingleListing() {
           .join(" · ")
       : "Graded (details pending)"
     : "Raw";
+  const metadataCompleteness = reviewIdentity?.metadataCompleteness;
+  const hasBackPhoto =
+    Array.isArray(listingData?.secondaryPhotos) &&
+    listingData.secondaryPhotos.length > 0;
   const displayPlayer =
     identityPlayer && identityPlayer !== identitySetName ? identityPlayer : "";
   const frontCorners = Array.isArray(listingData?.frontCorners)
@@ -110,6 +115,16 @@ export default function SingleListing() {
     setCondition(listingData.condition ?? "");
     setCategory("Sports Cards");
   }, [isSports, listingData]);
+
+  useEffect(() => {
+    if (!isSports) return;
+    if (!analysisInFlight) return;
+    const hints = ["Scanning surface…", "Reading print…", "Checking edges…"];
+    const timer = setInterval(() => {
+      setScanHintIndex((prev) => (prev + 1) % hints.length);
+    }, 1800);
+    return () => clearInterval(timer);
+  }, [isSports, analysisInFlight]);
 
   /* =========================================================
      =============== SPORTS REVIEW LAYOUT =====================
@@ -211,14 +226,29 @@ export default function SingleListing() {
             </div>
           )}
           {!analysisComplete && (
-            <div className="text-sm uppercase tracking-[0.3em] opacity-60 mt-6 text-center">
-              Analyzing card details…
+            <div className="text-xs uppercase tracking-[0.28em] opacity-60 mt-6 text-center">
+              {["Scanning surface…", "Reading print…", "Checking edges…"][scanHintIndex]}
             </div>
           )}
         </div>
 
         {analysisComplete && (
           <>
+            {metadataCompleteness === "partial" && (
+              <div className="lux-card mb-6">
+                <div className="text-sm text-white/70">
+                  Set &amp; year not visible on card front
+                </div>
+                {hasBackPhoto && (
+                  <button
+                    className="mt-3 px-4 py-2 rounded-full border border-white/20 text-xs uppercase tracking-[0.28em] text-white/80 hover:bg-white/10 transition"
+                    onClick={() => requestSportsAnalysis({ force: true, scanSide: "back" })}
+                  >
+                    Scan back of card
+                  </button>
+                )}
+              </div>
+            )}
             <div
               className="lux-card mb-10"
               style={{
