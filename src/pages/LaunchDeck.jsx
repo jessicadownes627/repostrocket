@@ -25,6 +25,19 @@ export default function LaunchDeck() {
 
   const activeListing = listings.length ? listings[0] : null;
   const resolvedIdentity = activeListing?.reviewIdentity || reviewIdentity || null;
+  const resolvedGrade =
+    resolvedIdentity?.grade && resolvedIdentity?.isSlabbed
+      ? [
+          `Mint ${resolvedIdentity.grade}`,
+          resolvedIdentity?.grader,
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      : resolvedIdentity?.grade
+      ? [resolvedIdentity?.condition, resolvedIdentity?.grade]
+          .filter(Boolean)
+          .join(" ")
+      : "";
   const identityTitle = resolvedIdentity ? composeCardTitle(resolvedIdentity) : "";
   const identityDescription = resolvedIdentity
     ? [
@@ -33,6 +46,7 @@ export default function LaunchDeck() {
         resolvedIdentity.year && `Year: ${resolvedIdentity.year}`,
         resolvedIdentity.team && `Team: ${resolvedIdentity.team}`,
         resolvedIdentity.sport && `Sport: ${resolvedIdentity.sport}`,
+        resolvedGrade && `Condition: ${resolvedGrade}`,
       ]
         .filter(Boolean)
         .join("\n")
@@ -42,6 +56,7 @@ export default function LaunchDeck() {
         ...activeListing,
         title: identityTitle || activeListing.title,
         description: activeListing.description || identityDescription,
+        condition: resolvedGrade || activeListing.condition,
         reviewIdentity: resolvedIdentity,
       }
     : null;
@@ -172,8 +187,11 @@ export default function LaunchDeck() {
     }
   };
 
+  const isSportsListing =
+    activeListing?.category === "Sports Cards" ||
+    listingData?.category === "Sports Cards";
   const goBackToEditor = () =>
-    navigate("/single-listing", { state: { mode: "casual" } });
+    navigate("/single-listing", { state: { mode: isSportsListing ? "sports" : "casual" } });
 
   return (
     <div className="min-h-screen bg-[#050807] text-[#E8E1D0] px-6 py-10">
@@ -214,6 +232,7 @@ export default function LaunchDeck() {
                 <PreviewCard
                   platform={platformKey}
                   item={normalizedListing}
+                  editLabel={isSportsListing ? "Back to Review" : "Edit Details"}
                   platformTitle={
                     platformPreview?.titles
                       ? platformPreview.titles[platformKey]

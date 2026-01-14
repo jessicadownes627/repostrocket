@@ -2,13 +2,6 @@ import React from "react";
 import { buildListingExportLinks } from "../utils/exportListing";
 import { getPhotoUrl } from "../utils/photoHelpers";
 
-function safeCopy(text) {
-  if (!text) return;
-  if (navigator?.clipboard?.writeText) {
-    navigator.clipboard.writeText(text).catch(() => {});
-  }
-}
-
 const APPAREL_CATEGORIES = new Set([
   "Tops",
   "Bottoms",
@@ -54,6 +47,7 @@ export default function PreviewCard({
   platform,
   item,
   onEdit,
+  editLabel = "Edit Details",
   platformTitle,
   platformDescription,
   onLaunch,
@@ -129,7 +123,7 @@ export default function PreviewCard({
             onClick={onEdit}
             className="text-[11px] px-3 py-1 rounded-full border border-[rgba(232,213,168,0.30)] text-[rgba(232,213,168,0.80)] hover:bg-black/50 transition"
           >
-            Edit Details
+            {editLabel}
           </button>
         )}
       </div>
@@ -207,14 +201,20 @@ export default function PreviewCard({
             <button
               type="button"
               className="w-full text-[11px] px-3 py-2 rounded-xl border border-[rgba(232,213,168,0.45)] text-[rgba(232,213,168,0.9)] bg-transparent hover:bg-black/25 transition"
-              onClick={() => safeCopy(displayTitle)}
+              onClick={() =>
+                navigator?.clipboard?.writeText &&
+                navigator.clipboard.writeText(displayTitle)
+              }
             >
               Copy Title
             </button>
             <button
               type="button"
               className="w-full text-[11px] px-3 py-2 rounded-xl border border-[rgba(232,213,168,0.35)] text-[rgba(232,213,168,0.85)] bg-transparent hover:bg-black/25 transition"
-              onClick={() => safeCopy(displayDescription)}
+              onClick={() =>
+                navigator?.clipboard?.writeText &&
+                navigator.clipboard.writeText(displayDescription)
+              }
             >
               Copy Description
             </button>
@@ -223,7 +223,8 @@ export default function PreviewCard({
                 type="button"
                 className="w-full text-[11px] px-3 py-2 rounded-xl border border-[rgba(232,213,168,0.35)] text-[rgba(232,213,168,0.85)] bg-transparent hover:bg-black/25 transition"
                 onClick={() =>
-                  safeCopy(
+                  navigator?.clipboard?.writeText &&
+                  navigator.clipboard.writeText(
                     typeof item.price === "number"
                       ? item.price.toString()
                       : item.price || ""

@@ -34,6 +34,18 @@ export default function LaunchListing() {
     return rawTitle;
   }, [rawTitle, cardAttributes, reviewIdentity]);
 
+  const resolvedGrade = useMemo(() => {
+    if (!reviewIdentity?.grade) return "";
+    if (reviewIdentity?.isSlabbed) {
+      return [ `Mint ${reviewIdentity.grade}`, reviewIdentity?.grader ]
+        .filter(Boolean)
+        .join(" · ");
+    }
+    return [reviewIdentity?.condition, reviewIdentity?.grade]
+      .filter(Boolean)
+      .join(" ");
+  }, [reviewIdentity]);
+
   const ebayTitle = useMemo(() => {
     if (!baseTitle) return "";
     return baseTitle.slice(0, 80);
@@ -62,6 +74,7 @@ export default function LaunchListing() {
         reviewIdentity.year && `Year: ${reviewIdentity.year}`,
         reviewIdentity.team && `Team: ${reviewIdentity.team}`,
         reviewIdentity.sport && `Sport: ${reviewIdentity.sport}`,
+        resolvedGrade && `Condition: ${resolvedGrade}`,
       ].filter(Boolean);
       if (identityLines.length) {
         return identityLines.join("\n");
