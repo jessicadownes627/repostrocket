@@ -71,8 +71,10 @@ export default function LaunchListing() {
     if (reviewIdentity) {
       const identityTeam = reviewIdentity?.team || "";
       const identitySport = reviewIdentity?.sport || "";
+      const identityBrand = reviewIdentity?.brand || "";
       const identityLines = [
         reviewIdentity.player && `Player: ${reviewIdentity.player}`,
+        identityBrand && `Brand: ${identityBrand}`,
         reviewIdentity.setName && `Set: ${reviewIdentity.setName}`,
         reviewIdentity.year && `Year: ${reviewIdentity.year}`,
         identityTeam && `Team: ${identityTeam}`,

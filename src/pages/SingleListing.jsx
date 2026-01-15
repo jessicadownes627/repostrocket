@@ -20,6 +20,7 @@ export default function SingleListing() {
     reviewIdentity,
     analysisState,
     requestSportsAnalysis,
+    setReviewIdentityField,
   } = useListingStore();
 
   const mode = location.state?.mode ?? "casual";
@@ -35,13 +36,17 @@ export default function SingleListing() {
   const [scanHintIndex, setScanHintIndex] = useState(0);
   const [condition, setCondition] = useState("");
   const [tags, setTags] = useState([]);
+  const [activeAssistField, setActiveAssistField] = useState("");
 
   const detectedFrontImage =
     listingData?.editedPhoto ||
     listingData?.frontImage ||
     getPhotoUrl(listingData?.photos?.[0]) ||
     "";
-  const detectedBackImage = listingData?.backImage || "";
+  const detectedBackImage =
+    listingData?.backImage ||
+    getPhotoUrl(listingData?.secondaryPhotos?.[0]) ||
+    "";
   const detectedSlabImage = listingData?.slabImage || "";
   const identityPlayer =
     reviewIdentity?.player ||
@@ -52,6 +57,11 @@ export default function SingleListing() {
     reviewIdentity?.setName ||
     listingData?.identity?.setName ||
     listingData?.setName ||
+    "";
+  const identityBrand =
+    reviewIdentity?.brand ||
+    listingData?.identity?.brand ||
+    listingData?.brand ||
     "";
   const identityTeam = reviewIdentity?.team || "";
   const identityYear =
@@ -87,6 +97,44 @@ export default function SingleListing() {
   const hasBackPhoto =
     Array.isArray(listingData?.secondaryPhotos) &&
     listingData.secondaryPhotos.length > 0;
+  const assistSuggestions = (field) => {
+    if (!listingData) return [];
+    const suggestions = new Set();
+    if (field === "player") {
+      [
+        listingData?.identity?.player,
+        listingData?.player,
+        listingData?.cardAttributes?.player,
+      ].forEach((value) => value && suggestions.add(value));
+    }
+    if (field === "team") {
+      [
+        listingData?.identity?.team,
+        listingData?.team,
+        listingData?.cardAttributes?.team,
+      ].forEach((value) => value && suggestions.add(value));
+    }
+    if (field === "year") {
+      [
+        listingData?.identity?.year,
+        listingData?.year,
+        listingData?.cardAttributes?.year,
+      ].forEach((value) => value && suggestions.add(String(value)));
+    }
+    if (field === "setName") {
+      [
+        listingData?.identity?.setName,
+        listingData?.setName,
+        listingData?.cardAttributes?.setName,
+        listingData?.cardAttributes?.setBrand,
+      ].forEach((value) => value && suggestions.add(value));
+    }
+    return Array.from(suggestions);
+  };
+  const handleAssistPick = (field, value) => {
+    setReviewIdentityField(field, value);
+    setActiveAssistField("");
+  };
   const displayPlayer =
     identityPlayer && identityPlayer !== identitySetName ? identityPlayer : "";
   const frontCorners = Array.isArray(listingData?.frontCorners)
@@ -97,6 +145,7 @@ export default function SingleListing() {
     : [];
   const cornersReviewed = frontCorners.length > 0 || backCorners.length > 0;
   const hasIdentityData = reviewIdentity !== null;
+  const analysisComplete = !analysisInFlight && hasIdentityData;
   const titleSetName =
     identitySetName && identitySetName !== identityPlayer ? identitySetName : "";
   const displayTitle = composeCardTitle({
@@ -144,109 +193,114 @@ export default function SingleListing() {
         <h1 className="text-center text-3xl mb-10">Single Listing</h1>
 
         <div className="lux-card mb-10">
-          <div className="scan-frame relative w-full max-w-[360px] mx-auto">
-            {detectedFrontImage && (
-              <img
-                src={detectedFrontImage}
-                alt="Card under analysis"
-                className="w-full max-h-[50vh] rounded-2xl border border-white/10 object-cover"
-              />
-            )}
-            <div
-              className="absolute inset-0 rounded-2xl"
-              style={{
-                background:
-                  "linear-gradient(120deg, rgba(255,255,255,0.04), rgba(255,255,255,0))",
-                opacity: showScanOverlay ? 1 : 0,
-                transition: "opacity 600ms ease",
-                pointerEvents: "none",
-              }}
-            />
-            <div
-              className="scan-line"
-              style={{
-                opacity: showScanOverlay ? 1 : 0,
-                transition: "opacity 600ms ease",
-                animation: showScanOverlay ? undefined : "none",
-              }}
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-[160px,1fr] gap-6 items-start">
+            <div>
+              <div className="scan-frame relative w-full max-w-[160px] mx-auto">
+                {detectedFrontImage && (
+                  <img
+                    src={detectedFrontImage}
+                    alt="Front of card"
+                    className="w-full h-44 rounded-2xl border border-white/10 object-cover"
+                  />
+                )}
+                <div
+                  className="absolute inset-0 rounded-2xl"
+                  style={{
+                    background:
+                      "linear-gradient(120deg, rgba(255,255,255,0.04), rgba(255,255,255,0))",
+                    opacity: showScanOverlay ? 1 : 0,
+                    transition: "opacity 600ms ease",
+                    pointerEvents: "none",
+                  }}
+                />
+                <div
+                  className="scan-line"
+                  style={{
+                    opacity: showScanOverlay ? 1 : 0,
+                    transition: "opacity 600ms ease",
+                    animation: showScanOverlay ? undefined : "none",
+                  }}
+                />
+              </div>
+              {detectedBackImage && (
+                <div className="mt-3 w-full max-w-[160px] mx-auto">
+                  <img
+                    src={detectedBackImage}
+                    alt="Back of card"
+                    className="w-full h-28 rounded-xl border border-white/10 object-cover"
+                  />
+                </div>
+              )}
+            </div>
+            <div className="space-y-4">
+              {frontCorners.length > 0 && (
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.3em] opacity-60 mb-2">
+                    Front Corners
+                  </div>
+                  <div className="grid grid-cols-4 gap-2">
+                    {frontCorners.slice(0, 4).map((entry, idx) => (
+                      <div
+                        key={`front-corner-${idx}`}
+                        className="rounded-lg border border-white/10 bg-black/30 overflow-hidden"
+                      >
+                        {entry?.url ? (
+                          <img
+                            src={entry.url}
+                            alt={entry?.label || "Front corner detail"}
+                            className="w-full h-16 object-cover"
+                          />
+                        ) : (
+                          <div className="h-16 flex items-center justify-center text-[10px] opacity-40">
+                            No data
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {backCorners.length > 0 && (
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.3em] opacity-60 mb-2">
+                    Back Corners
+                  </div>
+                  <div className="grid grid-cols-4 gap-2">
+                    {backCorners.slice(0, 4).map((entry, idx) => (
+                      <div
+                        key={`back-corner-${idx}`}
+                        className="rounded-lg border border-white/10 bg-black/30 overflow-hidden"
+                      >
+                        {entry?.url ? (
+                          <img
+                            src={entry.url}
+                            alt={entry?.label || "Back corner detail"}
+                            className="w-full h-16 object-cover"
+                          />
+                        ) : (
+                          <div className="h-16 flex items-center justify-center text-[10px] opacity-40">
+                            No data
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {!analysisComplete && (
+                <div className="text-[11px] uppercase tracking-[0.28em] opacity-60">
+                  {["Scanning surface…", "Reading print…", "Checking edges…"][scanHintIndex]}
+                </div>
+              )}
+            </div>
           </div>
-          {frontCorners.length > 0 && (
-            <div className="mt-5">
-              <div className="text-xs uppercase tracking-[0.3em] opacity-60 mb-2">
-                Front Corners
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                {frontCorners.slice(0, 4).map((entry, idx) => (
-                  <div
-                    key={`front-corner-${idx}`}
-                    className="rounded-xl border border-white/10 bg-black/30 overflow-hidden"
-                  >
-                    {entry?.url ? (
-                      <img
-                        src={entry.url}
-                        alt={entry?.label || "Front corner detail"}
-                        className="w-full h-20 object-cover"
-                      />
-                    ) : (
-                      <div className="h-20 flex items-center justify-center text-[10px] opacity-40">
-                        No data
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {backCorners.length > 0 && (
-            <div className="mt-5">
-              <div className="text-xs uppercase tracking-[0.3em] opacity-60 mb-2">
-                Back Corners
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                {backCorners.slice(0, 4).map((entry, idx) => (
-                  <div
-                    key={`back-corner-${idx}`}
-                    className="rounded-xl border border-white/10 bg-black/30 overflow-hidden"
-                  >
-                    {entry?.url ? (
-                      <img
-                        src={entry.url}
-                        alt={entry?.label || "Back corner detail"}
-                        className="w-full h-20 object-cover"
-                      />
-                    ) : (
-                      <div className="h-20 flex items-center justify-center text-[10px] opacity-40">
-                        No data
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {!analysisComplete && (
-            <div className="text-xs uppercase tracking-[0.28em] opacity-60 mt-6 text-center">
-              {["Scanning surface…", "Reading print…", "Checking edges…"][scanHintIndex]}
-            </div>
-          )}
         </div>
 
         {analysisComplete && (
           <>
             {metadataCompleteness === "partial" && (
               <div className="lux-card mb-6">
-                <div className="text-sm text-white/70">
-                  Set &amp; year not visible on card front
-                </div>
-                {hasBackPhoto && (
-                  <button
-                    className="mt-3 px-4 py-2 rounded-full border border-white/20 text-xs uppercase tracking-[0.28em] text-white/80 hover:bg-white/10 transition"
-                    onClick={() => requestSportsAnalysis({ force: true, scanSide: "back" })}
-                  >
-                    Scan back of card
-                  </button>
-                )}
+                <div className="text-sm text-white/70">Card profile in progress</div>
               </div>
             )}
             <div
@@ -256,6 +310,9 @@ export default function SingleListing() {
                 transition: "opacity 500ms ease",
               }}
             >
+              <div className="text-[11px] uppercase tracking-[0.3em] text-white/45 mb-4">
+                Front scan complete
+              </div>
               {displayTitle && (
                 <>
                   <div className="text-xs uppercase tracking-[0.35em] opacity-60 mb-3">
@@ -270,23 +327,157 @@ export default function SingleListing() {
                     Player
                   </div>
                   <div className="text-lg mt-1 text-white">
-                    {displayPlayer || <span className="text-white/35">—</span>}
+                    {displayPlayer || (
+                      <button
+                        type="button"
+                        className="inline-flex items-center px-2.5 py-1 rounded-full border border-white/15 text-[11px] uppercase tracking-[0.22em] text-white/70 hover:bg-white/10 transition"
+                        onClick={() =>
+                          setActiveAssistField((prev) =>
+                            prev === "player" ? "" : "player"
+                          )
+                        }
+                      >
+                        Add
+                      </button>
+                    )}
+                    {displayPlayer && (
+                      <button
+                        type="button"
+                        className="ml-2 inline-flex items-center px-2.5 py-1 rounded-full border border-white/15 text-[11px] uppercase tracking-[0.22em] text-white/60 hover:bg-white/10 transition"
+                        onClick={() => {
+                          const value = window.prompt("Player name", displayPlayer);
+                          if (value) {
+                            setReviewIdentityField("player", value.trim(), {
+                              force: true,
+                              source: "manual",
+                              userVerified: true,
+                            });
+                          }
+                        }}
+                      >
+                        Edit
+                      </button>
+                    )}
                   </div>
+                  {activeAssistField === "player" && !displayPlayer && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {assistSuggestions("player").map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          className="px-2.5 py-1 rounded-full border border-white/15 text-[11px] text-white/70 hover:bg-white/10 transition"
+                          onClick={() => handleAssistPick("player", option)}
+                        >
+                          {option}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        className="px-2.5 py-1 rounded-full border border-white/15 text-[11px] text-white/60 hover:bg-white/10 transition"
+                        onClick={() => {
+                          const value = window.prompt("Player name");
+                          if (value) handleAssistPick("player", value.trim());
+                        }}
+                      >
+                        Enter manually
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <div className="text-xs uppercase tracking-[0.3em] opacity-60">
                     Year
                   </div>
                   <div className="text-lg mt-1 text-white/85">
-                    {identityYear || <span className="text-white/35">—</span>}
+                    {identityYear || (
+                      <button
+                        type="button"
+                        className="inline-flex items-center px-2.5 py-1 rounded-full border border-white/15 text-[11px] uppercase tracking-[0.22em] text-white/70 hover:bg-white/10 transition"
+                        onClick={() =>
+                          setActiveAssistField((prev) =>
+                            prev === "year" ? "" : "year"
+                          )
+                        }
+                      >
+                        Add
+                      </button>
+                    )}
                   </div>
+                  {activeAssistField === "year" && !identityYear && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {assistSuggestions("year").map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          className="px-2.5 py-1 rounded-full border border-white/15 text-[11px] text-white/70 hover:bg-white/10 transition"
+                          onClick={() => handleAssistPick("year", option)}
+                        >
+                          {option}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        className="px-2.5 py-1 rounded-full border border-white/15 text-[11px] text-white/60 hover:bg-white/10 transition"
+                        onClick={() => {
+                          const value = window.prompt("Year");
+                          if (value) handleAssistPick("year", value.trim());
+                        }}
+                      >
+                        Enter manually
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <div className="text-xs uppercase tracking-[0.3em] opacity-60">
                     Set
                   </div>
                   <div className="text-lg mt-1 text-white/85">
-                    {identitySetName || <span className="text-white/35">—</span>}
+                    {identitySetName || (
+                      <button
+                        type="button"
+                        className="inline-flex items-center px-2.5 py-1 rounded-full border border-white/15 text-[11px] uppercase tracking-[0.22em] text-white/70 hover:bg-white/10 transition"
+                        onClick={() =>
+                          setActiveAssistField((prev) =>
+                            prev === "setName" ? "" : "setName"
+                          )
+                        }
+                      >
+                        Add
+                      </button>
+                    )}
+                  </div>
+                  {activeAssistField === "setName" && !identitySetName && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {assistSuggestions("setName").map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          className="px-2.5 py-1 rounded-full border border-white/15 text-[11px] text-white/70 hover:bg-white/10 transition"
+                          onClick={() => handleAssistPick("setName", option)}
+                        >
+                          {option}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        className="px-2.5 py-1 rounded-full border border-white/15 text-[11px] text-white/60 hover:bg-white/10 transition"
+                        onClick={() => {
+                          const value = window.prompt("Set / Brand");
+                          if (value) handleAssistPick("setName", value.trim());
+                        }}
+                      >
+                        Enter manually
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-[0.3em] opacity-60">
+                    Brand
+                  </div>
+                  <div className="text-lg mt-1 text-white/85">
+                    {identityBrand || <span className="text-white/35">—</span>}
                   </div>
                 </div>
                 <div>
@@ -294,8 +485,44 @@ export default function SingleListing() {
                     Team
                   </div>
                   <div className="text-lg mt-1 text-white/85">
-                    {identityTeam || <span className="text-white/35">—</span>}
+                    {identityTeam || (
+                      <button
+                        type="button"
+                        className="inline-flex items-center px-2.5 py-1 rounded-full border border-white/15 text-[11px] uppercase tracking-[0.22em] text-white/70 hover:bg-white/10 transition"
+                        onClick={() =>
+                          setActiveAssistField((prev) =>
+                            prev === "team" ? "" : "team"
+                          )
+                        }
+                      >
+                        Add
+                      </button>
+                    )}
                   </div>
+                  {activeAssistField === "team" && !identityTeam && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {assistSuggestions("team").map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          className="px-2.5 py-1 rounded-full border border-white/15 text-[11px] text-white/70 hover:bg-white/10 transition"
+                          onClick={() => handleAssistPick("team", option)}
+                        >
+                          {option}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        className="px-2.5 py-1 rounded-full border border-white/15 text-[11px] text-white/60 hover:bg-white/10 transition"
+                        onClick={() => {
+                          const value = window.prompt("Team");
+                          if (value) handleAssistPick("team", value.trim());
+                        }}
+                      >
+                        Enter manually
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <div className="text-xs uppercase tracking-[0.3em] opacity-60">

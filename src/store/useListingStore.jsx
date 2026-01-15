@@ -79,6 +79,25 @@ export function ListingProvider({ children }) {
     setLastAnalyzedHash(null);
   };
 
+  const setReviewIdentityField = (key, value, options = {}) => {
+    if (!key) return;
+    setReviewIdentity((prev) => {
+      if (!prev) return prev;
+      if (value === undefined || value === null || value === "") return prev;
+      const next = { ...prev };
+      if (!options.force && prev[key]) return prev;
+      next[key] = value;
+      if (options.source) {
+        next._sources = { ...(next._sources || {}), [key]: options.source };
+      }
+      if (options.userVerified) {
+        next.userVerified = { ...(next.userVerified || {}), [key]: true };
+      }
+      return next;
+    });
+  };
+
+
   const splitCornerEntries = (entries = []) => {
     const frontCorners = [];
     const backCorners = [];
@@ -242,6 +261,7 @@ export function ListingProvider({ children }) {
           team: promotions.team || "",
           year: promotions.year || "",
           setName: promotions.setName || "",
+          brand: promotions.brand || "",
           sport: promotions.sport || "",
           graded: typeof promotions.graded === "boolean" ? promotions.graded : null,
           cardTitle: promotions.cardTitle || "",
@@ -261,6 +281,7 @@ export function ListingProvider({ children }) {
           assignIdentity("player", resolvedFacts.player);
           assignIdentity("year", resolvedFacts.year);
           assignIdentity("setName", resolvedFacts.setName);
+          assignIdentity("brand", resolvedFacts.brand);
           assignIdentity("team", resolvedFacts.team);
           assignIdentity("sport", resolvedFacts.sport);
           assignIdentity("cardTitle", composedTitle);
@@ -294,6 +315,7 @@ export function ListingProvider({ children }) {
           assignListingField("team", resolvedFacts.team);
           assignListingField("year", resolvedFacts.year);
           assignListingField("setName", resolvedFacts.setName);
+          assignListingField("brand", resolvedFacts.brand);
           assignListingField("sport", resolvedFacts.sport);
           assignListingField("cardTitle", composedTitle);
           assignListingField("title", composedTitle);
@@ -314,6 +336,7 @@ export function ListingProvider({ children }) {
           team: resolvedFacts.team || "",
           year: resolvedFacts.year || "",
           setName: resolvedFacts.setName || "",
+          brand: resolvedFacts.brand || "",
           sport: resolvedFacts.sport || "",
           graded: resolvedFacts.graded,
           gradeStatus: composedGradeStatus,
@@ -384,7 +407,6 @@ export function ListingProvider({ children }) {
     const requestSportsAnalysisImpl = async (params) => {
       const incomingForce = params?.force;
       const incomingBypass = params?.bypassAllGuards;
-      const scanSide = params?.scanSide;
       console.assert(incomingForce === true, "FORCE FLAG LOST BEFORE STORE");
       console.log("[listingStore] requestSportsAnalysis entered");
       console.log("[listingStore] flags received (raw):", {
@@ -468,7 +490,7 @@ export function ListingProvider({ children }) {
           return { cancelled: true };
         }
 
-        console.log("[client] calling /.netlify/functions/cardIntel_v2", {
+        console.log("[client] calling /.netlify/functions/cardIntel_front", {
           requestId: prep.requestId,
           imageHash: prep.imageHash,
         });
@@ -476,7 +498,7 @@ export function ListingProvider({ children }) {
           frontImage: prep.payload?.frontImage || null,
           backImage: prep.payload?.backImage || null,
           nameZoneCrops: prep.payload?.nameZoneCrops || null,
-          scanSide,
+          backNameZoneCrops: prep.payload?.backNameZoneCrops || null,
           frontCorners: Array.isArray(payload?.frontCorners) ? payload.frontCorners : [],
           backCorners: Array.isArray(payload?.backCorners) ? payload.backCorners : [],
           altText: {
@@ -491,7 +513,7 @@ export function ListingProvider({ children }) {
           frontImage: minimalPayload.frontImage ? minimalPayload.frontImage.length : 0,
         });
         let data = null;
-        const response = await fetch("/.netlify/functions/cardIntel_v2", {
+        const response = await fetch("/.netlify/functions/cardIntel_front", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -536,28 +558,86 @@ export function ListingProvider({ children }) {
           !resolved?.setName &&
           !resolved?.year;
         const metadataCompleteness = hasPartialMetadata ? "partial" : "complete";
-        const hasIdentityFields = Boolean(
-          resolved?.player ||
-            resolved?.setName ||
-            resolved?.team ||
-            resolved?.year ||
-            resolved?.sport ||
-            resolved?.cardTitle
-        );
         setReviewIdentity((prev) => {
-          if (!hasIdentityFields) return prev || resolved || null;
-          if (scanSide === "back" && prev) {
-            const merged = { ...prev, metadataCompleteness };
-            Object.entries(resolved).forEach(([key, value]) => {
-              if (value === "" || value === null || value === undefined) return;
-              if (merged[key] !== undefined && merged[key] !== null && merged[key] !== "") return;
-              merged[key] = value;
+          const preserveUserVerified = (next) => {
+            if (!prev?.userVerified) return next;
+            const verifiedKeys = Object.keys(prev.userVerified).filter(
+              (key) => prev.userVerified[key]
+            );
+            if (!verifiedKeys.length) return next;
+            const merged = { ...next, userVerified: { ...prev.userVerified } };
+            merged._sources = { ...(merged._sources || {}) };
+            verifiedKeys.forEach((key) => {
+              if (prev[key]) {
+                merged[key] = prev[key];
+                merged._sources[key] = "manual";
+              }
             });
             return merged;
-          }
-          return { ...resolved, metadataCompleteness };
+          };
+          const next = preserveUserVerified({
+            ...resolved,
+            metadataCompleteness,
+            yearAttemptedSides: Array.from(
+              new Set(
+                [
+                  ...(prev?.yearAttemptedSides || []),
+                  null,
+                ].filter(Boolean)
+              )
+            ),
+          });
+          next.frontOcrLines = ocrLines;
+          return next;
         });
         setAnalysisState("complete");
+        if (minimalPayload.backImage || minimalPayload.nameZoneCrops?.slabLabel) {
+          fetch("/.netlify/functions/cardIntel_back", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              backImage: minimalPayload.backImage,
+              nameZoneCrops: minimalPayload.nameZoneCrops,
+              backNameZoneCrops: minimalPayload.backNameZoneCrops,
+              requestId: minimalPayload.requestId,
+              imageHash: minimalPayload.imageHash,
+            }),
+          })
+            .then((backResponse) => (backResponse.ok ? backResponse.json() : null))
+            .then((backData) => {
+              if (!backData) return;
+              const backOcrLines = Array.isArray(backData?.backOcrLines)
+                ? backData.backOcrLines
+                : [];
+              const slabLabelLines = Array.isArray(backData?.slabLabelLines)
+                ? backData.slabLabelLines
+                : [];
+              console.log("[CLIENT] back OCR lines", {
+                backCount: backOcrLines.length,
+                slabCount: slabLabelLines.length,
+              });
+              if (!backOcrLines.length && !slabLabelLines.length) return;
+              setReviewIdentity((prev) => {
+                if (!prev) return prev;
+                const resolvedBack = cardFactsResolver({
+                  ocrLines: prev.frontOcrLines || [],
+                  backOcrLines,
+                  slabLabelLines,
+                });
+                const merged = { ...prev };
+                Object.entries(resolvedBack).forEach(([key, value]) => {
+                  if (key === "_sources") return;
+                  if (value === "" || value === null || value === undefined) return;
+                  if (merged[key] !== undefined && merged[key] !== null && merged[key] !== "") return;
+                  merged[key] = value;
+                });
+                merged.backOcrLines = backOcrLines;
+                merged._sources = { ...(merged._sources || {}), ...(resolvedBack._sources || {}) };
+                return merged;
+              });
+            })
+            .catch(() => {});
+        }
         return { success: true, intel: data, resolved };
       } catch (err) {
         console.error("Sports card analysis failed:", err);
@@ -694,7 +774,8 @@ export function ListingProvider({ children }) {
       deleteDraft,
       loadDraft,
       consumeMagicUse,
-        setBatchMode,
+      setReviewIdentityField,
+      setBatchMode,
       analysisSessionId,
       analysisInFlight,
       lastAnalyzedHash,

@@ -25,6 +25,23 @@ export default function LaunchDeck() {
 
   const activeListing = listings.length ? listings[0] : null;
   const resolvedIdentity = activeListing?.reviewIdentity || reviewIdentity || null;
+  const usedBackForResolution = Array.isArray(resolvedIdentity?.yearAttemptedSides)
+    ? resolvedIdentity.yearAttemptedSides.includes("back")
+    : false;
+  const frontPhotos = Array.isArray(activeListing?.photos)
+    ? activeListing.photos
+    : Array.isArray(listingData?.photos)
+    ? listingData.photos
+    : [];
+  const backPhotos = Array.isArray(activeListing?.secondaryPhotos)
+    ? activeListing.secondaryPhotos
+    : Array.isArray(listingData?.secondaryPhotos)
+    ? listingData.secondaryPhotos
+    : [];
+  const launchPhotos =
+    usedBackForResolution && frontPhotos.length && backPhotos.length
+      ? [frontPhotos[0], backPhotos[0]]
+      : frontPhotos;
   const resolvedGrade =
     resolvedIdentity?.grade && resolvedIdentity?.isSlabbed
       ? [
@@ -49,9 +66,15 @@ export default function LaunchDeck() {
     listingData?.sport ||
     activeListing?.sport ||
     "";
+  const identityBrand =
+    resolvedIdentity?.brand ||
+    listingData?.brand ||
+    activeListing?.brand ||
+    "";
   const identityDescription = resolvedIdentity
     ? [
         resolvedIdentity.player && `Player: ${resolvedIdentity.player}`,
+        identityBrand && `Brand: ${identityBrand}`,
         resolvedIdentity.setName && `Set: ${resolvedIdentity.setName}`,
         resolvedIdentity.year && `Year: ${resolvedIdentity.year}`,
         identityTeam && `Team: ${identityTeam}`,
@@ -67,6 +90,9 @@ export default function LaunchDeck() {
         title: identityTitle || activeListing.title,
         description: activeListing.description || identityDescription,
         condition: resolvedGrade || activeListing.condition,
+        photos: launchPhotos,
+        secondaryPhotos: usedBackForResolution ? backPhotos : activeListing.secondaryPhotos,
+        brand: identityBrand || activeListing.brand,
         team: identityTeam || activeListing.team,
         sport: identitySport || activeListing.sport,
         frontCorners:

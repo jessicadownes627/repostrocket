@@ -21,63 +21,81 @@ export async function handler(event) {
     }
 
     const body = JSON.parse(event.body || "{}");
-    const { frontImage, backImage, requestId, imageHash, nameZoneCrops, scanSide } =
+    const { frontImage, backImage, requestId, imageHash, nameZoneCrops } =
       body || {};
-    const targetImage =
-      scanSide === "back" && backImage ? backImage : frontImage;
-    if (!targetImage) {
+    if (!frontImage) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: "Target image is required" }),
+        body: JSON.stringify({ error: "Front image is required" }),
       };
     }
 
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const response = await client.responses.create({
+    const slabLabelImage = nameZoneCrops?.slabLabel?.image || null;
+    const frontRequest = client.responses.create({
       model: "gpt-4o-mini",
       input: [
         { role: "system", content: SYSTEM_PROMPT },
         {
           role: "user",
           content: [
-            {
-              type: "input_text",
-              text:
-                scanSide === "back"
-                  ? "Back of card for OCR."
-                  : "Front of card for OCR.",
-            },
-            { type: "input_image", image_url: targetImage },
+            { type: "input_text", text: "Front of card for OCR." },
+            { type: "input_image", image_url: frontImage },
           ],
         },
       ],
     });
+    const backRequest = backImage
+      ? client.responses.create({
+          model: "gpt-4o-mini",
+          input: [
+            { role: "system", content: SYSTEM_PROMPT },
+            {
+              role: "user",
+              content: [
+                { type: "input_text", text: "Back of card for OCR." },
+                { type: "input_image", image_url: backImage },
+              ],
+            },
+          ],
+        })
+      : Promise.resolve(null);
+    const slabRequest = slabLabelImage
+      ? client.responses.create({
+          model: "gpt-4o-mini",
+          input: [
+            { role: "system", content: SYSTEM_PROMPT },
+            {
+              role: "user",
+              content: [
+                { type: "input_text", text: "Slab label OCR (top center)." },
+                { type: "input_image", image_url: slabLabelImage },
+              ],
+            },
+          ],
+        })
+      : Promise.resolve(null);
 
-    const raw = response.output_text || "";
-    const parsed = parseJsonSafe(raw);
-    const lines = Array.isArray(parsed?.lines) ? parsed.lines.filter(Boolean) : [];
-    let slabLabelLines = [];
-    const slabLabelImage = nameZoneCrops?.slabLabel?.image || null;
-    if (slabLabelImage) {
-      const slabResponse = await client.responses.create({
-        model: "gpt-4o-mini",
-        input: [
-          { role: "system", content: SYSTEM_PROMPT },
-          {
-            role: "user",
-            content: [
-              { type: "input_text", text: "Slab label OCR (top center)." },
-              { type: "input_image", image_url: slabLabelImage },
-            ],
-          },
-        ],
-      });
-      const slabRaw = slabResponse.output_text || "";
-      const slabParsed = parseJsonSafe(slabRaw);
-      slabLabelLines = Array.isArray(slabParsed?.lines)
-        ? slabParsed.lines.filter(Boolean)
-        : [];
-    }
+    const [frontResponse, backResponse, slabResponse] = await Promise.all([
+      frontRequest,
+      backRequest,
+      slabRequest,
+    ]);
+    const frontRaw = frontResponse?.output_text || "";
+    const frontParsed = parseJsonSafe(frontRaw);
+    const lines = Array.isArray(frontParsed?.lines)
+      ? frontParsed.lines.filter(Boolean)
+      : [];
+    const backRaw = backResponse?.output_text || "";
+    const backParsed = parseJsonSafe(backRaw);
+    const backOcrLines = Array.isArray(backParsed?.lines)
+      ? backParsed.lines.filter(Boolean)
+      : [];
+    const slabRaw = slabResponse?.output_text || "";
+    const slabParsed = parseJsonSafe(slabRaw);
+    const slabLabelLines = Array.isArray(slabParsed?.lines)
+      ? slabParsed.lines.filter(Boolean)
+      : [];
 
     return {
       statusCode: 200,
@@ -87,6 +105,7 @@ export async function handler(event) {
         imageHash: imageHash || null,
         ocrLines: lines,
         slabLabelLines,
+        backOcrLines,
       }),
     };
   } catch (err) {

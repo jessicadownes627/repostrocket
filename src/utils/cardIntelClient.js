@@ -224,6 +224,12 @@ export async function prepareCardIntelPayload(item = {}, options = {}) {
     if (nameZoneCrops && Object.keys(nameZoneCrops).length) {
       payload.nameZoneCrops = nameZoneCrops;
     }
+    if (backImage) {
+      const backNameZoneCrops = await buildNameZoneCrops(backImage);
+      if (backNameZoneCrops && Object.keys(backNameZoneCrops).length) {
+        payload.backNameZoneCrops = backNameZoneCrops;
+      }
+    }
   }
   const imageHash = await computeImageHash(frontImage, backImage);
   const requestId =

@@ -138,6 +138,10 @@ const LEAGUE_LOOKUP = [
   { league: "NBA", sport: "Basketball", keywords: NBA_TEAMS },
   { league: "NHL", sport: "Hockey", keywords: NHL_TEAMS },
 ];
+const PLAYER_CANONICAL_MAP = new Map([
+  ["jamaai charles", "Jamaal Charles"],
+  ["jamaal charles", "Jamaal Charles"],
+]);
 
 const POSITION_MAP = {
   "P": "Pitcher",
@@ -228,6 +232,43 @@ function titleCase(value = "") {
 
 function normalizeLine(line = "") {
   return line.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function normalizePlayerKey(value = "") {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizePlayerNameFinal(name = "") {
+  if (!name) return "";
+  const collapsed = name.replace(/(.)\1{2,}/g, "$1$1");
+  const suffixes = new Set(["JR", "SR", "II", "III", "IV", "V"]);
+  const normalized = collapsed
+    .split(/\s+/)
+    .map((word) => {
+      const parts = word.split("-");
+      const normalizedParts = parts.map((part) => {
+        const cleaned = part.replace(/\./g, "");
+        const upper = cleaned.toUpperCase();
+        if (suffixes.has(upper)) {
+          if (upper === "JR") return "Jr.";
+          if (upper === "SR") return "Sr.";
+          return upper;
+        }
+        return cleaned
+          ? cleaned[0].toUpperCase() + cleaned.slice(1).toLowerCase()
+          : "";
+      });
+      return normalizedParts.join("-");
+    })
+    .join(" ")
+    .trim();
+  if (!normalized) return "";
+  const canonical = PLAYER_CANONICAL_MAP.get(normalizePlayerKey(normalized));
+  return canonical || normalized;
 }
 
 function pickTeamFromOcr(lines) {
@@ -470,10 +511,17 @@ function pickPlayerFromOcr(lines, teamLine, brandLine) {
 export function resolveCardFacts(intel = {}) {
   const resolved = {};
   if (!intel) return resolved;
+  resolved._sources = {};
   const setIfEmpty = (key, value) => {
     if (resolved[key]) return;
     if (value === undefined || value === null || value === "") return;
     resolved[key] = value;
+  };
+  const setSourceIfUnset = (key, source, wasSet) => {
+    if (wasSet) return;
+    if (!resolved[key]) return;
+    if (resolved._sources[key]) return;
+    resolved._sources[key] = source;
   };
   const brandTokens = new Set([
     "upper",
@@ -491,6 +539,10 @@ export function resolveCardFacts(intel = {}) {
   const isLineArrayInput = Array.isArray(intel);
   const providedOcrLines =
     !isLineArrayInput && Array.isArray(intel?.ocrLines) ? intel.ocrLines : null;
+  const providedBackOcrLines =
+    !isLineArrayInput && Array.isArray(intel?.backOcrLines)
+      ? intel.backOcrLines
+      : null;
   const providedSlabLabelLines =
     !isLineArrayInput && Array.isArray(intel?.slabLabelLines)
       ? intel.slabLabelLines
@@ -500,16 +552,24 @@ export function resolveCardFacts(intel = {}) {
     : providedOcrLines
     ? normalizeOcrLineInput(providedOcrLines)
     : collectOcrLines(intel);
+  const backOcrLines = providedBackOcrLines
+    ? normalizeOcrLineInput(providedBackOcrLines)
+    : [];
   const slabLabelLines = providedSlabLabelLines
     ? normalizeOcrLineInput(providedSlabLabelLines)
     : [];
   console.log("[RESOLVER] slabLabelLines", slabLabelLines);
   console.log("[RESOLVER INPUT OCR]", ocrLines);
   if (!ocrLines.length) return resolved;
-  const ocrLineTexts = ocrLines
+  const ocrLineTextsFront = ocrLines
     .map((line) => (line?.text ? line.text : ""))
     .map((line) => line.trim())
     .filter(Boolean);
+  const ocrLineTextsBack = backOcrLines
+    .map((line) => (line?.text ? line.text : ""))
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const ocrLineTexts = [...ocrLineTextsFront, ...ocrLineTextsBack];
   const slabLineTexts = slabLabelLines
     .map((line) => (line?.text ? line.text : ""))
     .map((line) => line.trim())
@@ -529,7 +589,19 @@ export function resolveCardFacts(intel = {}) {
     slabLineTexts.some((line) => slabTokenRegex.test(line) || slabLabelNumberRegex.test(line)) ||
     ocrLineTexts.some((line) => slabTokenRegex.test(line) || slabLabelNumberRegex.test(line));
   const lineTexts = slabSignal && slabLineTexts.length ? slabLineTexts : ocrLineTexts;
+  const pickOcrSourceForValue = (value) => {
+    if (!value) return "front-ocr";
+    const normalized = normalizeLine(value);
+    const inFront = ocrLineTextsFront.some((line) => normalizeLine(line).includes(normalized));
+    const inBack = ocrLineTextsBack.some((line) => normalizeLine(line).includes(normalized));
+    if (inBack && !inFront) return "back-ocr";
+    return "front-ocr";
+  };
+  const lineSource = slabSignal && slabLineTexts.length ? "slab" : "front-ocr";
+  const hadSlabbed = Boolean(resolved.isSlabbed);
   setIfEmpty("isSlabbed", slabSignal);
+  setSourceIfUnset("isSlabbed", slabSignal ? lineSource : "inferred", hadSlabbed);
+  const brandSourceLines = ocrLineTextsBack.length ? ocrLineTextsBack : ocrLineTexts;
   const brandKeywords = [
     "upper deck",
     "topps",
@@ -540,6 +612,112 @@ export function resolveCardFacts(intel = {}) {
     "score",
     "optic",
   ];
+  const setKeywords = [
+    "upper deck",
+    "topps",
+    "donruss",
+    "bowman",
+    "fleer",
+    "score",
+    "optic",
+    "prizm",
+    "select",
+  ];
+  const manufacturerTokens = ["panini"];
+  const cardSpecificTokens = ["card", "rookie", "rc", "set", "series", "edition"];
+  const productMap = [
+    {
+      brand: "Panini",
+      sport: "Football",
+      families: ["Donruss", "Donruss Optic", "Score", "Prestige", "Select", "Prizm"],
+    },
+    {
+      brand: "Topps",
+      sport: "Baseball",
+      families: ["Topps Chrome", "Bowman Chrome"],
+    },
+    {
+      brand: "Upper Deck",
+      sport: "Hockey",
+      families: ["Upper Deck", "Upper Deck Young Guns"],
+    },
+  ];
+  if (!resolved.brand) {
+    const brandTokens = [
+      { token: "panini", label: "Panini" },
+      { token: "topps", label: "Topps" },
+      { token: "upper deck", label: "Upper Deck" },
+    ];
+    const brandHit = brandTokens.find(({ token }) =>
+      brandSourceLines.some((line) => normalizeLine(line).includes(token))
+    );
+    if (brandHit) {
+      const hadBrand = Boolean(resolved.brand);
+      setIfEmpty("brand", brandHit.label);
+      setSourceIfUnset("brand", "back-ocr", hadBrand);
+    }
+  }
+  let familyCandidates = [];
+  if (brandSourceLines.length) {
+    const hasDonruss = brandSourceLines.some((line) =>
+      normalizeLine(line).includes("donruss")
+    );
+    const hasOptic = brandSourceLines.some((line) =>
+      normalizeLine(line).includes("optic")
+    );
+    const hasScore = brandSourceLines.some((line) =>
+      normalizeLine(line).includes("score")
+    );
+    const hasPrestige = brandSourceLines.some((line) =>
+      normalizeLine(line).includes("prestige")
+    );
+    const hasSelect = brandSourceLines.some((line) =>
+      normalizeLine(line).includes("select")
+    );
+    const hasPrizm = brandSourceLines.some((line) =>
+      normalizeLine(line).includes("prizm")
+    );
+    const hasUpperDeck = brandSourceLines.some((line) =>
+      normalizeLine(line).includes("upper deck")
+    );
+    const hasYoungGuns = brandSourceLines.some((line) =>
+      normalizeLine(line).includes("young guns")
+    );
+    const hasBowman = brandSourceLines.some((line) =>
+      normalizeLine(line).includes("bowman")
+    );
+    const hasChrome = brandSourceLines.some((line) =>
+      normalizeLine(line).includes("chrome")
+    );
+    if (hasDonruss && hasOptic) {
+      familyCandidates.push("Donruss Optic");
+    }
+    if (hasDonruss) familyCandidates.push("Donruss");
+    if (hasScore) familyCandidates.push("Score");
+    if (hasPrestige) familyCandidates.push("Prestige");
+    if (hasSelect) familyCandidates.push("Select");
+    if (hasPrizm) familyCandidates.push("Prizm");
+    if (hasBowman && hasChrome) familyCandidates.push("Bowman Chrome");
+    if (hasChrome && !hasBowman) familyCandidates.push("Topps Chrome");
+    if (hasYoungGuns) familyCandidates.push("Upper Deck Young Guns");
+    if (hasUpperDeck) familyCandidates.push("Upper Deck");
+    familyCandidates = Array.from(new Set(familyCandidates));
+  }
+  const positionTokens = [
+    "running back",
+    "quarterback",
+    "wide receiver",
+    "linebacker",
+    "tight end",
+    "qb",
+    "rb",
+    "wr",
+    "te",
+    "lb",
+  ];
+  const statTokens = ["yds", "td", "avg", "rec", "att"];
+  const verbTokens = ["had", "was", "returned", "averaged"];
+  const teamKeywords = [...MLB_TEAMS, ...NFL_TEAMS, ...NBA_TEAMS, ...NHL_TEAMS];
   const excludedPlayerLines = new Set();
   const excludedPlayerTokens = new Set();
   const addExcludedTokens = (line) => {
@@ -584,7 +762,9 @@ export function resolveCardFacts(intel = {}) {
         ocrGraderLine ? new RegExp(`\\b${token}\\b`, "i").test(ocrGraderLine) : false
       ) ||
       "";
+    const hadGrader = Boolean(resolved.grader);
     setIfEmpty("grader", grader);
+    setSourceIfUnset("grader", "slab", hadGrader);
   }
 
   if (!resolved.player && slabLineTexts.length) {
@@ -598,7 +778,17 @@ export function resolveCardFacts(intel = {}) {
       .filter((line) => {
         if (excludedPlayerLines.has(line)) return false;
         if (isBrandFragmentLine(line)) return false;
+        if (line.length > 30) return false;
+        if (/[•,]/.test(line)) return false;
+        if (/\d/.test(line)) return false;
         if (!/[aeiou]/i.test(line)) return false;
+        if (statTokens.some((token) => new RegExp(`\\b${token}\\b`, "i").test(line))) return false;
+        if (positionTokens.some((token) => new RegExp(`\\b${token}\\b`, "i").test(line))) return false;
+        if (verbTokens.some((token) => new RegExp(`\\b${token}\\b`, "i").test(line))) return false;
+        const normalized = normalizeLine(line);
+        if (teamKeywords.some((team) => normalized.includes(team))) return false;
+        const wordCount = line.split(/\s+/).filter(Boolean).length;
+        if (wordCount < 2 || wordCount > 4) return false;
         return isAllCapsNameLine(line) || isCommaNameLine(line);
       })
       .sort((a, b) => b.length - a.length)[0];
@@ -611,7 +801,9 @@ export function resolveCardFacts(intel = {}) {
         if (["II", "III", "IV"].includes(upper)) return upper;
         return word[0].toUpperCase() + word.slice(1).toLowerCase();
       });
+      const hadPlayer = Boolean(resolved.player);
       setIfEmpty("player", words.join(" "));
+      setSourceIfUnset("player", "slab", hadPlayer);
     }
   }
 
@@ -620,15 +812,27 @@ export function resolveCardFacts(intel = {}) {
     if (line.length <= 3) return false;
     if (/^\d+$/.test(line)) return false;
     const words = line.split(/\s+/).filter(Boolean);
-    if (words.length < 2) return false;
+    if (words.length < 2 || words.length > 4) return false;
+    if (line.length > 30) return false;
     if (!/[aeiou]/i.test(line)) return false;
     if (line === line.toUpperCase()) return false;
     if (isBrandFragmentLine(line)) return false;
+    if (/[•,]/.test(line)) return false;
+    if (/\d/.test(line)) return false;
+    if (statTokens.some((token) => new RegExp(`\\b${token}\\b`, "i").test(line))) return false;
+    if (positionTokens.some((token) => new RegExp(`\\b${token}\\b`, "i").test(line))) return false;
+    if (verbTokens.some((token) => new RegExp(`\\b${token}\\b`, "i").test(line))) return false;
+    const normalizedLine = normalizeLine(line);
+    if (teamKeywords.some((team) => normalizedLine.includes(team))) return false;
     const normalizedTokens = normalizeLine(line).split(/\s+/).filter(Boolean);
     if (normalizedTokens.every((token) => excludedPlayerTokens.has(token))) return false;
     return /[A-Za-z]/.test(line);
   });
-  setIfEmpty("player", player);
+  {
+    const hadPlayer = Boolean(resolved.player);
+    setIfEmpty("player", player);
+    setSourceIfUnset("player", pickOcrSourceForValue(player), hadPlayer);
+  }
   if (!resolved.player) {
     const isNameToken = (text) => {
       if (!text) return false;
@@ -666,22 +870,13 @@ export function resolveCardFacts(intel = {}) {
       const name = `${normalizeToken(firstParts[0])} ${normalizeToken(secondParts[0])}`;
       if (!best) best = name;
     }
-    setIfEmpty("player", best);
+    {
+      const hadPlayer = Boolean(resolved.player);
+      setIfEmpty("player", best);
+      setSourceIfUnset("player", pickOcrSourceForValue(best), hadPlayer);
+    }
   }
   if (!resolved.player) {
-    const positionTokens = [
-      "running back",
-      "quarterback",
-      "wide receiver",
-      "linebacker",
-      "tight end",
-      "qb",
-      "rb",
-      "wr",
-      "te",
-      "lb",
-    ];
-    const teamKeywords = [...MLB_TEAMS, ...NFL_TEAMS, ...NBA_TEAMS, ...NHL_TEAMS];
     const candidate = ocrLineTexts.find((line) => {
       const words = line.split(/\s+/).filter(Boolean);
       if (words.length < 2 || words.length > 3) return false;
@@ -690,6 +885,10 @@ export function resolveCardFacts(intel = {}) {
       if (brandKeywords.some((brand) => normalized.includes(brand))) return false;
       if (positionTokens.some((token) => normalized.includes(token))) return false;
       if (teamKeywords.some((team) => normalized.includes(team))) return false;
+      if (statTokens.some((token) => normalized.includes(token))) return false;
+      if (verbTokens.some((token) => normalized.includes(token))) return false;
+      if (/[•,]/.test(line)) return false;
+      if (/\d/.test(line)) return false;
       const isAllCaps = line === line.toUpperCase();
       const isTitleCase = words.every(
         (word) => word[0] === word[0].toUpperCase()
@@ -697,11 +896,62 @@ export function resolveCardFacts(intel = {}) {
       return isAllCaps || isTitleCase;
     });
     if (candidate) {
+      const hadPlayer = Boolean(resolved.player);
       setIfEmpty("player", titleCase(candidate));
+      setSourceIfUnset("player", pickOcrSourceForValue(candidate), hadPlayer);
     }
+  }
+  if (
+    resolved.player &&
+    ["slab", "front-ocr", "back-ocr"].includes(resolved._sources?.player)
+  ) {
+    resolved.player = normalizePlayerNameFinal(resolved.player);
+  }
+
+  const isValidYearLine = (line) => {
+    const normalized = normalizeLine(line);
+    if (!normalized) return false;
+    const hasSetToken = setKeywords.some((token) => normalized.includes(token));
+    const hasCardSpecific = cardSpecificTokens.some((token) =>
+      normalized.includes(token)
+    );
+    const isLegalLine =
+      /copyright|tm|trademark/.test(normalized) ||
+      normalized.includes("america") ||
+      manufacturerTokens.some((token) => normalized.includes(token));
+    if (hasSetToken) return true;
+    if (hasCardSpecific && !isLegalLine) return true;
+    return false;
+  };
+  const backYearCandidates = [];
+  const addBackYear = (line) => {
+    if (!line || !isValidYearLine(line)) return;
+    const matches = line.match(/\b(19|20)\d{2}\b/g);
+    if (!matches) return;
+    matches.forEach((value) => {
+      const yearNumber = Number(value);
+      if (yearNumber >= 1900 && yearNumber <= 2099) {
+        backYearCandidates.push(yearNumber);
+      }
+    });
+  };
+  ocrLineTextsBack.forEach((line) => addBackYear(line));
+  if (backYearCandidates.length) {
+    const latest = Math.max(...backYearCandidates);
+    const hadYear = Boolean(resolved.year);
+    setIfEmpty("year", String(latest));
+    setSourceIfUnset("year", "back-ocr", hadYear);
   }
 
   const yearCandidates = lineTexts
+    .filter((line) => {
+      const normalized = normalizeLine(line);
+      if (!normalized) return false;
+      if (statTokens.some((token) => normalized.includes(token))) return false;
+      if (verbTokens.some((token) => normalized.includes(token))) return false;
+      if (!isValidYearLine(line)) return false;
+      return true;
+    })
     .map((line) => line.match(/\b(19|20)\d{2}\b/))
     .filter(Boolean)
     .map((match) => match[0])
@@ -711,7 +961,19 @@ export function resolveCardFacts(intel = {}) {
     });
   if (yearCandidates.length) {
     const oldest = Math.min(...yearCandidates.map(Number));
+    const hadYear = Boolean(resolved.year);
     setIfEmpty("year", String(oldest));
+    setSourceIfUnset("year", pickOcrSourceForValue(String(oldest)), hadYear);
+  }
+  if (!resolved.year) {
+    const setYearMatch = resolved.setName
+      ? resolved.setName.match(/\b(19|20)\d{2}\b/)
+      : null;
+    if (setYearMatch) {
+      const hadYear = Boolean(resolved.year);
+      setIfEmpty("year", setYearMatch[0]);
+      setSourceIfUnset("year", "inferred", hadYear);
+    }
   }
   if (!resolved.year) {
     const brandLineIndexes = [];
@@ -744,7 +1006,9 @@ export function resolveCardFacts(intel = {}) {
     }
     if (twoDigitCandidates.length) {
       const oldest = Math.min(...twoDigitCandidates);
+      const hadYear = Boolean(resolved.year);
       setIfEmpty("year", String(oldest));
+      setSourceIfUnset("year", pickOcrSourceForValue(String(oldest)), hadYear);
     }
   }
 
@@ -754,21 +1018,36 @@ export function resolveCardFacts(intel = {}) {
     .filter((line) => {
       const normalized = normalizeLine(line);
       if (!normalized) return false;
-      return brandKeywords.some((brand) => normalized.includes(brand));
+      return setKeywords.some((brand) => normalized.includes(brand));
     })
     .map((line) => {
-      const cleaned = line
-        .split(/\s+/)
-        .filter((word) => !noiseWords.has(word.toLowerCase()))
-        .join(" ");
+      const tokens = line.split(/\s+/).filter(Boolean);
+      const filteredTokens = tokens.filter((word) => {
+        const lower = word.toLowerCase();
+        if (noiseWords.has(lower)) return false;
+        if (manufacturerTokens.includes(lower)) return false;
+        return true;
+      });
+      if (!filteredTokens.length) return null;
+      const cleaned = filteredTokens.join(" ");
       const candidate = cleaned || line;
       const wordCount = candidate.split(/\s+/).filter(Boolean).length;
       return { raw: candidate, wordCount };
-    });
+    })
+    .filter(Boolean);
   if (setCandidates.length) {
     const maxWords = Math.max(...setCandidates.map((c) => c.wordCount));
-    const longest = setCandidates.find((c) => c.wordCount === maxWords);
-    if (longest) setIfEmpty("setName", titleCase(longest.raw));
+    const candidates = setCandidates.filter((c) => c.wordCount === maxWords);
+    const hasDonrussLogoHint = Boolean(intel?.logoHints?.donruss);
+    const donrussCandidate =
+      hasDonrussLogoHint &&
+      candidates.find((c) => normalizeLine(c.raw).includes("donruss"));
+    const longest = donrussCandidate || candidates[0];
+    if (longest) {
+      const hadSet = Boolean(resolved.setName);
+      setIfEmpty("setName", titleCase(longest.raw));
+      setSourceIfUnset("setName", pickOcrSourceForValue(longest.raw), hadSet);
+    }
   }
 
   if (!resolved.sport) {
@@ -786,7 +1065,9 @@ export function resolveCardFacts(intel = {}) {
       ? normalizeLine(resolved.player)
       : "";
     if (normalizedPlayer && playerSportMap.has(normalizedPlayer)) {
+      const hadSport = Boolean(resolved.sport);
       setIfEmpty("sport", playerSportMap.get(normalizedPlayer));
+      setSourceIfUnset("sport", "inferred", hadSport);
     }
     if (!resolved.sport) {
       const leagueLine = lineTexts.find((line) =>
@@ -795,16 +1076,43 @@ export function resolveCardFacts(intel = {}) {
       const leagueMatch = leagueTokens.find((entry) =>
         leagueLine ? new RegExp(`\\b${entry.token}\\b`, "i").test(leagueLine) : false
       );
-      if (leagueMatch) setIfEmpty("sport", leagueMatch.sport);
+      if (leagueMatch) {
+        const hadSport = Boolean(resolved.sport);
+        setIfEmpty("sport", leagueMatch.sport);
+        setSourceIfUnset("sport", lineSource, hadSport);
+      }
     }
     if (!resolved.sport && normalizedSet) {
       if (normalizedSet.includes("donruss optic") && resolved.year && Number(resolved.year) >= 2020) {
+        const hadSport = Boolean(resolved.sport);
         setIfEmpty("sport", "Football");
+        setSourceIfUnset("sport", "inferred", hadSport);
       }
     }
     if (!resolved.sport && resolved.team) {
       const inferred = matchesLeague(resolved.team);
-      if (inferred?.sport) setIfEmpty("sport", inferred.sport);
+      if (inferred?.sport) {
+        const hadSport = Boolean(resolved.sport);
+        setIfEmpty("sport", inferred.sport);
+        setSourceIfUnset("sport", "inferred", hadSport);
+      }
+    }
+  }
+  if (resolved.year && resolved.brand && resolved.sport && !resolved.setName) {
+    const candidates = productMap.find(
+      (entry) =>
+        entry.brand === resolved.brand && entry.sport === resolved.sport
+    );
+    if (candidates?.families?.length && familyCandidates.length) {
+      const familySet = new Set(familyCandidates);
+      const matches = candidates.families.filter((family) =>
+        familySet.has(family)
+      );
+      if (matches.length === 1) {
+        const hadSet = Boolean(resolved.setName);
+        setIfEmpty("setName", matches[0]);
+        setSourceIfUnset("setName", "inferred", hadSet);
+      }
     }
   }
   if (
@@ -820,7 +1128,11 @@ export function resolveCardFacts(intel = {}) {
     ]);
     const normalizedOcr = ocrLineTexts.map((line) => normalizeLine(line));
     const hasMlbPlayer = normalizedOcr.some((line) => mlbPlayers.has(line));
-    if (hasMlbPlayer) setIfEmpty("sport", "Baseball");
+    if (hasMlbPlayer) {
+      const hadSport = Boolean(resolved.sport);
+      setIfEmpty("sport", "Baseball");
+      setSourceIfUnset("sport", "inferred", hadSport);
+    }
   }
   if (
     resolved.isSlabbed === false &&
@@ -852,7 +1164,9 @@ export function resolveCardFacts(intel = {}) {
       normalizedSet.includes(entry.token)
     );
     if (match && hasFootballSignal) {
+      const hadYear = Boolean(resolved.year);
       setIfEmpty("year", match.year);
+      setSourceIfUnset("year", "inferred", hadYear);
     }
   }
   if (resolved.isSlabbed === false && !resolved.team) {
@@ -863,22 +1177,12 @@ export function resolveCardFacts(intel = {}) {
         return words.length >= 2 && /[aeiou]/i.test(line);
       });
     if (hasNameSignal) {
-      const positionTokens = [
-        "running back",
-        "quarterback",
-        "wide receiver",
-        "linebacker",
-        "tight end",
-        "qb",
-        "wr",
-        "te",
-        "lb",
-      ];
       const mascotMap = new Map([
         ["titans", "Tennessee Titans"],
         ["eagles", "Philadelphia Eagles"],
         ["cowboys", "Dallas Cowboys"],
         ["packers", "Green Bay Packers"],
+        ["chiefs", "Kansas City Chiefs"],
       ]);
       const normalizedLines = ocrLineTexts.map((line) => normalizeLine(line));
       const hasPosition = normalizedLines.some((line) =>
@@ -893,8 +1197,12 @@ export function resolveCardFacts(intel = {}) {
       });
       if (hasPosition && mascotsFound.size === 1) {
         const team = Array.from(mascotsFound)[0];
+        const hadTeam = Boolean(resolved.team);
+        const hadSport = Boolean(resolved.sport);
         setIfEmpty("team", team);
         setIfEmpty("sport", "Football");
+        setSourceIfUnset("team", pickOcrSourceForValue(team), hadTeam);
+        setSourceIfUnset("sport", "inferred", hadSport);
       }
     }
   }
@@ -903,7 +1211,9 @@ export function resolveCardFacts(intel = {}) {
     const footballSets = ["donruss optic", "prizm", "select"];
     const isFootballSet = footballSets.some((set) => normalizedSet.includes(set));
     if (!resolved.sport && isFootballSet && resolved.team && matchesLeague(resolved.team)?.league === "NFL") {
+      const hadSport = Boolean(resolved.sport);
       setIfEmpty("sport", "Football");
+      setSourceIfUnset("sport", "inferred", hadSport);
     }
   }
 
@@ -925,13 +1235,18 @@ export function resolveCardFacts(intel = {}) {
       );
       return match ? match.team : "";
     };
-    setIfEmpty("team", findTeamByPair(slabLineTexts));
+    {
+      const hadTeam = Boolean(resolved.team);
+      setIfEmpty("team", findTeamByPair(slabLineTexts));
+      setSourceIfUnset("team", "slab", hadTeam);
+    }
     if (!resolved.team) {
+      const hadTeam = Boolean(resolved.team);
       setIfEmpty("team", findTeamByPair(ocrLineTexts));
+      setSourceIfUnset("team", pickOcrSourceForValue(resolved.team), hadTeam);
     }
   }
 
-  const teamKeywords = [...MLB_TEAMS, ...NFL_TEAMS, ...NBA_TEAMS, ...NHL_TEAMS];
   const teamTokenMap = new Map([
     ["mets", "New York Mets"],
     ["orioles", "Baltimore Orioles"],
@@ -975,7 +1290,13 @@ export function resolveCardFacts(intel = {}) {
   });
   if (teamCandidate && !resolved.team) {
     const normalized = normalizeLine(teamCandidate);
+    const hadTeam = Boolean(resolved.team);
     setIfEmpty("team", teamTokenMap.get(normalized) || titleCase(teamCandidate));
+    setSourceIfUnset(
+      "team",
+      slabLineTexts.length ? "slab" : pickOcrSourceForValue(teamCandidate),
+      hadTeam
+    );
   }
   if (!resolved.team && resolved.isSlabbed === false) {
     const teamPairs = [
@@ -1003,11 +1324,19 @@ export function resolveCardFacts(intel = {}) {
       return false;
     };
     const match = teamPairs.find((pair) => isPairWithinRange(pair));
-    if (match) setIfEmpty("team", match.team);
+    if (match) {
+      const hadTeam = Boolean(resolved.team);
+      setIfEmpty("team", match.team);
+      setSourceIfUnset("team", pickOcrSourceForValue(match.team), hadTeam);
+    }
   }
   if (resolved.team) {
     const inferred = matchesLeague(resolved.team);
-    if (inferred?.sport) setIfEmpty("sport", inferred.sport);
+    if (inferred?.sport) {
+      const hadSport = Boolean(resolved.sport);
+      setIfEmpty("sport", inferred.sport);
+      setSourceIfUnset("sport", "inferred", hadSport);
+    }
   }
   if (
     resolved.isSlabbed === false &&
@@ -1031,8 +1360,12 @@ export function resolveCardFacts(intel = {}) {
     });
     if (mascotsFound.size === 1) {
       const team = Array.from(mascotsFound)[0];
+      const hadTeam = Boolean(resolved.team);
+      const hadSport = Boolean(resolved.sport);
       setIfEmpty("team", team);
       setIfEmpty("sport", "Baseball");
+      setSourceIfUnset("team", pickOcrSourceForValue(team), hadTeam);
+      setSourceIfUnset("sport", "inferred", hadSport);
     }
   }
 
@@ -1068,9 +1401,15 @@ export function resolveCardFacts(intel = {}) {
       );
     const isSlabbed = slabIndexes.length > 0 || slabMeta;
     if (isSlabbed) {
+      const hadSlabbed = Boolean(resolved.isSlabbed);
+      const hadGrader = Boolean(resolved.grader);
+      const hadCondition = Boolean(resolved.condition);
       setIfEmpty("isSlabbed", true);
       setIfEmpty("grader", grader);
       setIfEmpty("condition", "Graded");
+      setSourceIfUnset("isSlabbed", "slab", hadSlabbed);
+      setSourceIfUnset("grader", "slab", hadGrader);
+      setSourceIfUnset("condition", "slab", hadCondition);
       if (!resolved.grade && grader) {
         const gradeWordRegex =
           /\b(?:GEM\s*MT|GEM\s*MINT|MINT|NM-MT|NM|EX-MT|EX|VG|GOOD|POOR)\b/i;
@@ -1106,7 +1445,9 @@ export function resolveCardFacts(intel = {}) {
           )
           .find(Boolean);
         if (gradeMatch) {
+          const hadGrade = Boolean(resolved.grade);
           setIfEmpty("grade", gradeMatch[0]);
+          setSourceIfUnset("grade", "slab", hadGrade);
         }
       }
     }
@@ -1154,8 +1495,12 @@ export function resolveCardFacts(intel = {}) {
           )
           .find(Boolean);
         if (gradeMatch) {
+          const hadGrader = Boolean(resolved.grader);
+          const hadGrade = Boolean(resolved.grade);
           setIfEmpty("grader", slabGrader);
           setIfEmpty("grade", gradeMatch[0]);
+          setSourceIfUnset("grader", "slab", hadGrader);
+          setSourceIfUnset("grade", "slab", hadGrade);
         }
       }
     }
@@ -1188,9 +1533,19 @@ export function resolveCardFacts(intel = {}) {
       })
       .find(Boolean);
     if (match) {
+      const hadGrade = Boolean(resolved.grade);
+      const hadCondition = Boolean(resolved.condition);
       setIfEmpty("grade", match.grade);
       setIfEmpty("condition", match.condition);
+      setSourceIfUnset("grade", "slab", hadGrade);
+      setSourceIfUnset("condition", "slab", hadCondition);
     }
+  }
+  if (
+    resolved.player &&
+    ["slab", "front-ocr", "back-ocr"].includes(resolved._sources?.player)
+  ) {
+    resolved.player = normalizePlayerNameFinal(resolved.player);
   }
   console.log("[RESOLVER OUTPUT]", resolved);
   return resolved;
