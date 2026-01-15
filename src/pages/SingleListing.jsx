@@ -82,8 +82,9 @@ export default function SingleListing() {
     listingData?.cardAttributes?.grade ||
     "";
   const isSlabbed = reviewIdentity?.isSlabbed === true;
+  const backOcrStatus = reviewIdentity?.backOcrStatus || "";
   const showGraded = isSlabbed || reviewIdentity?.graded === true;
-  const gradeLabel = reviewIdentity?.isSlabbed
+  const gradeLabel = isSlabbed
     ? reviewIdentity?.grade
       ? [
           `Mint ${reviewIdentity?.grade}`,
@@ -91,7 +92,9 @@ export default function SingleListing() {
         ]
           .filter(Boolean)
           .join(" · ")
-      : "Graded (details pending)"
+      : "Graded"
+    : backOcrStatus === "pending"
+    ? ""
     : "Raw";
   const metadataCompleteness = reviewIdentity?.metadataCompleteness;
   const hasBackPhoto =

@@ -264,10 +264,18 @@ export function ListingProvider({ children }) {
           brand: promotions.brand || "",
           sport: promotions.sport || "",
           graded: typeof promotions.graded === "boolean" ? promotions.graded : null,
+          isSlabbed: promotions.isSlabbed === true,
+          grade: promotions.grade || "",
+          grader: promotions.grader || "",
+          condition: promotions.condition || "",
           cardTitle: promotions.cardTitle || "",
         };
         const composedTitle = resolvedFacts.cardTitle || "";
-        const composedGradeStatus = resolvedFacts.graded === false ? "Raw" : "";
+        const composedGradeStatus = resolvedFacts.isSlabbed
+          ? "Graded"
+          : resolvedFacts.graded === false
+          ? "Raw"
+          : "";
         const composedIsGraded = resolvedFacts.graded;
         setListingData((prev) => {
           const nextIdentity = { ...(prev.identity || {}) };
@@ -284,6 +292,10 @@ export function ListingProvider({ children }) {
           assignIdentity("brand", resolvedFacts.brand);
           assignIdentity("team", resolvedFacts.team);
           assignIdentity("sport", resolvedFacts.sport);
+          assignIdentity("isSlabbed", resolvedFacts.isSlabbed);
+          assignIdentity("grade", resolvedFacts.grade);
+          assignIdentity("grader", resolvedFacts.grader);
+          assignIdentity("condition", resolvedFacts.condition);
           assignIdentity("cardTitle", composedTitle);
           assignIdentity("title", composedTitle);
           assignIdentity("gradeStatus", composedGradeStatus);
@@ -317,6 +329,10 @@ export function ListingProvider({ children }) {
           assignListingField("setName", resolvedFacts.setName);
           assignListingField("brand", resolvedFacts.brand);
           assignListingField("sport", resolvedFacts.sport);
+          assignListingField("isSlabbed", resolvedFacts.isSlabbed);
+          assignListingField("grade", resolvedFacts.grade);
+          assignListingField("grader", resolvedFacts.grader);
+          assignListingField("condition", resolvedFacts.condition);
           assignListingField("cardTitle", composedTitle);
           assignListingField("title", composedTitle);
           if (composedGradeStatus && !mergedUpdates.gradeStatus) {
@@ -338,6 +354,10 @@ export function ListingProvider({ children }) {
           setName: resolvedFacts.setName || "",
           brand: resolvedFacts.brand || "",
           sport: resolvedFacts.sport || "",
+          isSlabbed: resolvedFacts.isSlabbed,
+          grade: resolvedFacts.grade || "",
+          grader: resolvedFacts.grader || "",
+          condition: resolvedFacts.condition || "",
           graded: resolvedFacts.graded,
           gradeStatus: composedGradeStatus,
         });
@@ -588,6 +608,10 @@ export function ListingProvider({ children }) {
             ),
           });
           next.frontOcrLines = ocrLines;
+          next.backOcrStatus =
+            minimalPayload.backImage || minimalPayload.nameZoneCrops?.slabLabel
+              ? "pending"
+              : "complete";
           return next;
         });
         setAnalysisState("complete");
@@ -628,10 +652,15 @@ export function ListingProvider({ children }) {
                 Object.entries(resolvedBack).forEach(([key, value]) => {
                   if (key === "_sources") return;
                   if (value === "" || value === null || value === undefined) return;
+                  if (key === "isSlabbed" && value === true) {
+                    merged.isSlabbed = true;
+                    return;
+                  }
                   if (merged[key] !== undefined && merged[key] !== null && merged[key] !== "") return;
                   merged[key] = value;
                 });
                 merged.backOcrLines = backOcrLines;
+                merged.backOcrStatus = "complete";
                 merged._sources = { ...(merged._sources || {}), ...(resolvedBack._sources || {}) };
                 return merged;
               });

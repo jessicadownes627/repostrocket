@@ -36,12 +36,15 @@ export default function LaunchListing() {
   }, [rawTitle, cardAttributes, reviewIdentity]);
 
   const resolvedGrade = useMemo(() => {
-    if (!reviewIdentity?.grade) return "";
     if (reviewIdentity?.isSlabbed) {
-      return [ `Mint ${reviewIdentity.grade}`, reviewIdentity?.grader ]
-        .filter(Boolean)
-        .join(" · ");
+      if (reviewIdentity?.grade) {
+        return [ `Mint ${reviewIdentity.grade}`, reviewIdentity?.grader ]
+          .filter(Boolean)
+          .join(" · ");
+      }
+      return "Graded";
     }
+    if (!reviewIdentity?.grade) return "";
     return [reviewIdentity?.condition, reviewIdentity?.grade]
       .filter(Boolean)
       .join(" ");

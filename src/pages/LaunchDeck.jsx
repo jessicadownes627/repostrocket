@@ -54,6 +54,8 @@ export default function LaunchDeck() {
       ? [resolvedIdentity?.condition, resolvedIdentity?.grade]
           .filter(Boolean)
           .join(" ")
+      : resolvedIdentity?.isSlabbed
+      ? "Graded"
       : "";
   const identityTitle = resolvedIdentity ? composeCardTitle(resolvedIdentity) : "";
   const identityTeam =

@@ -560,7 +560,9 @@ export function resolveCardFacts(intel = {}) {
     : [];
   console.log("[RESOLVER] slabLabelLines", slabLabelLines);
   console.log("[RESOLVER INPUT OCR]", ocrLines);
-  if (!ocrLines.length) return resolved;
+  if (!ocrLines.length && !backOcrLines.length && !slabLabelLines.length) {
+    return resolved;
+  }
   const ocrLineTextsFront = ocrLines
     .map((line) => (line?.text ? line.text : ""))
     .map((line) => line.trim())
@@ -599,8 +601,27 @@ export function resolveCardFacts(intel = {}) {
   };
   const lineSource = slabSignal && slabLineTexts.length ? "slab" : "front-ocr";
   const hadSlabbed = Boolean(resolved.isSlabbed);
-  setIfEmpty("isSlabbed", slabSignal);
-  setSourceIfUnset("isSlabbed", slabSignal ? lineSource : "inferred", hadSlabbed);
+  if (slabSignal) {
+    resolved.isSlabbed = true;
+    if (!resolved._sources.isSlabbed) {
+      resolved._sources.isSlabbed = lineSource;
+    }
+  }
+  if (slabLineTexts.length) {
+    const slabYearCandidates = slabLineTexts
+      .map((line) => line.match(/\b(19|20)\d{2}\b/))
+      .filter(Boolean)
+      .map((match) => match[0])
+      .filter((value) => {
+        const yearNumber = Number(value);
+        return yearNumber >= 1900 && yearNumber <= 2099;
+      });
+    if (slabYearCandidates.length) {
+      const latest = Math.max(...slabYearCandidates.map(Number));
+      resolved.year = String(latest);
+      resolved._sources.year = "slab";
+    }
+  }
   const brandSourceLines = ocrLineTextsBack.length ? ocrLineTextsBack : ocrLineTexts;
   const brandKeywords = [
     "upper deck",
@@ -625,23 +646,18 @@ export function resolveCardFacts(intel = {}) {
   ];
   const manufacturerTokens = ["panini"];
   const cardSpecificTokens = ["card", "rookie", "rc", "set", "series", "edition"];
-  const productMap = [
-    {
-      brand: "Panini",
-      sport: "Football",
-      families: ["Donruss", "Donruss Optic", "Score", "Prestige", "Select", "Prizm"],
+  const productMap = {
+    panini: {
+      football: ["Donruss", "Score", "Prizm"],
+      basketball: ["Prizm", "Donruss"],
     },
-    {
-      brand: "Topps",
-      sport: "Baseball",
-      families: ["Topps Chrome", "Bowman Chrome"],
+    topps: {
+      baseball: ["Topps Chrome", "Topps"],
     },
-    {
-      brand: "Upper Deck",
-      sport: "Hockey",
-      families: ["Upper Deck", "Upper Deck Young Guns"],
+    upper_deck: {
+      hockey: ["Upper Deck"],
     },
-  ];
+  };
   if (!resolved.brand) {
     const brandTokens = [
       { token: "panini", label: "Panini" },
@@ -656,52 +672,6 @@ export function resolveCardFacts(intel = {}) {
       setIfEmpty("brand", brandHit.label);
       setSourceIfUnset("brand", "back-ocr", hadBrand);
     }
-  }
-  let familyCandidates = [];
-  if (brandSourceLines.length) {
-    const hasDonruss = brandSourceLines.some((line) =>
-      normalizeLine(line).includes("donruss")
-    );
-    const hasOptic = brandSourceLines.some((line) =>
-      normalizeLine(line).includes("optic")
-    );
-    const hasScore = brandSourceLines.some((line) =>
-      normalizeLine(line).includes("score")
-    );
-    const hasPrestige = brandSourceLines.some((line) =>
-      normalizeLine(line).includes("prestige")
-    );
-    const hasSelect = brandSourceLines.some((line) =>
-      normalizeLine(line).includes("select")
-    );
-    const hasPrizm = brandSourceLines.some((line) =>
-      normalizeLine(line).includes("prizm")
-    );
-    const hasUpperDeck = brandSourceLines.some((line) =>
-      normalizeLine(line).includes("upper deck")
-    );
-    const hasYoungGuns = brandSourceLines.some((line) =>
-      normalizeLine(line).includes("young guns")
-    );
-    const hasBowman = brandSourceLines.some((line) =>
-      normalizeLine(line).includes("bowman")
-    );
-    const hasChrome = brandSourceLines.some((line) =>
-      normalizeLine(line).includes("chrome")
-    );
-    if (hasDonruss && hasOptic) {
-      familyCandidates.push("Donruss Optic");
-    }
-    if (hasDonruss) familyCandidates.push("Donruss");
-    if (hasScore) familyCandidates.push("Score");
-    if (hasPrestige) familyCandidates.push("Prestige");
-    if (hasSelect) familyCandidates.push("Select");
-    if (hasPrizm) familyCandidates.push("Prizm");
-    if (hasBowman && hasChrome) familyCandidates.push("Bowman Chrome");
-    if (hasChrome && !hasBowman) familyCandidates.push("Topps Chrome");
-    if (hasYoungGuns) familyCandidates.push("Upper Deck Young Guns");
-    if (hasUpperDeck) familyCandidates.push("Upper Deck");
-    familyCandidates = Array.from(new Set(familyCandidates));
   }
   const positionTokens = [
     "running back",
@@ -1012,43 +982,6 @@ export function resolveCardFacts(intel = {}) {
     }
   }
 
-  const noiseWords = new Set(["base", "series", "edition"]);
-  const setCandidates = lineTexts
-    .filter((line) => /^[A-Z0-9\s.'&-]+$/.test(line))
-    .filter((line) => {
-      const normalized = normalizeLine(line);
-      if (!normalized) return false;
-      return setKeywords.some((brand) => normalized.includes(brand));
-    })
-    .map((line) => {
-      const tokens = line.split(/\s+/).filter(Boolean);
-      const filteredTokens = tokens.filter((word) => {
-        const lower = word.toLowerCase();
-        if (noiseWords.has(lower)) return false;
-        if (manufacturerTokens.includes(lower)) return false;
-        return true;
-      });
-      if (!filteredTokens.length) return null;
-      const cleaned = filteredTokens.join(" ");
-      const candidate = cleaned || line;
-      const wordCount = candidate.split(/\s+/).filter(Boolean).length;
-      return { raw: candidate, wordCount };
-    })
-    .filter(Boolean);
-  if (setCandidates.length) {
-    const maxWords = Math.max(...setCandidates.map((c) => c.wordCount));
-    const candidates = setCandidates.filter((c) => c.wordCount === maxWords);
-    const hasDonrussLogoHint = Boolean(intel?.logoHints?.donruss);
-    const donrussCandidate =
-      hasDonrussLogoHint &&
-      candidates.find((c) => normalizeLine(c.raw).includes("donruss"));
-    const longest = donrussCandidate || candidates[0];
-    if (longest) {
-      const hadSet = Boolean(resolved.setName);
-      setIfEmpty("setName", titleCase(longest.raw));
-      setSourceIfUnset("setName", pickOcrSourceForValue(longest.raw), hadSet);
-    }
-  }
 
   if (!resolved.sport) {
     const normalizedSet = resolved.setName ? normalizeLine(resolved.setName) : "";
@@ -1099,20 +1032,13 @@ export function resolveCardFacts(intel = {}) {
     }
   }
   if (resolved.year && resolved.brand && resolved.sport && !resolved.setName) {
-    const candidates = productMap.find(
-      (entry) =>
-        entry.brand === resolved.brand && entry.sport === resolved.sport
-    );
-    if (candidates?.families?.length && familyCandidates.length) {
-      const familySet = new Set(familyCandidates);
-      const matches = candidates.families.filter((family) =>
-        familySet.has(family)
-      );
-      if (matches.length === 1) {
-        const hadSet = Boolean(resolved.setName);
-        setIfEmpty("setName", matches[0]);
-        setSourceIfUnset("setName", "inferred", hadSet);
-      }
+    const brandKey = normalizeLine(resolved.brand).replace(/\s+/g, "_");
+    const sportKey = normalizeLine(resolved.sport);
+    const candidates = productMap?.[brandKey]?.[sportKey] || [];
+    if (candidates.length === 1) {
+      const hadSet = Boolean(resolved.setName);
+      setIfEmpty("setName", candidates[0]);
+      setSourceIfUnset("setName", "inferred", hadSet);
     }
   }
   if (
@@ -1404,10 +1330,12 @@ export function resolveCardFacts(intel = {}) {
       const hadSlabbed = Boolean(resolved.isSlabbed);
       const hadGrader = Boolean(resolved.grader);
       const hadCondition = Boolean(resolved.condition);
-      setIfEmpty("isSlabbed", true);
+      resolved.isSlabbed = true;
       setIfEmpty("grader", grader);
       setIfEmpty("condition", "Graded");
-      setSourceIfUnset("isSlabbed", "slab", hadSlabbed);
+      if (!resolved._sources.isSlabbed) {
+        resolved._sources.isSlabbed = "slab";
+      }
       setSourceIfUnset("grader", "slab", hadGrader);
       setSourceIfUnset("condition", "slab", hadCondition);
       if (!resolved.grade && grader) {
@@ -1541,11 +1469,20 @@ export function resolveCardFacts(intel = {}) {
       setSourceIfUnset("condition", "slab", hadCondition);
     }
   }
+  if (resolved.isSlabbed && !resolved.condition) {
+    const hadCondition = Boolean(resolved.condition);
+    setIfEmpty("condition", "Graded");
+    setSourceIfUnset("condition", "slab", hadCondition);
+  }
   if (
     resolved.player &&
     ["slab", "front-ocr", "back-ocr"].includes(resolved._sources?.player)
   ) {
     resolved.player = normalizePlayerNameFinal(resolved.player);
+  }
+  // FINAL authority: slab presence
+  if (slabLabelLines && slabLabelLines.length > 0) {
+    resolved.isSlabbed = true;
   }
   console.log("[RESOLVER OUTPUT]", resolved);
   return resolved;
