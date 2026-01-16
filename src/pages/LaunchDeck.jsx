@@ -73,6 +73,13 @@ export default function LaunchDeck() {
     listingData?.sport ||
     activeListing?.sport ||
     "";
+  const identityCardType =
+    resolvedIdentity?.cardType ||
+    listingData?.cardType ||
+    activeListing?.cardType ||
+    "";
+  const isSlabbedMode =
+    identityCardType === "slabbed" || resolvedIdentity?.isSlabbed === true;
   const identityBrand =
     resolvedIdentity?.brand ||
     listingData?.brand ||
@@ -102,20 +109,23 @@ export default function LaunchDeck() {
         brand: identityBrand || activeListing.brand,
         team: identityTeam || activeListing.team,
         sport: identitySport || activeListing.sport,
-        frontCorners:
-          Array.isArray(activeListing.frontCorners) &&
-          activeListing.frontCorners.length > 0
-            ? activeListing.frontCorners
-            : Array.isArray(listingData?.frontCorners)
-            ? listingData.frontCorners
-            : [],
-        backCorners:
-          Array.isArray(activeListing.backCorners) &&
-          activeListing.backCorners.length > 0
-            ? activeListing.backCorners
-            : Array.isArray(listingData?.backCorners)
-            ? listingData.backCorners
-            : [],
+        cardType: identityCardType || activeListing.cardType,
+        frontCorners: isSlabbedMode
+          ? []
+          : Array.isArray(activeListing.frontCorners) &&
+            activeListing.frontCorners.length > 0
+          ? activeListing.frontCorners
+          : Array.isArray(listingData?.frontCorners)
+          ? listingData.frontCorners
+          : [],
+        backCorners: isSlabbedMode
+          ? []
+          : Array.isArray(activeListing.backCorners) &&
+            activeListing.backCorners.length > 0
+          ? activeListing.backCorners
+          : Array.isArray(listingData?.backCorners)
+          ? listingData.backCorners
+          : [],
         reviewIdentity: resolvedIdentity,
       }
     : null;

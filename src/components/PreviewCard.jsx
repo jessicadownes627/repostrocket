@@ -82,12 +82,76 @@ export default function PreviewCard({
     platformDescription ||
     item.description ||
     "Description not added yet.";
-  const frontCorners = Array.isArray(item.frontCorners)
+  const isSlabbedMode =
+    item.reviewIdentity?.cardType === "slabbed" ||
+    item.reviewIdentity?.isSlabbed === true ||
+    item.cardType === "slabbed" ||
+    item.isSlabbed === true;
+  const frontCorners = isSlabbedMode
+    ? []
+    : Array.isArray(item.frontCorners)
     ? item.frontCorners
     : [];
-  const backCorners = Array.isArray(item.backCorners)
+  const backCorners = isSlabbedMode
+    ? []
+    : Array.isArray(item.backCorners)
     ? item.backCorners
     : [];
+
+  const renderCornerThumbs = () => {
+    if (isSlabbedMode) return null;
+    if (!frontCorners.length && !backCorners.length) return null;
+    return (
+      <>
+        {frontCorners.length > 0 && (
+          <div>
+            <div className="text-[9px] uppercase tracking-[0.25em] text-white/50 mb-1">
+              Front Corners
+            </div>
+            <div className="grid grid-cols-2 gap-1 w-20">
+              {frontCorners.slice(0, 4).map((corner, idx) => (
+                <div
+                  key={corner?.url || corner?.id || `front-${idx}`}
+                  className="w-9 h-9 rounded-[8px] overflow-hidden border border-[rgba(255,255,255,0.08)] bg-black/40"
+                >
+                  {corner?.url ? (
+                    <img
+                      src={corner.url}
+                      alt={corner?.label || `Front corner ${idx + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {backCorners.length > 0 && (
+          <div>
+            <div className="text-[9px] uppercase tracking-[0.25em] text-white/50 mb-1">
+              Back Corners
+            </div>
+            <div className="grid grid-cols-2 gap-1 w-20">
+              {backCorners.slice(0, 4).map((corner, idx) => (
+                <div
+                  key={corner?.url || corner?.id || `back-${idx}`}
+                  className="w-9 h-9 rounded-[8px] overflow-hidden border border-[rgba(255,255,255,0.08)] bg-black/40"
+                >
+                  {corner?.url ? (
+                    <img
+                      src={corner.url}
+                      alt={corner?.label || `Back corner ${idx + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </>
+    );
+  };
 
   return (
     <div
@@ -147,52 +211,7 @@ export default function PreviewCard({
           ) : (
             <div className="w-20 h-20 rounded-[14px] bg-black/40 border border-[rgba(255,255,255,0.05)]" />
           )}
-          {frontCorners.length > 0 && (
-            <div>
-              <div className="text-[9px] uppercase tracking-[0.25em] text-white/50 mb-1">
-                Front Corners
-              </div>
-              <div className="grid grid-cols-2 gap-1 w-20">
-                {frontCorners.slice(0, 4).map((corner, idx) => (
-                  <div
-                    key={corner?.url || corner?.id || `front-${idx}`}
-                    className="w-9 h-9 rounded-[8px] overflow-hidden border border-[rgba(255,255,255,0.08)] bg-black/40"
-                  >
-                    {corner?.url ? (
-                      <img
-                        src={corner.url}
-                        alt={corner?.label || `Front corner ${idx + 1}`}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {backCorners.length > 0 && (
-            <div>
-              <div className="text-[9px] uppercase tracking-[0.25em] text-white/50 mb-1">
-                Back Corners
-              </div>
-              <div className="grid grid-cols-2 gap-1 w-20">
-                {backCorners.slice(0, 4).map((corner, idx) => (
-                  <div
-                    key={corner?.url || corner?.id || `back-${idx}`}
-                    className="w-9 h-9 rounded-[8px] overflow-hidden border border-[rgba(255,255,255,0.08)] bg-black/40"
-                  >
-                    {corner?.url ? (
-                      <img
-                        src={corner.url}
-                        alt={corner?.label || `Back corner ${idx + 1}`}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {renderCornerThumbs()}
         </div>
 
         {/* Text content */}

@@ -49,6 +49,8 @@ export default function SingleListing() {
   const [tags, setTags] = useState([]);
   const [activeAssistField, setActiveAssistField] = useState("");
   const [manualSetValue, setManualSetValue] = useState("");
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
 
   const detectedFrontImage =
     listingData?.editedPhoto ||
@@ -77,7 +79,10 @@ export default function SingleListing() {
     listingData?.cardAttributes?.grading?.value ||
     listingData?.cardAttributes?.grade ||
     "";
-  const isSlabbed = reviewIdentity?.isSlabbed === true;
+  const cardType = reviewIdentity?.cardType || "";
+  const isSlabbedMode =
+    cardType === "slabbed" || reviewIdentity?.isSlabbed === true;
+  const isSlabbed = reviewIdentity?.isSlabbed === true || isSlabbedMode;
   const backOcrStatus = reviewIdentity?.backOcrStatus || "";
   const showGraded = isSlabbed || reviewIdentity?.graded === true;
   const gradeValue =
@@ -160,12 +165,14 @@ export default function SingleListing() {
   };
   const displayPlayer =
     identityPlayer && identityPlayer !== identitySetName ? identityPlayer : "";
-  const frontCorners = Array.isArray(listingData?.frontCorners)
-    ? listingData.frontCorners
-    : [];
-  const backCorners = Array.isArray(listingData?.backCorners)
-    ? listingData.backCorners
-    : [];
+  const frontCorners =
+    isSlabbedMode || !Array.isArray(listingData?.frontCorners)
+      ? []
+      : listingData.frontCorners;
+  const backCorners =
+    isSlabbedMode || !Array.isArray(listingData?.backCorners)
+      ? []
+      : listingData.backCorners;
   const cornersReviewed = frontCorners.length > 0 || backCorners.length > 0;
   const hasIdentityData = reviewIdentity !== null;
   const analysisComplete = !analysisInFlight && hasIdentityData;
@@ -176,6 +183,106 @@ export default function SingleListing() {
     : identityYear && identityBrand
     ? `${identityYear} ${identityBrand} · ${identityPlayer}`
     : identityPlayer || "";
+  const lockedTitle = reviewIdentity?.cardTitle || "";
+  const titleValue = lockedTitle || displayTitle;
+
+  useEffect(() => {
+    if (isEditingTitle) return;
+    setTitleDraft(titleValue);
+  }, [titleValue, isEditingTitle]);
+
+  const handleTitleEditStart = () => {
+    setTitleDraft(titleValue);
+    setIsEditingTitle(true);
+  };
+
+  const handleTitleEditCancel = () => {
+    setTitleDraft(titleValue);
+    setIsEditingTitle(false);
+  };
+
+  const handleTitleEditSave = () => {
+    const nextTitle = titleDraft.trim();
+    if (!nextTitle) {
+      setIsEditingTitle(false);
+      return;
+    }
+    setReviewIdentityField("cardTitle", nextTitle, {
+      force: true,
+      source: "user",
+      userVerified: true,
+    });
+    setReviewIdentityField("titleLocked", true, {
+      force: true,
+      source: "user",
+      userVerified: true,
+    });
+    setIsEditingTitle(false);
+  };
+
+  const renderCornerRows = () => {
+    if (isSlabbedMode) return null;
+    if (!frontCorners.length && !backCorners.length) return null;
+    return (
+      <>
+        {frontCorners.length > 0 && (
+          <div className="mt-6">
+            <div className="text-[10px] uppercase tracking-[0.35em] text-white/50 mb-2">
+              Front Corners
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {frontCorners.slice(0, 4).map((entry, idx) => (
+                <div
+                  key={`front-corner-${idx}`}
+                  className="rounded-xl border border-white/10 bg-black/30 overflow-hidden"
+                >
+                  {entry?.url && (
+                    <img
+                      src={entry.url}
+                      alt={entry?.label || "Front corner detail"}
+                      className="w-full h-24 object-cover"
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {backCorners.length > 0 && (
+          <div className="mt-6">
+            <div className="text-[10px] uppercase tracking-[0.35em] text-white/50 mb-2">
+              Back Corners
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {backCorners.slice(0, 4).map((entry, idx) => (
+                <div
+                  key={`back-corner-${idx}`}
+                  className="rounded-xl border border-white/10 bg-black/30 overflow-hidden"
+                >
+                  {entry?.url && (
+                    <img
+                      src={entry.url}
+                      alt={entry?.label || "Back corner detail"}
+                      className="w-full h-24 object-cover"
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </>
+    );
+  };
+
+  const renderCornersReviewed = () => {
+    if (isSlabbedMode || !cornersReviewed) return null;
+    return (
+      <div className="mt-4 text-[11px] uppercase tracking-[0.35em] text-white/50">
+        Corners reviewed
+      </div>
+    );
+  };
 
   /* ---------- hydrate ONCE for sports ---------- */
   useEffect(() => {
@@ -214,7 +321,13 @@ export default function SingleListing() {
           ← Back
         </button>
 
-        <h1 className="text-center text-3xl mb-10">Single Listing</h1>
+        <h1 className="sparkly-header header-glitter text-center text-3xl mb-3">
+          Single Listing
+        </h1>
+        <div className="magic-cta-bar mb-4" />
+        <div className="text-center text-[11px] uppercase tracking-[0.35em] text-white/50 mb-8">
+          Step 3 — Review Details
+        </div>
 
         <div className="lux-card mb-10">
           <div className="grid grid-cols-1 sm:grid-cols-[160px,1fr] gap-6 items-start">
@@ -224,7 +337,7 @@ export default function SingleListing() {
                   <img
                     src={detectedFrontImage}
                     alt="Front of card"
-                    className="w-full h-44 rounded-2xl border border-white/10 object-cover"
+                    className="w-full h-40 rounded-2xl border border-white/10 object-cover"
                   />
                 )}
                 <div
@@ -251,66 +364,13 @@ export default function SingleListing() {
                   <img
                     src={detectedBackImage}
                     alt="Back of card"
-                    className="w-full h-28 rounded-xl border border-white/10 object-cover"
+                    className="w-full h-40 rounded-2xl border border-white/10 object-cover"
                   />
                 </div>
               )}
             </div>
             <div className="space-y-4">
-              {frontCorners.length > 0 && (
-                <div>
-                  <div className="text-[11px] uppercase tracking-[0.3em] opacity-60 mb-2">
-                    Front Corners
-                  </div>
-                  <div className="grid grid-cols-4 gap-2">
-                    {frontCorners.slice(0, 4).map((entry, idx) => (
-                      <div
-                        key={`front-corner-${idx}`}
-                        className="rounded-lg border border-white/10 bg-black/30 overflow-hidden"
-                      >
-                        {entry?.url ? (
-                          <img
-                            src={entry.url}
-                            alt={entry?.label || "Front corner detail"}
-                            className="w-full h-16 object-cover"
-                          />
-                        ) : (
-                          <div className="h-16 flex items-center justify-center text-[10px] opacity-40">
-                            No data
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {backCorners.length > 0 && (
-                <div>
-                  <div className="text-[11px] uppercase tracking-[0.3em] opacity-60 mb-2">
-                    Back Corners
-                  </div>
-                  <div className="grid grid-cols-4 gap-2">
-                    {backCorners.slice(0, 4).map((entry, idx) => (
-                      <div
-                        key={`back-corner-${idx}`}
-                        className="rounded-lg border border-white/10 bg-black/30 overflow-hidden"
-                      >
-                        {entry?.url ? (
-                          <img
-                            src={entry.url}
-                            alt={entry?.label || "Back corner detail"}
-                            className="w-full h-16 object-cover"
-                          />
-                        ) : (
-                          <div className="h-16 flex items-center justify-center text-[10px] opacity-40">
-                            No data
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {renderCornerRows()}
               {!analysisComplete && (
                 <div className="text-[10px] uppercase tracking-[0.22em] opacity-40">
                   {["Scanning surface…", "Reading print…", "Checking edges…"][scanHintIndex]}
@@ -334,15 +394,50 @@ export default function SingleListing() {
                 transition: "opacity 500ms ease",
               }}
             >
-              <div className="text-[11px] uppercase tracking-[0.3em] text-white/45 mb-4">
-                Front scan complete
-              </div>
-              {displayTitle && (
+              {titleValue && (
                 <>
-                  <div className="text-xs uppercase tracking-[0.35em] opacity-60 mb-3">
-                    Card Title
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="text-xs uppercase tracking-[0.35em] opacity-60">
+                      Card Title
+                    </div>
+                    {!isEditingTitle && (
+                      <button
+                        type="button"
+                        className="text-[10px] uppercase tracking-[0.3em] text-white/70 border border-white/20 rounded-full px-3 py-1 hover:border-white/50 hover:text-white transition"
+                        onClick={handleTitleEditStart}
+                      >
+                        Edit title
+                      </button>
+                    )}
                   </div>
-                  <div className="text-2xl text-white mb-6">{displayTitle}</div>
+                  {isEditingTitle ? (
+                    <div className="mb-6">
+                      <input
+                        type="text"
+                        value={titleDraft}
+                        onChange={(event) => setTitleDraft(event.target.value)}
+                        className="w-full rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-white text-base"
+                      />
+                      <div className="mt-3 flex gap-3">
+                        <button
+                          type="button"
+                          className="px-4 py-2 rounded-full border border-white/20 text-[11px] uppercase tracking-[0.25em] text-white/70 hover:border-white/50 transition"
+                          onClick={handleTitleEditSave}
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          className="px-4 py-2 rounded-full border border-white/10 text-[11px] uppercase tracking-[0.25em] text-white/40 hover:text-white/70 transition"
+                          onClick={handleTitleEditCancel}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-2xl text-white mb-6">{titleValue}</div>
+                  )}
                 </>
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -711,11 +806,7 @@ export default function SingleListing() {
                   )}
                 </div>
               </div>
-              {cornersReviewed && !isSlabbed && (
-                <div className="text-xs uppercase tracking-[0.3em] opacity-60 mt-4">
-                  Corners reviewed
-                </div>
-              )}
+              {renderCornersReviewed()}
             </div>
 
             <button

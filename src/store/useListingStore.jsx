@@ -82,9 +82,8 @@ export function ListingProvider({ children }) {
   const setReviewIdentityField = (key, value, options = {}) => {
     if (!key) return;
     setReviewIdentity((prev) => {
-      if (!prev) return prev;
       if (value === undefined || value === null || value === "") return prev;
-      const next = { ...prev };
+      const next = prev ? { ...prev } : {};
       if (!options.force && prev[key]) return prev;
       next[key] = value;
       if (options.source) {
@@ -270,7 +269,10 @@ export function ListingProvider({ children }) {
           condition: promotions.condition || "",
           cardTitle: promotions.cardTitle || "",
         };
-        const composedTitle = resolvedFacts.cardTitle || "";
+        const isTitleLocked = reviewIdentity?.titleLocked === true;
+        const composedTitle = isTitleLocked
+          ? reviewIdentity?.cardTitle || ""
+          : resolvedFacts.cardTitle || "";
         const composedGradeStatus = resolvedFacts.isSlabbed
           ? "Graded"
           : resolvedFacts.graded === false
@@ -296,8 +298,10 @@ export function ListingProvider({ children }) {
           assignIdentity("grade", resolvedFacts.grade);
           assignIdentity("grader", resolvedFacts.grader);
           assignIdentity("condition", resolvedFacts.condition);
-          assignIdentity("cardTitle", composedTitle);
-          assignIdentity("title", composedTitle);
+          if (!isTitleLocked) {
+            assignIdentity("cardTitle", composedTitle);
+            assignIdentity("title", composedTitle);
+          }
           assignIdentity("gradeStatus", composedGradeStatus);
           assignIdentity("isGraded", composedIsGraded);
 
@@ -333,8 +337,10 @@ export function ListingProvider({ children }) {
           assignListingField("grade", resolvedFacts.grade);
           assignListingField("grader", resolvedFacts.grader);
           assignListingField("condition", resolvedFacts.condition);
-          assignListingField("cardTitle", composedTitle);
-          assignListingField("title", composedTitle);
+          if (!isTitleLocked) {
+            assignListingField("cardTitle", composedTitle);
+            assignListingField("title", composedTitle);
+          }
           if (composedGradeStatus && !mergedUpdates.gradeStatus) {
             mergedUpdates.gradeStatus = composedGradeStatus;
           }
@@ -360,6 +366,7 @@ export function ListingProvider({ children }) {
           condition: resolvedFacts.condition || "",
           graded: resolvedFacts.graded,
           gradeStatus: composedGradeStatus,
+          titleLocked: isTitleLocked,
         });
         setAnalysisState("complete");
         setLastAnalyzedHash(intel?.imageHash || null);
@@ -598,6 +605,7 @@ export function ListingProvider({ children }) {
           };
           const next = preserveUserVerified({
             ...resolved,
+            cardType: resolved?.cardType || prev?.cardType || "",
             metadataCompleteness,
             yearAttemptedSides: Array.from(
               new Set(

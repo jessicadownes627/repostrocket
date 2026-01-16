@@ -64,6 +64,8 @@ export default function MagicCardPrep({ analysisActive = false }) {
     setListingField,
     resetListing,
     requestSportsAnalysis,
+    reviewIdentity,
+    setReviewIdentityField,
     batchMode,
     setBatchMode,
   } = useListingStore();
@@ -102,14 +104,7 @@ export default function MagicCardPrep({ analysisActive = false }) {
   const cornerSyncSignatureRef = useRef("");
   const isRegeneratingRef = useRef(false);
   const adjustBusyKeyRef = useRef("");
-  const logAdjustEvent = useCallback((type, payload = {}) => {
-    try {
-      console.log(`[Adjust] ${type}`, payload);
-    } catch (err) {
-      // logging failure should never break UI
-    }
-  }, []);
-
+  const slabCornerClearedRef = useRef(false);
   const isAxisClamped = useCallback(
     (entry, axis, direction) => {
       if (!entry) return true;
@@ -171,6 +166,42 @@ export default function MagicCardPrep({ analysisActive = false }) {
     ).length;
   }, [cornerEntries]);
 
+  const cardType =
+    reviewIdentity?.cardType || listingData?.cardType || "raw";
+  const hasFrontImage = Boolean(frontPhoto || listingData?.frontImage);
+  const userMarkedSlabbed =
+    reviewIdentity?.cardType === "slabbed" ||
+    listingData?.cardType === "slabbed";
+  const isSlabbedResolved =
+    hasFrontImage && reviewIdentity?.isSlabbed === true;
+  const isSlabbedMode = cardType === "slabbed";
+  const shouldSkipCorners =
+    isSlabbedResolved || (hasFrontImage && userMarkedSlabbed);
+  const logAdjustEvent = useCallback(
+    (type, payload = {}) => {
+      if (shouldSkipCorners) return;
+      try {
+        console.log(`[Adjust] ${type}`, payload);
+      } catch (err) {
+        // logging failure should never break UI
+      }
+    },
+    [shouldSkipCorners]
+  );
+  const slabGrader = reviewIdentity?.grader || "";
+  const slabGradeValue =
+    reviewIdentity?.grade && typeof reviewIdentity.grade === "object"
+      ? reviewIdentity.grade.value
+      : reviewIdentity?.grade || "";
+  const slabGradeLabel =
+    slabGrader && slabGradeValue
+      ? `${slabGrader} ${slabGradeValue}`
+      : slabGrader || slabGradeValue || "—";
+  const slabCert =
+    reviewIdentity?.certNumber ||
+    reviewIdentity?.serialNumber ||
+    reviewIdentity?.certId ||
+    "";
   const hasFrontPhoto = Boolean(frontPhoto);
   const hasBackPhoto = Boolean(backPhoto);
   const readyForConfirm = hasFrontPhoto && hasBackPhoto;
@@ -432,6 +463,22 @@ export default function MagicCardPrep({ analysisActive = false }) {
   );
 
   useEffect(() => {
+    if (shouldSkipCorners) {
+      if (slabCornerClearedRef.current && cornerEntries.length === 0) {
+        return;
+      }
+      if (cornerEntries.length > 0) {
+        clearCorners();
+      }
+      if (Array.isArray(listingData?.cornerPhotos) && listingData.cornerPhotos.length > 0) {
+        setListingField("cornerPhotos", []);
+      }
+      setCornerLoading(false);
+      setCornerError("");
+      slabCornerClearedRef.current = true;
+      return;
+    }
+    slabCornerClearedRef.current = false;
     let cancelled = false;
     if (!frontPhoto || !backPhoto) {
       return () => {
@@ -470,9 +517,19 @@ export default function MagicCardPrep({ analysisActive = false }) {
     return () => {
       cancelled = true;
     };
-  }, [frontPhoto, backPhoto, cornerEntries.length, syncCornerEntries]);
+  }, [
+    shouldSkipCorners,
+    frontPhoto,
+    backPhoto,
+    cornerEntries.length,
+    syncCornerEntries,
+    clearCorners,
+    setListingField,
+    listingData?.cornerPhotos,
+  ]);
 
   const renderPreflightNotice = (position, label) => {
+    if (shouldSkipCorners) return null;
     const result = photoPreflight[position];
     if (!result || preflightDismissed[position]) return null;
     const warnings = Array.isArray(result.warnings) ? result.warnings : [];
@@ -633,6 +690,37 @@ export default function MagicCardPrep({ analysisActive = false }) {
         </div>
       )}
 
+      <div className="mb-6">
+        <div className="text-[11px] uppercase tracking-[0.35em] text-white/60 mb-3">
+          Card Type
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {[
+            { value: "raw", label: "Raw / Ungraded" },
+            { value: "slabbed", label: "Slabbed / Graded" },
+          ].map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={`px-4 py-2 rounded-full border text-[11px] uppercase tracking-[0.3em] transition ${
+                cardType === option.value
+                  ? "border-[#E8D5A8] text-[#E8D5A8] bg-black/40"
+                  : "border-white/15 text-white/70 hover:border-white/35"
+              }`}
+              onClick={() =>
+                setReviewIdentityField("cardType", option.value, {
+                  force: true,
+                  source: "user",
+                  userVerified: true,
+                })
+              }
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="grid gap-6 md:grid-cols-2 relative z-20">
         {renderUploadSlot("front", "Front of card", frontPhoto)}
         {renderUploadSlot("back", "Back of card", backPhoto)}
@@ -640,7 +728,9 @@ export default function MagicCardPrep({ analysisActive = false }) {
 
       {!backPhoto && frontPhoto && (
         <div className="mt-3 text-xs text-center text-white/60 tracking-[0.35em]">
-          Add the back to unlock corner coverage.
+          {isSlabbedMode
+            ? "Add the back to capture slab details."
+            : "Add the back to unlock corner coverage."}
         </div>
       )}
 
@@ -650,149 +740,189 @@ export default function MagicCardPrep({ analysisActive = false }) {
     </>
   );
 
-  const renderConfirmStage = () => (
-    <>
-      <div className="grid gap-6 md:grid-cols-2 relative z-20">
-        {renderConfirmedPhoto("front", "Front of card", frontPhoto)}
-        {renderConfirmedPhoto("back", "Back of card", backPhoto)}
-      </div>
-
-      <div className="mt-4 text-xs text-white/60 flex items-center gap-2">
-        <span className="h-1.5 w-1.5 rounded-full bg-[#E8D5A8]/80"></span>
-        We balanced lighting for analysis.
-      </div>
-
-      <div className="mt-10 rounded-2xl border border-[#E8DCC0]/30 bg-black/40 p-6 relative z-20">
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-[11px] uppercase tracking-[0.45em] text-[#E8DCC0]/80">
-            Auto Corner Coverage
+  const renderCornerCoverageSection = () => {
+    if (shouldSkipCorners) return null;
+    return (
+      <>
+        <div className="mt-10 rounded-2xl border border-[#E8DCC0]/30 bg-black/40 p-6 relative z-20">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-[11px] uppercase tracking-[0.45em] text-[#E8DCC0]/80">
+              Auto Corner Coverage
+            </div>
+            {isAnalysisReady && (
+              <div className="text-xs text-white/60">
+                Ready for analysis
+              </div>
+            )}
           </div>
-          {isAnalysisReady && (
-            <div className="text-xs text-white/60">
-              Ready for analysis
+          <p className="text-xs text-white/55 mb-4">
+            Confidence only reflects image clarity (High = clearly framed, Medium = visible but slightly angled). It never judges card condition.
+          </p>
+
+          {cornerLoading && (
+            <div className="text-sm text-white/70">
+              Capturing corner crops…
             </div>
           )}
-        </div>
-        <p className="text-xs text-white/55 mb-4">
-          Confidence only reflects image clarity (High = clearly framed, Medium = visible but slightly angled). It never judges card condition.
-        </p>
 
-        {cornerLoading && (
-          <div className="text-sm text-white/70">
-            Capturing corner crops…
-          </div>
-        )}
-
-        {!cornerLoading && (
-          <>
-            {["front", "back"].map((sideKey) => {
-              const prettySide = sideKey === "front" ? "Front" : "Back";
-              const sideConfidence = getSideConfidence(sideKey);
-              return (
-                <div key={sideKey} className="mt-6">
-                  <div className="flex items-center gap-2 text-xs uppercase tracking-[0.35em] text-white/70">
-                    {prettySide} Corners
-                    {isAnalysisReady && renderConfidenceBadge(sideConfidence)}
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
-                    {CORNER_POSITIONS.map((corner) => {
-                      const entry = cornerMap[sideKey][corner.key];
-                      return (
-                        <div
-                          key={`${sideKey}-${corner.key}`}
-                          className="text-center text-[11px] uppercase tracking-[0.25em]"
-                        >
+          {!cornerLoading && (
+            <>
+              {["front", "back"].map((sideKey) => {
+                const prettySide = sideKey === "front" ? "Front" : "Back";
+                const sideConfidence = getSideConfidence(sideKey);
+                return (
+                  <div key={sideKey} className="mt-6">
+                    <div className="flex items-center gap-2 text-xs uppercase tracking-[0.35em] text-white/70">
+                      {prettySide} Corners
+                      {isAnalysisReady && renderConfidenceBadge(sideConfidence)}
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+                      {CORNER_POSITIONS.map((corner) => {
+                        const entry = cornerMap[sideKey][corner.key];
+                        return (
                           <div
-                            className={`mb-2 rounded-2xl border border-white/10 bg-black/30 overflow-hidden corner-thumb-shell ${
-                              adjustBusyKey === `${sideKey}-${corner.key}`
-                                ? "corner-thumb-shell--pending"
-                                : ""
-                            }`}
+                            key={`${sideKey}-${corner.key}`}
+                            className="text-center text-[11px] uppercase tracking-[0.25em]"
                           >
-                            {isAnalysisReady ? (
-                              entry ? (
-                                <img
-                                  key={entry.url}
-                                  src={entry.url}
-                                  alt={entry.altText}
-                                  className="w-full h-24 object-cover corner-thumb-image"
-                                />
+                            <div
+                              className={`mb-2 rounded-2xl border border-white/10 bg-black/30 overflow-hidden corner-thumb-shell ${
+                                adjustBusyKey === `${sideKey}-${corner.key}`
+                                  ? "corner-thumb-shell--pending"
+                                  : ""
+                              }`}
+                            >
+                              {isAnalysisReady ? (
+                                entry ? (
+                                  <img
+                                    key={entry.url}
+                                    src={entry.url}
+                                    alt={entry.altText}
+                                    className="w-full h-24 object-cover corner-thumb-image"
+                                  />
+                                ) : (
+                                  <div className="h-24 flex items-center justify-center text-[10px] opacity-40">
+                                    Waiting for coverage
+                                  </div>
+                                )
                               ) : (
                                 <div className="h-24 flex items-center justify-center text-[10px] opacity-40">
                                   Waiting for coverage
                                 </div>
-                              )
-                            ) : (
-                              <div className="h-24 flex items-center justify-center text-[10px] opacity-40">
-                                Waiting for coverage
+                              )}
+                            </div>
+                            <div className="flex items-center justify-center gap-2 text-white/70">
+                              {corner.label}
+                              {isAnalysisReady && entry && renderConfidenceBadge(entry?.confidence)}
+                            </div>
+                            {isAnalysisReady && entry && (
+                              <div className="mt-2">
+                                <button
+                                  type="button"
+                                  className="text-[10px] tracking-[0.25em] text-[#E8D5A8] hover:text-[#fff4d4] transition"
+                                  onClick={() =>
+                                    setAdjustTarget({
+                                      sideKey,
+                                      cornerKey: corner.key,
+                                    })
+                                  }
+                                >
+                                  Adjust
+                                </button>
                               </div>
                             )}
-                          </div>
-                          <div className="flex items-center justify-center gap-2 text-white/70">
-                            {corner.label}
-                            {isAnalysisReady && entry && renderConfidenceBadge(entry?.confidence)}
-                          </div>
-                          {isAnalysisReady && entry && (
-                            <div className="mt-2">
-                              <button
-                                type="button"
-                                className="text-[10px] tracking-[0.25em] text-[#E8D5A8] hover:text-[#fff4d4] transition"
-                                onClick={() =>
-                                  setAdjustTarget({
-                                    sideKey,
-                                    cornerKey: corner.key,
-                                  })
-                                }
-                              >
-                                Adjust
-                              </button>
-                            </div>
-                          )}
-                </div>
-              );
-            })}
-          </div>
-                </div>
-              );
-            })}
-          </>
-        )}
+                  </div>
+                );
+              })}
+            </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
 
-        <p className="mt-5 text-xs text-white/55">
-          Corners are auto-detected for condition analysis. Retake the photos if coverage looks off.
-        </p>
-        {isAnalysisReady && lowConfidenceCount > 0 && (
-          <div className="mt-3 text-xs text-[#F6D48F]">
-            {lowConfidenceCount === 1
-              ? "1 corner looks low-confidence. Retake if clarity matters."
-              : `${lowConfidenceCount} corners look low-confidence. Retake if clarity matters.`}
-          </div>
-        )}
-      </div>
+          <p className="mt-5 text-xs text-white/55">
+            Corners are auto-detected for condition analysis. Retake the photos if coverage looks off.
+          </p>
+          {isAnalysisReady && lowConfidenceCount > 0 && (
+            <div className="mt-3 text-xs text-[#F6D48F]">
+              {lowConfidenceCount === 1
+                ? "1 corner looks low-confidence. Retake if clarity matters."
+                : `${lowConfidenceCount} corners look low-confidence. Retake if clarity matters.`}
+            </div>
+          )}
+        </div>
 
         {!isAnalysisReady && cornerError && (
           <div className="mt-4 text-xs text-red-300">{cornerError}</div>
         )}
+      </>
+    );
+  };
 
-      <div className="mt-10 flex flex-col sm:flex-row gap-3 relative z-30">
-        <button
-          onClick={handleAnalyze}
-          disabled={!isAnalysisReady}
-          className={`flex-1 py-4 text-lg font-semibold rounded-xl lux-continue-btn ${
-            !isAnalysisReady ? "opacity-40 cursor-not-allowed" : ""
-          }`}
-        >
-          Analyze Card →
-        </button>
-        <button
-          onClick={handleRetakeAll}
-          className="flex-1 py-4 text-lg font-semibold rounded-xl border border-white/15 text-white/70 hover:bg-white/5 transition"
-        >
-          Retake Photos
-        </button>
-      </div>
-    </>
-  );
+  const renderConfirmStage = () => {
+    if (shouldSkipCorners) {
+      return (
+        <>
+          <div className="grid gap-6 md:grid-cols-2 relative z-20">
+            {renderConfirmedPhoto("front", "Front of card", frontPhoto)}
+            {renderConfirmedPhoto("back", "Back of card", backPhoto)}
+          </div>
+
+          <div className="mt-10 flex flex-col sm:flex-row gap-3 relative z-30">
+            <button
+              onClick={handleAnalyze}
+              disabled={!isAnalysisReady}
+              className={`flex-1 py-4 text-lg font-semibold rounded-xl lux-continue-btn ${
+                !isAnalysisReady ? "opacity-40 cursor-not-allowed" : ""
+              }`}
+            >
+              Continue →
+            </button>
+            <button
+              onClick={handleRetakeAll}
+              className="flex-1 py-4 text-lg font-semibold rounded-xl border border-white/15 text-white/70 hover:bg-white/5 transition"
+            >
+              Retake Photos
+            </button>
+          </div>
+        </>
+      );
+    }
+
+    return (
+      <>
+        <div className="grid gap-6 md:grid-cols-2 relative z-20">
+          {renderConfirmedPhoto("front", "Front of card", frontPhoto)}
+          {renderConfirmedPhoto("back", "Back of card", backPhoto)}
+        </div>
+
+        <div className="mt-4 text-xs text-white/60 flex items-center gap-2">
+          <span className="h-1.5 w-1.5 rounded-full bg-[#E8D5A8]/80"></span>
+          Confirm card coverage for analysis.
+        </div>
+
+        {renderCornerCoverageSection()}
+
+        <div className="mt-10 flex flex-col sm:flex-row gap-3 relative z-30">
+          <button
+            onClick={handleAnalyze}
+            disabled={!isAnalysisReady}
+            className={`flex-1 py-4 text-lg font-semibold rounded-xl lux-continue-btn ${
+              !isAnalysisReady ? "opacity-40 cursor-not-allowed" : ""
+            }`}
+          >
+            Analyze Card →
+          </button>
+          <button
+            onClick={handleRetakeAll}
+            className="flex-1 py-4 text-lg font-semibold rounded-xl border border-white/15 text-white/70 hover:bg-white/5 transition"
+          >
+            Retake Photos
+          </button>
+        </div>
+      </>
+    );
+  };
 
   const frontCoverageComplete = useMemo(
     () => CORNER_POSITIONS.every(({ key }) => Boolean(cornerMap.front[key])),
@@ -807,8 +937,7 @@ export default function MagicCardPrep({ analysisActive = false }) {
   const isAnalysisReady = Boolean(
     frontPhoto &&
       backPhoto &&
-      frontCoverageComplete &&
-      backCoverageComplete &&
+      (shouldSkipCorners || (frontCoverageComplete && backCoverageComplete)) &&
       !cornerLoading
   );
   const coverageMessage =
@@ -848,6 +977,7 @@ export default function MagicCardPrep({ analysisActive = false }) {
 
   const handleAdjustMove = useCallback(
     async (sideKey, cornerKey, axis = "x", direction = 1) => {
+      if (shouldSkipCorners) return;
       const entry = cornerMap[sideKey]?.[cornerKey];
       const sourcePhoto =
         sideKey === "front" ? frontPhoto?.url : sideKey === "back" ? backPhoto?.url : null;
@@ -959,7 +1089,15 @@ export default function MagicCardPrep({ analysisActive = false }) {
             : regenerated.initialCropBounds || prevEntry.initialCropBounds,
       }));
     },
-    [cornerMap, frontPhoto, backPhoto, updateCornerEntryData, getMomentumDelta, adjustBusyKey]
+    [
+      shouldSkipCorners,
+      cornerMap,
+      frontPhoto,
+      backPhoto,
+      updateCornerEntryData,
+      getMomentumDelta,
+      adjustBusyKey,
+    ]
   );
 
   const stopAdjustHold = useCallback(() => {
@@ -1018,6 +1156,7 @@ export default function MagicCardPrep({ analysisActive = false }) {
   }, [adjustBusyKey]);
 
   useEffect(() => {
+    if (shouldSkipCorners) return;
     const signature = JSON.stringify(
       cornerEntries.map((entry) => ({
         side: entry.side || "",
@@ -1053,9 +1192,10 @@ export default function MagicCardPrep({ analysisActive = false }) {
     }
     cornerSyncSignatureRef.current = signature;
     setListingField("cornerPhotos", cornerEntries);
-  }, [cornerEntries, setListingField]);
+  }, [cornerEntries, setListingField, shouldSkipCorners]);
 
   useEffect(() => {
+    if (shouldSkipCorners) return;
     if (!frontPhoto || !backPhoto || cornerLoading) return;
     if (!frontCoverageComplete || !backCoverageComplete) {
       setCornerError(coverageMessage);
@@ -1070,6 +1210,7 @@ export default function MagicCardPrep({ analysisActive = false }) {
     cornerLoading,
     cornerError,
     coverageMessage,
+    shouldSkipCorners,
   ]);
 
   const handleAnalyze = () => {
@@ -1139,7 +1280,7 @@ export default function MagicCardPrep({ analysisActive = false }) {
   };
 
   const renderCornerAdjustOverlay = () => {
-    if (stage !== STAGES.CONFIRM || !adjustTarget) return null;
+    if (shouldSkipCorners || stage !== STAGES.CONFIRM || !adjustTarget) return null;
     const targetEntry =
       cornerMap[adjustTarget.sideKey]?.[adjustTarget.cornerKey] || null;
     const targetInfo = CORNER_POSITIONS.find(
@@ -1255,16 +1396,23 @@ export default function MagicCardPrep({ analysisActive = false }) {
       </h1>
 
       <div className="magic-cta-bar mb-6" />
+      <div className="h-3" />
 
-      <p className="text-center opacity-65 text-sm mb-2">
-        Confirm coverage for the card you just captured. These exact photos move into analysis next.
-      </p>
-      <div className="text-center text-[11px] uppercase tracking-[0.35em] text-white/50 mb-6">
-        {stage === STAGES.CAPTURE ? "Step 1 — Capture" : "Step 2 — Confirm Corners"}
+      {!isSlabbedMode && (
+        <p className="text-center opacity-65 text-sm mb-2">
+          Confirm coverage for the card you just captured. These exact photos move into analysis next.
+        </p>
+      )}
+      <div className="text-center text-[11px] uppercase tracking-[0.35em] text-white/50 mb-8">
+        {stage === STAGES.CAPTURE
+          ? "Step 1 — Capture"
+          : isSlabbedMode
+          ? "Step 2 — Confirm Photos"
+          : "Step 2 — Confirm Corners"}
       </div>
 
       {stage === STAGES.CAPTURE ? renderCaptureStage() : renderConfirmStage()}
-      {renderCornerAdjustOverlay()}
+      {!shouldSkipCorners && renderCornerAdjustOverlay()}
 
       <input
         type="file"
@@ -1281,7 +1429,7 @@ export default function MagicCardPrep({ analysisActive = false }) {
         onChange={(e) => handleSelect("back", e.target.files)}
       />
 
-      {showCapturePrimer && (
+      {showCapturePrimer && !shouldSkipCorners && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur">
           <div className="w-[min(520px,90vw)] rounded-3xl border border-white/15 bg-[#050505] p-6 text-white shadow-[0_25px_80px_rgba(0,0,0,0.65)]">
             <div className="text-[11px] uppercase tracking-[0.35em] text-white/50">

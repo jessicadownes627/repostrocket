@@ -81,6 +81,9 @@ export default function LaunchListing() {
     ? `$${String(suggestedPrice)}`
     : "";
 
+  const isSlabbedMode =
+    reviewIdentity?.cardType === "slabbed" || reviewIdentity?.isSlabbed === true;
+
   const summaryDescription = useMemo(() => {
     if (description && description.length > 0) return description;
     if (reviewIdentity) {
@@ -100,7 +103,7 @@ export default function LaunchListing() {
         return identityLines.join("\n");
       }
     }
-    if (cardAttributes?.grading) {
+    if (cardAttributes?.grading && !isSlabbedMode) {
       const g = cardAttributes.grading;
       return [
         g.centering && `Centering: ${g.centering}`,
@@ -112,7 +115,14 @@ export default function LaunchListing() {
         .join("\n");
     }
     return "";
-  }, [description, cardAttributes, reviewIdentity]);
+  }, [description, cardAttributes, reviewIdentity, isSlabbedMode]);
+  const slabCert =
+    reviewIdentity?.certNumber ||
+    reviewIdentity?.serialNumber ||
+    reviewIdentity?.certId ||
+    "";
+  const safeFrontCorners = isSlabbedMode ? [] : frontCorners;
+  const safeBackCorners = isSlabbedMode ? [] : backCorners;
 
   const copyText = (text) => {
     if (!text) return;
@@ -134,7 +144,7 @@ export default function LaunchListing() {
 
   const encodedTitle = encodeURIComponent(baseTitle || "");
   const handleDownloadCorners = async () => {
-    const mergedCorners = [...frontCorners, ...backCorners];
+    const mergedCorners = [...safeFrontCorners, ...safeBackCorners];
     if (!mergedCorners.length) return;
     const payload = mergedCorners
       .filter((entry) => entry?.url)
@@ -150,6 +160,75 @@ export default function LaunchListing() {
       title: baseTitle || "Corner inspection photos",
       text: "Saved from Repost Rocket",
     });
+  };
+
+  const renderCornerDetails = () => {
+    if (isSlabbedMode) return null;
+    if (!safeFrontCorners.length && !safeBackCorners.length) return null;
+    return (
+      <div>
+        <div className="text-xs uppercase tracking-[0.18em] opacity-70 mb-1">
+          Corner Detail Photos
+        </div>
+        <div className="opacity-50 text-xs mt-1 mb-2">
+          Optional detail shots you can upload to any marketplace.
+        </div>
+        {safeFrontCorners.length > 0 && (
+          <div className="mb-4">
+            <div className="text-[10px] uppercase tracking-[0.25em] opacity-70 mb-2">
+              Front Corners
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {safeFrontCorners.slice(0, 4).map((entry, idx) => (
+                <div
+                  key={`${entry.label || "front"}-${idx}`}
+                  className="rounded-xl border border-[rgba(255,255,255,0.12)] overflow-hidden bg-black/30"
+                >
+                  <img
+                    src={entry.url}
+                    alt={entry.altText || entry.label}
+                    className="w-full h-24 object-cover"
+                  />
+                  <div className="text-[10px] uppercase tracking-[0.25em] text-center py-1 opacity-70">
+                    {entry.label || `Front corner ${idx + 1}`}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {safeBackCorners.length > 0 && (
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.25em] opacity-70 mb-2">
+              Back Corners
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {safeBackCorners.slice(0, 4).map((entry, idx) => (
+                <div
+                  key={`${entry.label || "back"}-${idx}`}
+                  className="rounded-xl border border-[rgba(255,255,255,0.12)] overflow-hidden bg-black/30"
+                >
+                  <img
+                    src={entry.url}
+                    alt={entry.altText || entry.label}
+                    className="w-full h-24 object-cover"
+                  />
+                  <div className="text-[10px] uppercase tracking-[0.25em] text-center py-1 opacity-70">
+                    {entry.label || `Back corner ${idx + 1}`}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        <button
+          className="lux-small-btn mt-3"
+          onClick={handleDownloadCorners}
+        >
+          {saveImageLabel}
+        </button>
+      </div>
+    );
   };
 
   return (
@@ -280,68 +359,32 @@ export default function LaunchListing() {
             </div>
           </div>
 
-          {(frontCorners.length > 0 || backCorners.length > 0) && (
+          {renderCornerDetails()}
+          {isSlabbedMode && (
             <div>
               <div className="text-xs uppercase tracking-[0.18em] opacity-70 mb-1">
-                Corner Detail Photos
+                Slab Summary
               </div>
-              <div className="opacity-50 text-xs mt-1 mb-2">
-                Optional detail shots you can upload to any marketplace.
-              </div>
-              {frontCorners.length > 0 && (
-                <div className="mb-4">
-                  <div className="text-[10px] uppercase tracking-[0.25em] opacity-70 mb-2">
-                    Front Corners
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {frontCorners.slice(0, 4).map((entry, idx) => (
-                      <div
-                        key={`${entry.label || "front"}-${idx}`}
-                        className="rounded-xl border border-[rgba(255,255,255,0.12)] overflow-hidden bg-black/30"
-                      >
-                        <img
-                          src={entry.url}
-                          alt={entry.altText || entry.label}
-                          className="w-full h-24 object-cover"
-                        />
-                        <div className="text-[10px] uppercase tracking-[0.25em] text-center py-1 opacity-70">
-                          {entry.label || `Front corner ${idx + 1}`}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {backCorners.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
                 <div>
-                  <div className="text-[10px] uppercase tracking-[0.25em] opacity-70 mb-2">
-                    Back Corners
+                  <div className="text-[10px] uppercase tracking-[0.25em] opacity-70">
+                    Grader
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {backCorners.slice(0, 4).map((entry, idx) => (
-                      <div
-                        key={`${entry.label || "back"}-${idx}`}
-                        className="rounded-xl border border-[rgba(255,255,255,0.12)] overflow-hidden bg-black/30"
-                      >
-                        <img
-                          src={entry.url}
-                          alt={entry.altText || entry.label}
-                          className="w-full h-24 object-cover"
-                        />
-                        <div className="text-[10px] uppercase tracking-[0.25em] text-center py-1 opacity-70">
-                          {entry.label || `Back corner ${idx + 1}`}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <div className="mt-1">{reviewIdentity?.grader || "—"}</div>
                 </div>
-              )}
-              <button
-                className="lux-small-btn mt-3"
-                onClick={handleDownloadCorners}
-              >
-                {saveImageLabel}
-              </button>
+                <div>
+                  <div className="text-[10px] uppercase tracking-[0.25em] opacity-70">
+                    Grade
+                  </div>
+                  <div className="mt-1">{resolvedGrade || "Graded"}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-[0.25em] opacity-70">
+                    Cert / Serial
+                  </div>
+                  <div className="mt-1">{slabCert || "—"}</div>
+                </div>
+              </div>
             </div>
           )}
 
