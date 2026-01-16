@@ -37,15 +37,27 @@ export default function LaunchListing() {
 
   const resolvedGrade = useMemo(() => {
     if (reviewIdentity?.isSlabbed) {
-      if (reviewIdentity?.grade) {
-        return [ `Mint ${reviewIdentity.grade}`, reviewIdentity?.grader ]
-          .filter(Boolean)
-          .join(" · ");
+      const gradeValue =
+        reviewIdentity?.grade && typeof reviewIdentity.grade === "object"
+          ? reviewIdentity.grade.value
+          : reviewIdentity?.grade || "";
+      const gradeScale =
+        reviewIdentity?.grader
+          ? reviewIdentity.grader
+          : reviewIdentity?.grade && typeof reviewIdentity.grade === "object"
+          ? reviewIdentity.grade.scale
+          : reviewIdentity?.grader || "";
+      if (gradeValue) {
+        return [gradeScale, gradeValue].filter(Boolean).join(" ");
       }
       return "Graded";
     }
-    if (!reviewIdentity?.grade) return "";
-    return [reviewIdentity?.condition, reviewIdentity?.grade]
+    const gradeValue =
+      reviewIdentity?.grade && typeof reviewIdentity.grade === "object"
+        ? reviewIdentity.grade.value
+        : reviewIdentity?.grade || "";
+    if (!gradeValue) return "";
+    return [reviewIdentity?.condition, gradeValue]
       .filter(Boolean)
       .join(" ");
   }, [reviewIdentity]);

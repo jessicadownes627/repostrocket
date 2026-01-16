@@ -10,6 +10,18 @@ import "../styles/overrides.css";
 const CATEGORY_OPTIONS = ["Sports Cards", "Apparel", "Accessories", "Home Goods", "Other"];
 const CONDITION_OPTIONS = ["New with tags", "Like new", "Very good", "Good", "Fair"];
 const TAG_OPTIONS = ["Neutral", "Modern", "Minimal", "Classic", "Statement"];
+const SET_CANDIDATE_MAP = {
+  panini: {
+    football: ["Donruss", "Score", "Prizm"],
+    basketball: ["Prizm", "Donruss"],
+  },
+  topps: {
+    baseball: ["Topps Chrome", "Topps"],
+  },
+  "upper deck": {
+    hockey: ["Upper Deck"],
+  },
+};
 
 export default function SingleListing() {
   const navigate = useNavigate();
@@ -37,6 +49,7 @@ export default function SingleListing() {
   const [condition, setCondition] = useState("");
   const [tags, setTags] = useState([]);
   const [activeAssistField, setActiveAssistField] = useState("");
+  const [manualSetValue, setManualSetValue] = useState("");
 
   const detectedFrontImage =
     listingData?.editedPhoto ||
@@ -48,34 +61,18 @@ export default function SingleListing() {
     getPhotoUrl(listingData?.secondaryPhotos?.[0]) ||
     "";
   const detectedSlabImage = listingData?.slabImage || "";
-  const identityPlayer =
-    reviewIdentity?.player ||
-    listingData?.identity?.player ||
-    listingData?.player ||
-    "";
-  const identitySetName =
-    reviewIdentity?.setName ||
-    listingData?.identity?.setName ||
-    listingData?.setName ||
-    "";
-  const identityBrand =
-    reviewIdentity?.brand ||
-    listingData?.identity?.brand ||
-    listingData?.brand ||
-    "";
+  const identityPlayer = reviewIdentity?.player || "";
+  const identitySetName = reviewIdentity?.setName || "";
+  const identityBrand = reviewIdentity?.brand || "";
   const identityTeam = reviewIdentity?.team || "";
-  const identityYear =
-    reviewIdentity?.year ||
-    listingData?.identity?.year ||
-    listingData?.year ||
-    "";
+  const identityYear = reviewIdentity?.year || "";
   const identitySport = reviewIdentity?.sport || "";
   const gradeCompany =
     listingData?.gradingCompany ||
     listingData?.cardAttributes?.gradingAuthority ||
     listingData?.cardAttributes?.grading?.authority ||
     "";
-  const gradeValue =
+  const legacyGradeValue =
     listingData?.gradeValue ||
     listingData?.cardAttributes?.gradeValue ||
     listingData?.cardAttributes?.grading?.value ||
@@ -84,18 +81,33 @@ export default function SingleListing() {
   const isSlabbed = reviewIdentity?.isSlabbed === true;
   const backOcrStatus = reviewIdentity?.backOcrStatus || "";
   const showGraded = isSlabbed || reviewIdentity?.graded === true;
+  const gradeValue =
+    reviewIdentity?.grade && typeof reviewIdentity.grade === "object"
+      ? reviewIdentity.grade.value
+      : reviewIdentity?.grade || "";
+  const gradeScale =
+    isSlabbed && reviewIdentity?.grader
+      ? reviewIdentity.grader
+      : reviewIdentity?.grade && typeof reviewIdentity.grade === "object"
+      ? reviewIdentity.grade.scale
+      : reviewIdentity?.grader || "";
   const gradeLabel = isSlabbed
-    ? reviewIdentity?.grade
-      ? [
-          `Mint ${reviewIdentity?.grade}`,
-          reviewIdentity?.grader,
-        ]
-          .filter(Boolean)
-          .join(" · ")
+    ? gradeValue
+      ? [gradeScale, gradeValue].filter(Boolean).join(" ")
       : "Graded"
     : backOcrStatus === "pending"
     ? ""
     : "Raw";
+  const graderSource = reviewIdentity?._sources?.grader || "";
+  const showGraderChips =
+    isSlabbed && (!reviewIdentity?.grader || graderSource === "inferred");
+  const showGradeChips =
+    isSlabbed && reviewIdentity?.grader && !gradeValue;
+  const gradeChipOptions = {
+    PSA: ["7", "8", "9", "10"],
+    BGS: ["8", "8.5", "9", "9.5", "10"],
+    SGC: ["88", "92", "96", "98", "100"],
+  };
   const metadataCompleteness = reviewIdentity?.metadataCompleteness;
   const hasBackPhoto =
     Array.isArray(listingData?.secondaryPhotos) &&
@@ -134,6 +146,15 @@ export default function SingleListing() {
     }
     return Array.from(suggestions);
   };
+  const setCandidates = (() => {
+    if (!identityBrand || !identitySport || !identityYear) return [];
+    const brandKey = identityBrand.toLowerCase().trim();
+    const sportKey = identitySport.toLowerCase().trim();
+    const brandSets = SET_CANDIDATE_MAP[brandKey];
+    if (!brandSets) return [];
+    const candidates = brandSets[sportKey] || [];
+    return Array.isArray(candidates) ? candidates : [];
+  })();
   const handleAssistPick = (field, value) => {
     setReviewIdentityField(field, value);
     setActiveAssistField("");
@@ -446,32 +467,79 @@ export default function SingleListing() {
                           )
                         }
                       >
-                        Add
+                        Select Set
                       </button>
                     )}
                   </div>
                   {activeAssistField === "setName" && !identitySetName && (
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {assistSuggestions("setName").map((option) => (
-                        <button
-                          key={option}
-                          type="button"
-                          className="px-2.5 py-1 rounded-full border border-white/15 text-[11px] text-white/70 hover:bg-white/10 transition"
-                          onClick={() => handleAssistPick("setName", option)}
-                        >
-                          {option}
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        className="px-2.5 py-1 rounded-full border border-white/15 text-[11px] text-white/60 hover:bg-white/10 transition"
-                        onClick={() => {
-                          const value = window.prompt("Set / Brand");
-                          if (value) handleAssistPick("setName", value.trim());
-                        }}
-                      >
-                        Enter manually
-                      </button>
+                    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-4">
+                      <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#121212] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.55)]">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="text-xs uppercase tracking-[0.25em] text-white/60">
+                            Select Set
+                          </div>
+                          <button
+                            type="button"
+                            className="text-xs uppercase tracking-[0.25em] text-white/50 hover:text-white/80"
+                            onClick={() => setActiveAssistField("")}
+                          >
+                            Close
+                          </button>
+                        </div>
+                        {setCandidates.length ? (
+                          <div className="flex flex-wrap gap-2">
+                            {setCandidates.map((option) => (
+                              <button
+                                key={option}
+                                type="button"
+                                className="px-2.5 py-1 rounded-full border border-white/15 text-[11px] text-white/70 hover:bg-white/10 transition"
+                                onClick={() =>
+                                  setReviewIdentityField("setName", option, {
+                                    force: true,
+                                    source: "manual",
+                                    userVerified: true,
+                                  })
+                                }
+                              >
+                                {option}
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-[11px] text-white/60">
+                            Set will auto-fill if detected on card back.
+                          </div>
+                        )}
+                        <div className="mt-3">
+                          <div className="text-[11px] uppercase tracking-[0.2em] text-white/50 mb-2">
+                            Manual Set
+                          </div>
+                          <input
+                            type="text"
+                            value={manualSetValue}
+                            onChange={(event) => setManualSetValue(event.target.value)}
+                            className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-white/30"
+                            placeholder="Enter set name"
+                          />
+                          <button
+                            type="button"
+                            className="mt-2 w-full rounded-xl border border-white/20 py-2 text-[11px] uppercase tracking-[0.25em] text-white/70 hover:bg-white/10 transition"
+                            onClick={() => {
+                              const value = manualSetValue.trim();
+                              if (!value) return;
+                              setReviewIdentityField("setName", value, {
+                                force: true,
+                                source: "manual",
+                                userVerified: true,
+                              });
+                              setManualSetValue("");
+                              setActiveAssistField("");
+                            }}
+                          >
+                            Save Set
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -542,6 +610,77 @@ export default function SingleListing() {
                   <div className="text-lg mt-1 text-white/85">
                     {gradeLabel || <span className="text-white/35">—</span>}
                   </div>
+                  {showGraderChips && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {["PSA", "BGS", "SGC", "Other"].map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          className="px-2.5 py-1 rounded-full border border-white/15 text-[11px] text-white/70 hover:bg-white/10 transition"
+                          onClick={() => {
+                            if (option === "Other") {
+                              const value = window.prompt("Grader");
+                              if (!value) return;
+                              setReviewIdentityField("grader", value.trim(), {
+                                force: true,
+                                source: "user",
+                                userVerified: true,
+                              });
+                              return;
+                            }
+                            setReviewIdentityField("grader", option, {
+                              force: true,
+                              source: "user",
+                              userVerified: true,
+                            });
+                          }}
+                        >
+                          {option}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {showGradeChips && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {(gradeChipOptions[reviewIdentity?.grader] || []).map(
+                        (option) => (
+                          <button
+                            key={option}
+                            type="button"
+                            className="px-2.5 py-1 rounded-full border border-white/15 text-[11px] text-white/70 hover:bg-white/10 transition"
+                            onClick={() =>
+                              setReviewIdentityField(
+                                "grade",
+                                { value: option, scale: "10" },
+                                {
+                                  force: true,
+                                  source: "user",
+                                  userVerified: true,
+                                }
+                              )
+                            }
+                          >
+                            {option}
+                          </button>
+                        )
+                      )}
+                      <button
+                        type="button"
+                        className="px-2.5 py-1 rounded-full border border-white/15 text-[11px] text-white/60 hover:bg-white/10 transition"
+                        onClick={() => {
+                          const value = window.prompt("Grade");
+                          if (!value) return;
+                          setReviewIdentityField(
+                            "grade",
+                            { value: value.trim(), scale: "10" },
+                            { force: true, source: "user", userVerified: true }
+                          );
+                        }}
+                      >
+                        Enter manually
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
               {cornersReviewed && (

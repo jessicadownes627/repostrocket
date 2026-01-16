@@ -1,4 +1,4 @@
-console.log("[RESOLVER] cardFactsResolver invoked");
+ 
 
 const MLB_TEAMS = [
   "angels",
@@ -131,6 +131,21 @@ const NHL_TEAMS = [
   "maple leafs",
   "senators",
 ];
+
+const positionTokens = [
+  "running back",
+  "quarterback",
+  "wide receiver",
+  "linebacker",
+  "tight end",
+  "qb",
+  "rb",
+  "wr",
+  "te",
+  "lb",
+];
+const statTokens = ["yds", "td", "avg", "rec", "att"];
+const verbTokens = ["had", "was", "returned", "averaged"];
 
 const LEAGUE_LOOKUP = [
   { league: "MLB", sport: "Baseball", keywords: MLB_TEAMS },
@@ -269,6 +284,39 @@ function normalizePlayerNameFinal(name = "") {
   if (!normalized) return "";
   const canonical = PLAYER_CANONICAL_MAP.get(normalizePlayerKey(normalized));
   return canonical || normalized;
+}
+
+function extractSlabGrade(slabLines = []) {
+  if (!Array.isArray(slabLines) || !slabLines.length) return null;
+  const lines = slabLines.map((line) => String(line || "").trim()).filter(Boolean);
+  if (!lines.length) return null;
+  const graders = ["PSA", "BGS", "SGC"];
+  const graderIndex = lines.findIndex((line) =>
+    graders.some((grader) => new RegExp(`\\b${grader}\\b`, "i").test(line))
+  );
+  if (graderIndex === -1) return null;
+  const graderMatch = graders.find((grader) =>
+    new RegExp(`\\b${grader}\\b`, "i").test(lines[graderIndex])
+  );
+  if (!graderMatch) return null;
+  const gradeRegex = /\b(10|9\.5|9|8\.5|8|7\.5|7|6\.5|6|5\.5|5|4\.5|4|3\.5|3|2\.5|2|1\.5|1|98)\b/;
+  const directMatch = lines[graderIndex].match(
+    new RegExp(`${graderMatch}\\s*(${gradeRegex.source})`, "i")
+  );
+  if (directMatch?.[1]) {
+    return { grader: graderMatch, value: directMatch[1] };
+  }
+  const candidates = [];
+  for (let offset = -2; offset <= 2; offset += 1) {
+    const idx = graderIndex + offset;
+    if (idx < 0 || idx >= lines.length) continue;
+    const match = lines[idx].match(gradeRegex);
+    if (match?.[1]) {
+      candidates.push(match[1]);
+    }
+  }
+  if (!candidates.length) return null;
+  return { grader: graderMatch, value: candidates[0] };
 }
 
 function pickTeamFromOcr(lines) {
@@ -558,8 +606,6 @@ export function resolveCardFacts(intel = {}) {
   const slabLabelLines = providedSlabLabelLines
     ? normalizeOcrLineInput(providedSlabLabelLines)
     : [];
-  console.log("[RESOLVER] slabLabelLines", slabLabelLines);
-  console.log("[RESOLVER INPUT OCR]", ocrLines);
   if (!ocrLines.length && !backOcrLines.length && !slabLabelLines.length) {
     return resolved;
   }
@@ -607,6 +653,15 @@ export function resolveCardFacts(intel = {}) {
       resolved._sources.isSlabbed = lineSource;
     }
   }
+  if (slabLineTexts.length && (!resolved.grade || !resolved.grader)) {
+    const slabGrade = extractSlabGrade(slabLineTexts);
+    if (slabGrade?.grader && slabGrade?.value && !resolved.grade) {
+      resolved.grade = { value: slabGrade.value, scale: "10" };
+      resolved.grader = slabGrade.grader;
+      resolved._sources.grade = "slab";
+      resolved._sources.grader = "slab";
+    }
+  }
   if (slabLineTexts.length) {
     const slabYearCandidates = slabLineTexts
       .map((line) => line.match(/\b(19|20)\d{2}\b/))
@@ -622,7 +677,30 @@ export function resolveCardFacts(intel = {}) {
       resolved._sources.year = "slab";
     }
   }
-  const brandSourceLines = ocrLineTextsBack.length ? ocrLineTextsBack : ocrLineTexts;
+  if (!resolved.year && ocrLineTextsFront.length) {
+    const frontYearCandidates = [];
+    ocrLineTextsFront.forEach((line) => {
+      const normalized = normalizeLine(line);
+      if (!normalized) return;
+      if (statTokens.some((token) => normalized.includes(token))) return;
+      if (verbTokens.some((token) => normalized.includes(token))) return;
+      const matches = line.match(/\b(19|20)\d{2}\b/g);
+      if (!matches) return;
+      matches.forEach((value) => {
+        const yearNumber = Number(value);
+        if (yearNumber >= 1900 && yearNumber <= 2099) {
+          frontYearCandidates.push(yearNumber);
+        }
+      });
+    });
+    if (frontYearCandidates.length) {
+      const firstYear = frontYearCandidates[0];
+      const hadYear = Boolean(resolved.year);
+      setIfEmpty("year", String(firstYear));
+      setSourceIfUnset("year", "front-ocr", hadYear);
+    }
+  }
+  const brandSourceLines = ocrLineTextsBack.length ? ocrLineTextsBack : ocrLineTextsFront;
   const brandKeywords = [
     "upper deck",
     "topps",
@@ -673,20 +751,6 @@ export function resolveCardFacts(intel = {}) {
       setSourceIfUnset("brand", "back-ocr", hadBrand);
     }
   }
-  const positionTokens = [
-    "running back",
-    "quarterback",
-    "wide receiver",
-    "linebacker",
-    "tight end",
-    "qb",
-    "rb",
-    "wr",
-    "te",
-    "lb",
-  ];
-  const statTokens = ["yds", "td", "avg", "rec", "att"];
-  const verbTokens = ["had", "was", "returned", "averaged"];
   const teamKeywords = [...MLB_TEAMS, ...NFL_TEAMS, ...NBA_TEAMS, ...NHL_TEAMS];
   const excludedPlayerLines = new Set();
   const excludedPlayerTokens = new Set();
@@ -1068,18 +1132,6 @@ export function resolveCardFacts(intel = {}) {
     const normalizedSet = normalizeLine(resolved.setName);
     const modernSetYearMap = [
       { token: "panini donruss", year: "2025" },
-    ];
-    const positionTokens = [
-      "running back",
-      "quarterback",
-      "wide receiver",
-      "linebacker",
-      "tight end",
-      "qb",
-      "wr",
-      "te",
-      "lb",
-      "rb",
     ];
     const hasFootballSignal =
       resolved.sport === "Football" ||
@@ -1484,6 +1536,5 @@ export function resolveCardFacts(intel = {}) {
   if (slabLabelLines && slabLabelLines.length > 0) {
     resolved.isSlabbed = true;
   }
-  console.log("[RESOLVER OUTPUT]", resolved);
   return resolved;
 }

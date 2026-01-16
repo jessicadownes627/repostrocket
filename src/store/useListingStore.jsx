@@ -578,6 +578,7 @@ export function ListingProvider({ children }) {
           !resolved?.setName &&
           !resolved?.year;
         const metadataCompleteness = hasPartialMetadata ? "partial" : "complete";
+        let committedIdentity = null;
         setReviewIdentity((prev) => {
           const preserveUserVerified = (next) => {
             if (!prev?.userVerified) return next;
@@ -612,6 +613,7 @@ export function ListingProvider({ children }) {
             minimalPayload.backImage || minimalPayload.nameZoneCrops?.slabLabel
               ? "pending"
               : "complete";
+          committedIdentity = next;
           return next;
         });
         setAnalysisState("complete");
@@ -627,9 +629,12 @@ export function ListingProvider({ children }) {
               imageHash: minimalPayload.imageHash,
             }),
           })
-            .then((backResponse) => (backResponse.ok ? backResponse.json() : null))
+            .then((backResponse) => {
+              if (!backResponse.ok) return null;
+              return backResponse.json().catch(() => null);
+            })
             .then((backData) => {
-              if (!backData) return;
+              if (!backData || backData.status !== "ok") return;
               const backOcrLines = Array.isArray(backData?.backOcrLines)
                 ? backData.backOcrLines
                 : [];

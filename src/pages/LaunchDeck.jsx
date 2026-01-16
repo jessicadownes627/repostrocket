@@ -42,20 +42,25 @@ export default function LaunchDeck() {
     usedBackForResolution && frontPhotos.length && backPhotos.length
       ? [frontPhotos[0], backPhotos[0]]
       : frontPhotos;
+  const resolvedGradeValue =
+    resolvedIdentity?.grade && typeof resolvedIdentity.grade === "object"
+      ? resolvedIdentity.grade.value
+      : resolvedIdentity?.grade || "";
+  const resolvedGradeScale =
+    resolvedIdentity?.isSlabbed && resolvedIdentity?.grader
+      ? resolvedIdentity.grader
+      : resolvedIdentity?.grade && typeof resolvedIdentity.grade === "object"
+      ? resolvedIdentity.grade.scale
+      : resolvedIdentity?.grader || "";
   const resolvedGrade =
-    resolvedIdentity?.grade && resolvedIdentity?.isSlabbed
-      ? [
-          `Mint ${resolvedIdentity.grade}`,
-          resolvedIdentity?.grader,
-        ]
-          .filter(Boolean)
-          .join(" · ")
-      : resolvedIdentity?.grade
-      ? [resolvedIdentity?.condition, resolvedIdentity?.grade]
+    resolvedIdentity?.isSlabbed
+      ? resolvedGradeValue
+        ? [resolvedGradeScale, resolvedGradeValue].filter(Boolean).join(" ")
+        : "Graded"
+      : resolvedGradeValue
+      ? [resolvedIdentity?.condition, resolvedGradeValue]
           .filter(Boolean)
           .join(" ")
-      : resolvedIdentity?.isSlabbed
-      ? "Graded"
       : "";
   const identityTitle = resolvedIdentity ? composeCardTitle(resolvedIdentity) : "";
   const identityTeam =
