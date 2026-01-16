@@ -1316,6 +1316,18 @@ export function resolveCardFacts(intel = {}) {
       setSourceIfUnset("sport", "inferred", hadSport);
     }
   }
+  if (!resolved.team && resolved.player && resolved.sport) {
+    const canonicalTeamMap = new Map([
+      ["michael jordan", "Chicago Bulls"],
+    ]);
+    const normalizedPlayer = normalizeLine(resolved.player);
+    const canonicalTeam = canonicalTeamMap.get(normalizedPlayer);
+    if (canonicalTeam) {
+      const hadTeam = Boolean(resolved.team);
+      setIfEmpty("team", canonicalTeam);
+      setSourceIfUnset("team", "canonical", hadTeam);
+    }
+  }
   if (
     resolved.isSlabbed === false &&
     resolved.player &&

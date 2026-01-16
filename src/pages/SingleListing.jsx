@@ -3,7 +3,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 import LuxeChipGroup from "../components/LuxeChipGroup";
 import LuxeInput from "../components/LuxeInput";
 import { useListingStore } from "../store/useListingStore";
-import { composeCardTitle } from "../utils/composeCardTitle";
 import { getPhotoUrl } from "../utils/photoHelpers";
 import "../styles/overrides.css";
 
@@ -172,10 +171,11 @@ export default function SingleListing() {
   const analysisComplete = !analysisInFlight && hasIdentityData;
   const titleSetName =
     identitySetName && identitySetName !== identityPlayer ? identitySetName : "";
-  const displayTitle = composeCardTitle({
-    setName: titleSetName,
-    player: identityPlayer,
-  });
+  const displayTitle = identityYear && identityBrand && titleSetName
+    ? `${identityYear} ${identityBrand} ${titleSetName} · ${identityPlayer}`
+    : identityYear && identityBrand
+    ? `${identityYear} ${identityBrand} · ${identityPlayer}`
+    : identityPlayer || "";
 
   /* ---------- hydrate ONCE for sports ---------- */
   useEffect(() => {
@@ -312,7 +312,7 @@ export default function SingleListing() {
                 </div>
               )}
               {!analysisComplete && (
-                <div className="text-[11px] uppercase tracking-[0.28em] opacity-60">
+                <div className="text-[10px] uppercase tracking-[0.22em] opacity-40">
                   {["Scanning surface…", "Reading print…", "Checking edges…"][scanHintIndex]}
                 </div>
               )}
@@ -352,17 +352,22 @@ export default function SingleListing() {
                   </div>
                   <div className="text-lg mt-1 text-white">
                     {displayPlayer || (
-                      <button
-                        type="button"
-                        className="inline-flex items-center px-2.5 py-1 rounded-full border border-white/15 text-[11px] uppercase tracking-[0.22em] text-white/70 hover:bg-white/10 transition"
-                        onClick={() =>
-                          setActiveAssistField((prev) =>
-                            prev === "player" ? "" : "player"
-                          )
-                        }
-                      >
-                        Add
-                      </button>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm text-white/35">
+                          Detecting player…
+                        </span>
+                        <button
+                          type="button"
+                          className="inline-flex items-center px-2.5 py-1 rounded-full border border-white/15 text-[11px] uppercase tracking-[0.22em] text-white/70 hover:bg-white/10 transition"
+                          onClick={() =>
+                            setActiveAssistField((prev) =>
+                              prev === "player" ? "" : "player"
+                            )
+                          }
+                        >
+                          Add
+                        </button>
+                      </div>
                     )}
                     {displayPlayer && (
                       <button
@@ -414,17 +419,22 @@ export default function SingleListing() {
                   </div>
                   <div className="text-lg mt-1 text-white/85">
                     {identityYear || (
-                      <button
-                        type="button"
-                        className="inline-flex items-center px-2.5 py-1 rounded-full border border-white/15 text-[11px] uppercase tracking-[0.22em] text-white/70 hover:bg-white/10 transition"
-                        onClick={() =>
-                          setActiveAssistField((prev) =>
-                            prev === "year" ? "" : "year"
-                          )
-                        }
-                      >
-                        Add
-                      </button>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm text-white/35">
+                          Detecting year…
+                        </span>
+                        <button
+                          type="button"
+                          className="inline-flex items-center px-2.5 py-1 rounded-full border border-white/15 text-[11px] uppercase tracking-[0.22em] text-white/70 hover:bg-white/10 transition"
+                          onClick={() =>
+                            setActiveAssistField((prev) =>
+                              prev === "year" ? "" : "year"
+                            )
+                          }
+                        >
+                          Add
+                        </button>
+                      </div>
                     )}
                   </div>
                   {activeAssistField === "year" && !identityYear && (
@@ -458,17 +468,22 @@ export default function SingleListing() {
                   </div>
                   <div className="text-lg mt-1 text-white/85">
                     {identitySetName || (
-                      <button
-                        type="button"
-                        className="inline-flex items-center px-2.5 py-1 rounded-full border border-white/15 text-[11px] uppercase tracking-[0.22em] text-white/70 hover:bg-white/10 transition"
-                        onClick={() =>
-                          setActiveAssistField((prev) =>
-                            prev === "setName" ? "" : "setName"
-                          )
-                        }
-                      >
-                        Select Set
-                      </button>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm text-white/35">
+                          Checking card back…
+                        </span>
+                        <button
+                          type="button"
+                          className="inline-flex items-center px-2.5 py-1 rounded-full border border-white/15 text-[11px] uppercase tracking-[0.22em] text-white/70 hover:bg-white/10 transition"
+                          onClick={() =>
+                            setActiveAssistField((prev) =>
+                              prev === "setName" ? "" : "setName"
+                            )
+                          }
+                        >
+                          Select Set
+                        </button>
+                      </div>
                     )}
                   </div>
                   {activeAssistField === "setName" && !identitySetName && (
@@ -507,7 +522,7 @@ export default function SingleListing() {
                           </div>
                         ) : (
                           <div className="text-[11px] text-white/60">
-                            Set will auto-fill if detected on card back.
+                            Multiple sets exist for this year. Select the correct set.
                           </div>
                         )}
                         <div className="mt-3">
@@ -548,7 +563,11 @@ export default function SingleListing() {
                     Brand
                   </div>
                   <div className="text-lg mt-1 text-white/85">
-                    {identityBrand || <span className="text-white/35">—</span>}
+                    {identityBrand || (
+                      <span className="text-sm text-white/35">
+                        Identifying brand…
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div>
@@ -557,17 +576,22 @@ export default function SingleListing() {
                   </div>
                   <div className="text-lg mt-1 text-white/85">
                     {identityTeam || (
-                      <button
-                        type="button"
-                        className="inline-flex items-center px-2.5 py-1 rounded-full border border-white/15 text-[11px] uppercase tracking-[0.22em] text-white/70 hover:bg-white/10 transition"
-                        onClick={() =>
-                          setActiveAssistField((prev) =>
-                            prev === "team" ? "" : "team"
-                          )
-                        }
-                      >
-                        Add
-                      </button>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm text-white/35">
+                          Detecting team…
+                        </span>
+                        <button
+                          type="button"
+                          className="inline-flex items-center px-2.5 py-1 rounded-full border border-white/15 text-[11px] uppercase tracking-[0.22em] text-white/70 hover:bg-white/10 transition"
+                          onClick={() =>
+                            setActiveAssistField((prev) =>
+                              prev === "team" ? "" : "team"
+                            )
+                          }
+                        >
+                          Add
+                        </button>
+                      </div>
                     )}
                   </div>
                   {activeAssistField === "team" && !identityTeam && (
@@ -600,7 +624,11 @@ export default function SingleListing() {
                     Sport
                   </div>
                   <div className="text-lg mt-1 text-white/85">
-                    {identitySport || <span className="text-white/35">—</span>}
+                    {identitySport || (
+                      <span className="text-sm text-white/35">
+                        Identifying sport…
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div>
@@ -683,7 +711,7 @@ export default function SingleListing() {
                   )}
                 </div>
               </div>
-              {cornersReviewed && (
+              {cornersReviewed && !isSlabbed && (
                 <div className="text-xs uppercase tracking-[0.3em] opacity-60 mt-4">
                   Corners reviewed
                 </div>
