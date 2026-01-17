@@ -728,10 +728,10 @@ export default function SingleListing() {
                 </div>
                 <div>
                   <div className="text-xs uppercase tracking-[0.3em] opacity-60">
-                    Condition / Grade
+                    {isSlabbed ? "Grade" : "Grade"}
                   </div>
                   <div className="text-lg mt-1 text-white/85">
-                    {gradeLabel || <span className="text-white/35">—</span>}
+                    {gradeLabel || ""}
                   </div>
                   {showGraderChips && (
                     <div className="flex flex-wrap gap-2 mt-2">
@@ -806,7 +806,6 @@ export default function SingleListing() {
                   )}
                 </div>
               </div>
-              {renderCornersReviewed()}
             </div>
 
             <button
