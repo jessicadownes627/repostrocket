@@ -26,6 +26,20 @@ const CORNER_LABELS = {
   bottomLeft: "Bottom Left",
   bottomRight: "Bottom Right",
 };
+
+const splitCornerEntries = (entries = []) => {
+  const frontCorners = [];
+  const backCorners = [];
+  entries.forEach((entry) => {
+    const side = (entry?.side || "").toLowerCase();
+    if (side.includes("front")) {
+      frontCorners.push(entry);
+    } else if (side.includes("back")) {
+      backCorners.push(entry);
+    }
+  });
+  return { frontCorners, backCorners };
+};
 const CARD_IDENTITY_FIELDS = [
   { key: "player", label: "Player" },
   { key: "team", label: "Team" },
@@ -89,7 +103,13 @@ export default function BatchCardPrep() {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedId = searchParams.get("cardId");
   const { batchItems, updateBatchItem } = useBatchStore();
-  const { listingData, setListing, setListingField, setBatchItems } = useListingStore();
+  const {
+    listingData,
+    reviewIdentity,
+    setListing,
+    setListingField,
+    setBatchItems,
+  } = useListingStore();
   const loadedCardIdRef = useRef(null);
   const [analysisError, setAnalysisError] = useState("");
   const [approving, setApproving] = useState(false);
@@ -437,6 +457,7 @@ export default function BatchCardPrep() {
       cardAttributes: currentCard.cardAttributes || null,
       pricing: currentCard.pricing || null,
       title: currentCard.title || "",
+      reviewIdentity: currentCard.reviewIdentity || null,
       batchCardId: currentCard.id,
     });
   }, [currentCard, setListing]);
@@ -456,6 +477,7 @@ export default function BatchCardPrep() {
       cardAttributes: listingData.cardAttributes || null,
       pricing: listingData.pricing || null,
       title: listingData.title || "",
+      reviewIdentity: reviewIdentity || currentCard?.reviewIdentity || null,
       prepComplete,
       batchCardId: currentCard.id,
     });
@@ -469,6 +491,7 @@ export default function BatchCardPrep() {
     listingData.cardAttributes,
     listingData.pricing,
     listingData.title,
+    reviewIdentity,
     updateBatchItem,
   ]);
 
@@ -723,7 +746,7 @@ export default function BatchCardPrep() {
     : 0;
   const statusVisualMap = {
     ready: {
-      label: "Ready to list",
+      label: "Ready for launch",
       badgeClass:
         "text-emerald-200 border border-emerald-200/40 bg-emerald-500/10",
       cardClass: "border border-emerald-200/35 bg-emerald-500/5",
@@ -739,6 +762,14 @@ export default function BatchCardPrep() {
       cardClass: "border border-white/15 bg-black/30",
     },
   };
+  const currentStatus =
+    currentCard?.id && cardStatusMap[currentCard.id]?.status
+      ? cardStatusMap[currentCard.id].status
+      : currentCard
+      ? deriveCardStatus(currentCard)
+      : "notStarted";
+  const currentStatusConfig =
+    statusVisualMap[currentStatus] || statusVisualMap.notStarted;
 
   const getConfidenceDescription = (level) => {
     if (!level) return "";
@@ -866,7 +897,20 @@ export default function BatchCardPrep() {
       const ocrLines = Array.isArray(data?.ocrLines) ? data.ocrLines : [];
       const resolved = cardFactsResolver(ocrLines);
       const cardTitle = composeCardTitle(resolved);
-      const reviewIdentity = { ...resolved, cardTitle };
+      const reviewIdentity = { ...(currentCard?.reviewIdentity || {}) };
+      const assignIfEmpty = (key, value) => {
+        if (value === undefined || value === null || value === "") return;
+        if (reviewIdentity[key] !== undefined && reviewIdentity[key] !== null && reviewIdentity[key] !== "") {
+          return;
+        }
+        reviewIdentity[key] = value;
+      };
+      Object.entries(resolved || {}).forEach(([key, value]) => {
+        assignIfEmpty(key, value);
+      });
+      if (cardTitle) {
+        reviewIdentity.cardTitle = reviewIdentity.cardTitle || cardTitle;
+      }
 
       setListingField("cardIntel", data);
       setListingField("reviewIdentity", reviewIdentity);
@@ -891,6 +935,7 @@ export default function BatchCardPrep() {
     if (!showAnalysisResults || launching) return;
     setLaunching(true);
     try {
+      const { frontCorners, backCorners } = splitCornerEntries(activeCornerPhotos || []);
       const payloadItem = {
         id: currentCard.id,
         title: listingTitle || "",
@@ -903,6 +948,8 @@ export default function BatchCardPrep() {
         cardIntel: activeCardIntel || null,
         pricing: activePricing || null,
         cornerPhotos: activeCornerPhotos || [],
+        frontCorners,
+        backCorners,
         photos: activePhotos || [],
         secondaryPhotos: activeSecondaryPhotos || [],
       };
@@ -999,6 +1046,13 @@ export default function BatchCardPrep() {
                   : `Card — / ${batchItems.length}`}
               </div>
             </div>
+            {currentStatusConfig && (
+              <span
+                className={`text-[10px] uppercase tracking-[0.3em] rounded-full px-2 py-0.5 ${currentStatusConfig.badgeClass}`}
+              >
+                {currentStatusConfig.label}
+              </span>
+            )}
           </div>
           <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
             <div

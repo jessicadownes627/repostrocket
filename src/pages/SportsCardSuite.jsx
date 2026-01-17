@@ -214,12 +214,12 @@ export default function SportsCardSuite() {
           Sports Card Suite
         </h1>
         <p className="text-lg text-white/75 mb-10 leading-relaxed max-w-3xl">
-          Built for sellers who need one place to prep, analyze, and launch card listings.
+          Choose how you want to prep your card(s).
         </p>
 
         {/* Feature cards */}
-        <div className="space-y-5 mt-8">
-          <div className="rounded-[32px] border-[2px] border-white/20 bg-gradient-to-b from-[#161210] via-[#0C0A0A] to-[#070606] shadow-[0_25px_70px_rgba(8,4,0,0.55)]">
+        <div className="space-y-8 mt-10">
+          <div className="rounded-[32px] border-[2px] border-white/25 bg-gradient-to-b from-[#161210] via-[#0C0A0A] to-[#070606] shadow-[0_30px_85px_rgba(8,4,0,0.65)]">
             <button
               onClick={() =>
                 handleNavigate("/batch", "batchMode", {
@@ -235,22 +235,7 @@ export default function SportsCardSuite() {
                 </span>
               </div>
               <div className="text-[17px] leading-relaxed mb-4 max-w-3xl text-white/80">
-                One guided pipeline keeps every card moving from capture to launch.
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] text-white/70">
-                {[
-                  "1. Capture front/back with auto-crop + corner checks",
-                  "2. Analyze player, year, grading, pricing when visible",
-                  "3. Approve, flag, or park cards that need work",
-                  "4. Send ready cards straight into Launch Deck",
-                ].map((step) => (
-                  <div
-                    key={step}
-                    className="rounded-xl border border-white/15 bg-black/25 px-3 py-1.5"
-                  >
-                    {step}
-                  </div>
-                ))}
+                Prep multiple cards in one guided flow from photos to launch.
               </div>
               <span className="mt-4 inline-flex text-[11px] tracking-[0.3em] uppercase text-white/90">
                 Enter Batch Flow →
@@ -258,7 +243,7 @@ export default function SportsCardSuite() {
             </button>
           </div>
 
-          <div className="rounded-[32px] border-[2px] border-white/20 bg-black/15">
+          <div className="rounded-[32px] border-[2px] border-white/25 bg-black/15">
             <button
               onClick={() => handleNavigate("/card-prep")}
               className="w-full text-left px-6 py-5 rounded-[32px] text-white hover:bg-white/5 transition-all"
@@ -267,8 +252,7 @@ export default function SportsCardSuite() {
                 Single Card Pro Editor
               </div>
               <div className="text-base text-white/80 leading-relaxed mb-2">
-                The full-frame editor for one-off cards. Confirm corners, run AI
-                polish, and fine-tune titles + tags before sending to Launch Deck.
+                Prep and fine-tune one card before launch.
               </div>
               <span className="text-xs uppercase tracking-[0.3em] text-white/70">
                 Open Pro Editor →
@@ -276,51 +260,40 @@ export default function SportsCardSuite() {
             </button>
           </div>
 
-          <div className="rounded-[32px] border-[2px] border-white/20 bg-black/10">
-            <div className="px-6 py-5 rounded-[32px]">
-              <div className="text-[10px] uppercase tracking-[0.4em] text-white/45 mb-2">
-                Slab awareness
-              </div>
-              <p className="text-base leading-relaxed text-white/80">
-                Repost Rocket watches for graded/slabbed cards in your saved items so
-                you know when confirming details with the slab label is the right move.
+          <details className="rounded-[32px] border-[2px] border-white/15 bg-black/10 overflow-hidden">
+            <summary className="cursor-pointer px-6 py-5 text-[10px] uppercase tracking-[0.4em] text-white/55 flex items-center justify-between">
+              <span>Slab awareness + grading resources</span>
+              <span className="text-[10px] text-white/40">(tap to view)</span>
+            </summary>
+            <div className="px-6 pb-6">
+              <p className="text-sm leading-relaxed text-white/80">
+                Recognizes slabbed cards and surfaces grading context when present.
               </p>
-              {slabContext?.gradedCount > 0 && (
-                <>
-                  <p className="text-base leading-relaxed text-white/80 mt-2">
-                    Graded card detected in your saved items. Sellers typically confirm
-                    listing details from the slab label when working this format.
-                  </p>
-                  {slabContext.likelyAuthority && (
-                    <p className="text-[11px] uppercase tracking-[0.35em] text-white/60 mt-1">
-                      Likely {slabContext.likelyAuthority}
-                    </p>
-                  )}
-                </>
+              {slabContext?.gradedCount > 0 && slabContext.likelyAuthority && (
+                <p className="text-[11px] uppercase tracking-[0.35em] text-white/60 mt-2">
+                  Likely {slabContext.likelyAuthority}
+                </p>
               )}
               <div className="mt-4">
                 <div className="text-[10px] uppercase tracking-[0.4em] text-white/50 mb-2">
-                  Official grading resources
+                  Grading resources
                 </div>
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div className="flex flex-wrap gap-2">
                   {GRADING_LINKS.map((link) => (
                     <a
                       key={link.label}
                       href={link.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="block rounded-2xl border border-white/15 px-3 py-2 transition hover:border-white/40"
+                      className="inline-flex items-center rounded-full border border-white/15 px-3 py-1 text-[11px] uppercase tracking-[0.3em] text-white/70 hover:border-white/40 transition"
                     >
-                      <div className="text-[12px] font-semibold">{link.label}</div>
-                  <p className="text-[11px] text-white/70 mt-1">
-                        {link.description}
-                      </p>
+                      {link.label}
                     </a>
                   ))}
                 </div>
               </div>
             </div>
-          </div>
+          </details>
 
           {SHOW_MULTI_CARD_EXPERIMENT && (
             <div className="rounded-[32px] border border-white/10 bg-black/10">
@@ -352,7 +325,7 @@ export default function SportsCardSuite() {
         <div className="mt-16">
           <details className="border border-white/15 rounded-2xl bg-black/20 overflow-hidden">
             <summary className="cursor-pointer px-4 py-3 text-sm uppercase tracking-[0.3em] text-white/45 flex items-center justify-between">
-              <span>Included in your suite</span>
+              <span>What powers this suite</span>
               <span className="text-[11px] text-white/35">(tap to view)</span>
             </summary>
             <div className="px-4 py-4 space-y-4 text-white/75 text-sm leading-relaxed border-t border-white/10">

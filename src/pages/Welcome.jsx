@@ -15,8 +15,8 @@ export default function Welcome() {
         </h1>
 
         {/* SUBTITLE */}
-        <p className="text-lg md:text-xl text-[#D9D0C0] opacity-80 mt-3 font-light tracking-wide">
-          Your Luxury Selling Prep Studio
+        <p className="text-xl md:text-2xl text-[#E6DCC6] opacity-85 mt-2 font-light tracking-wide">
+          Precision listing prep.
         </p>
 
         {/* SHIMMER UNDERLINE */}
@@ -29,7 +29,7 @@ export default function Welcome() {
         <button
           onClick={() => navigate("/dashboard")}
           className="
-            mt-4 px-8 py-4 text-lg font-medium
+            mt-4 px-10 py-4 text-lg font-medium
             bg-[#050505]
             text-[#F5EBD5]
             border border-[#E8DCC0]/50
@@ -41,7 +41,7 @@ export default function Welcome() {
             backdrop-blur-md
           "
         >
-          Start Your Prep
+          Start
         </button>
       </div>
 

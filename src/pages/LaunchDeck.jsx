@@ -110,6 +110,12 @@ export default function LaunchDeck() {
         team: identityTeam || activeListing.team,
         sport: identitySport || activeListing.sport,
         cardType: identityCardType || activeListing.cardType,
+        cornerPhotos:
+          Array.isArray(activeListing.cornerPhotos) && activeListing.cornerPhotos.length > 0
+            ? activeListing.cornerPhotos
+            : Array.isArray(listingData?.cornerPhotos)
+            ? listingData.cornerPhotos
+            : [],
         frontCorners: isSlabbedMode
           ? []
           : Array.isArray(activeListing.frontCorners) &&

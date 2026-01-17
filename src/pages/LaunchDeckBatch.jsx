@@ -167,7 +167,7 @@ function isBabyApparelListing(item = {}) {
 export default function LaunchDeckBatch() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { batchMode } = useListingStore();
+  const { batchMode, setListing, replaceReviewIdentity } = useListingStore();
   const isSportsBatch = batchMode === "sports_cards";
 
   const fallbackItems = useMemo(() => [], []);
@@ -189,6 +189,18 @@ export default function LaunchDeckBatch() {
     getPremiumStatus() ||
     (typeof window !== "undefined" &&
       window.localStorage.getItem("rr_dev_premium") === "true");
+
+  const handleEditCard = useCallback(
+    (item) => {
+      if (!item) return;
+      setListing({ ...item, batchCardId: item.id });
+      replaceReviewIdentity(item.reviewIdentity || null);
+      navigate("/single-listing", {
+        state: { mode: "sports", batchCardId: item.id },
+      });
+    },
+    [setListing, replaceReviewIdentity, navigate]
+  );
 
   const updateItem = useCallback(
     (i, updater) => {
@@ -900,6 +912,8 @@ export default function LaunchDeckBatch() {
               setActiveDetailIndex={
                 isSportsBatch ? setActiveDetailIndex : undefined
               }
+              isSportsBatch={isSportsBatch}
+              onEditItem={handleEditCard}
               onRefreshItem={refreshItem}
             />
           )
@@ -1046,7 +1060,15 @@ export default function LaunchDeckBatch() {
   );
 }
 
-function BatchCard({ item, index, updateItem, setActiveDetailIndex, onRefreshItem }) {
+function BatchCard({
+  item,
+  index,
+  updateItem,
+  setActiveDetailIndex,
+  onRefreshItem,
+  isSportsBatch,
+  onEditItem,
+}) {
   const outputRef = useRef(null);
 
   const [activePlatform, setActivePlatform] = useState(null);
@@ -1258,7 +1280,9 @@ function BatchCard({ item, index, updateItem, setActiveDetailIndex, onRefreshIte
             }
             platformDescription={platformDescriptions[platformKey]}
             onEdit={
-              setActiveDetailIndex
+              isSportsBatch
+                ? () => onEditItem?.(item)
+                : setActiveDetailIndex
                 ? () => setActiveDetailIndex(index)
                 : undefined
             }

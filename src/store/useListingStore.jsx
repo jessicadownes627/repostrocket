@@ -96,6 +96,10 @@ export function ListingProvider({ children }) {
     });
   };
 
+  const replaceReviewIdentity = (nextIdentity) => {
+    setReviewIdentity(nextIdentity || null);
+  };
+
 
   const splitCornerEntries = (entries = []) => {
     const frontCorners = [];
@@ -817,6 +821,7 @@ export function ListingProvider({ children }) {
       loadDraft,
       consumeMagicUse,
       setReviewIdentityField,
+      replaceReviewIdentity,
       setBatchMode,
       analysisSessionId,
       analysisInFlight,

@@ -103,6 +103,7 @@ export default function PreviewCard({
     : Array.isArray(item.backCorners)
     ? item.backCorners
     : [];
+  const cornerPhotos = Array.isArray(item.cornerPhotos) ? item.cornerPhotos : [];
 
   const renderCornerThumbs = () => {
     if (isSlabbedMode) return null;
@@ -218,6 +219,14 @@ export default function PreviewCard({
             <div className="w-20 h-20 rounded-[14px] bg-black/40 border border-[rgba(255,255,255,0.05)]" />
           )}
           {renderCornerThumbs()}
+          {!isSlabbedMode &&
+            !frontCorners.length &&
+            !backCorners.length &&
+            cornerPhotos.length > 0 && (
+              <div className="text-[9px] uppercase tracking-[0.3em] text-white/50 mt-1">
+                Corners reviewed
+              </div>
+            )}
         </div>
 
         {/* Text content */}

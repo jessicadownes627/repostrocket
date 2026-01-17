@@ -36,6 +36,8 @@ export default function SingleListing() {
 
   const mode = location.state?.mode ?? "casual";
   const listingData = storedListingData || location.state?.listingData || null;
+  const batchCardId =
+    listingData?.batchCardId || location.state?.batchCardId || "";
   const isSports = mode === "sports";
 
   /* ---------- shared state ---------- */
@@ -175,7 +177,7 @@ export default function SingleListing() {
       : listingData.backCorners;
   const cornersReviewed = frontCorners.length > 0 || backCorners.length > 0;
   const hasIdentityData = reviewIdentity !== null;
-  const analysisComplete = !analysisInFlight && hasIdentityData;
+  const analysisComplete = hasIdentityData || !analysisInFlight;
   const titleSetName =
     identitySetName && identitySetName !== identityPlayer ? identitySetName : "";
   const displayTitle = identityYear && identityBrand && titleSetName
@@ -310,16 +312,24 @@ export default function SingleListing() {
      =============== SPORTS REVIEW LAYOUT =====================
      ========================================================= */
   if (isSports) {
-    const analysisComplete = !analysisInFlight && hasIdentityData;
-    const showScanOverlay = !analysisComplete;
+    const analysisComplete = hasIdentityData || !analysisInFlight;
+    const showScanOverlay = !hasIdentityData && analysisInFlight;
     return (
       <div className="app-wrapper px-6 py-10 max-w-2xl mx-auto">
         <button
           onClick={() => navigate(-1)}
-          className="text-left text-sm uppercase tracking-[0.2em] mb-6 opacity-70"
+          className="text-left text-sm uppercase tracking-[0.2em] mb-2 opacity-70"
         >
           ← Back
         </button>
+        {batchCardId && (
+          <button
+            onClick={() => navigate(`/batch-card-prep?cardId=${batchCardId}`)}
+            className="text-left text-[11px] uppercase tracking-[0.25em] mb-6 text-white/50 hover:text-white/80 transition"
+          >
+            ← Back to Batch
+          </button>
+        )}
 
         <h1 className="sparkly-header header-glitter text-center text-3xl mb-3">
           Single Listing

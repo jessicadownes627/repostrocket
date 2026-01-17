@@ -50,7 +50,7 @@ export default function Dashboard() {
           <span className="sparkly-header header-glitter">Repost Rocket</span>
         </h1>
         <p className="text-sm opacity-70 mt-1 tracking-wide">
-          Luxury listing prep. Fast. Polished. Profitable.
+          Precision listing prep. Fast. Polished. Profitable.
         </p>
         <div className="lux-divider lux-divider-hero"></div>
       </div>
