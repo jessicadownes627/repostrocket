@@ -935,7 +935,12 @@ export default function BatchCardPrep() {
     if (!showAnalysisResults || launching) return;
     setLaunching(true);
     try {
-      const { frontCorners, backCorners } = splitCornerEntries(activeCornerPhotos || []);
+      const isSlabbedCard =
+        activeReviewIdentity?.isSlabbed === true ||
+        activeReviewIdentity?.cardType === "slabbed" ||
+        currentCard?.cardType === "slabbed";
+      const safeCornerPhotos = isSlabbedCard ? [] : activeCornerPhotos || [];
+      const { frontCorners, backCorners } = splitCornerEntries(safeCornerPhotos);
       const payloadItem = {
         id: currentCard.id,
         title: listingTitle || "",
@@ -947,7 +952,7 @@ export default function BatchCardPrep() {
         cardAttributes: activeCardAttributes || null,
         cardIntel: activeCardIntel || null,
         pricing: activePricing || null,
-        cornerPhotos: activeCornerPhotos || [],
+        cornerPhotos: safeCornerPhotos,
         frontCorners,
         backCorners,
         photos: activePhotos || [],

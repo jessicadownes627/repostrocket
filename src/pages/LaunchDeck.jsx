@@ -16,9 +16,24 @@ export default function LaunchDeck() {
   const [platformImages, setPlatformImages] = useState({});
 
   const locationItems = location.state?.items;
+  const hasCardLevelItems = Array.isArray(locationItems)
+    ? locationItems.some(
+        (item) =>
+          item?.reviewIdentity ||
+          item?.cardType === "sports" ||
+          Boolean(item?.batchCardId)
+      )
+    : false;
   const listings =
-    locationItems && locationItems.length
-      ? locationItems
+    Array.isArray(locationItems) && locationItems.length
+      ? hasCardLevelItems
+        ? locationItems.filter(
+            (item) =>
+              item?.reviewIdentity ||
+              item?.cardType === "sports" ||
+              Boolean(item?.batchCardId)
+          )
+        : locationItems
       : listingData?.photos?.length
       ? [{ ...listingData }]
       : [];
@@ -110,12 +125,13 @@ export default function LaunchDeck() {
         team: identityTeam || activeListing.team,
         sport: identitySport || activeListing.sport,
         cardType: identityCardType || activeListing.cardType,
-        cornerPhotos:
-          Array.isArray(activeListing.cornerPhotos) && activeListing.cornerPhotos.length > 0
-            ? activeListing.cornerPhotos
-            : Array.isArray(listingData?.cornerPhotos)
-            ? listingData.cornerPhotos
-            : [],
+        cornerPhotos: isSlabbedMode
+          ? []
+          : Array.isArray(activeListing.cornerPhotos) && activeListing.cornerPhotos.length > 0
+          ? activeListing.cornerPhotos
+          : Array.isArray(listingData?.cornerPhotos)
+          ? listingData.cornerPhotos
+          : [],
         frontCorners: isSlabbedMode
           ? []
           : Array.isArray(activeListing.frontCorners) &&

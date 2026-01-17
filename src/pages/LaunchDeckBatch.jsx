@@ -710,7 +710,7 @@ export default function LaunchDeckBatch() {
 
   if (processing) {
     const processingHeadline = isPremiumUser
-      ? "Running Magic Fill…"
+      ? "Analyzing your cards…"
       : isSportsBatch
       ? "Preparing cards…"
       : "Preparing items…";
@@ -956,7 +956,7 @@ export default function LaunchDeckBatch() {
                 toolbarMode === "pricing"
                   ? "e.g., 45"
                   : toolbarMode === "tags" || toolbarMode === "seo"
-                  ? "Comma-separated, e.g., cozy, neutral, fall"
+                  ? "Comma-separated, e.g., rookie, refractor, parallel"
                   : "Type a value…"
               }
               value={toolbarValue}
@@ -967,7 +967,7 @@ export default function LaunchDeckBatch() {
               {toolbarMode === "tags" &&
                 "Tags will be split on commas and cleaned."}
               {toolbarMode === "seo" &&
-                "SEO keywords help buyers find your items faster."}
+                "SEO keywords help buyers find your cards faster."}
             </div>
 
             <div className="ld-modal-actions">

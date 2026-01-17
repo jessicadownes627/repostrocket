@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
 import { buildListingExportLinks } from "../utils/exportListing";
 import { getPhotoUrl } from "../utils/photoHelpers";
 
@@ -103,7 +103,38 @@ export default function PreviewCard({
     : Array.isArray(item.backCorners)
     ? item.backCorners
     : [];
-  const cornerPhotos = Array.isArray(item.cornerPhotos) ? item.cornerPhotos : [];
+  const cornerPhotos = isSlabbedMode
+    ? []
+    : Array.isArray(item.cornerPhotos)
+    ? item.cornerPhotos
+    : [];
+  const [includeCorners, setIncludeCorners] = useState(false);
+  const cornerUrls = useMemo(() => {
+    if (isSlabbedMode) return [];
+    if (cornerPhotos.length) {
+      return cornerPhotos.map((entry) => getPhotoUrl(entry)).filter(Boolean);
+    }
+    return [...frontCorners, ...backCorners]
+      .map((entry) => getPhotoUrl(entry))
+      .filter(Boolean);
+  }, [isSlabbedMode, cornerPhotos, frontCorners, backCorners]);
+  const baseImageUrls = useMemo(() => {
+    const urls = [];
+    const primaryUrls = photoList.map((entry) => getPhotoUrl(entry)).filter(Boolean);
+    primaryUrls.forEach((url) => {
+      if (!urls.includes(url)) urls.push(url);
+    });
+    const secondaryUrls = Array.isArray(item.secondaryPhotos)
+      ? item.secondaryPhotos.map((entry) => getPhotoUrl(entry)).filter(Boolean)
+      : [];
+    secondaryUrls.forEach((url) => {
+      if (!urls.includes(url)) urls.push(url);
+    });
+    return urls;
+  }, [photoList, item.secondaryPhotos]);
+  const includedImageUrls = includeCorners
+    ? [...baseImageUrls, ...cornerUrls]
+    : baseImageUrls;
 
   const renderCornerThumbs = () => {
     if (isSlabbedMode) return null;
@@ -227,6 +258,22 @@ export default function PreviewCard({
                 Corners reviewed
               </div>
             )}
+          {!isSlabbedMode && cornerUrls.length > 0 && (
+            <label className="mt-1 flex items-center gap-2 text-[10px] uppercase tracking-[0.3em] text-white/60">
+              <input
+                type="checkbox"
+                checked={includeCorners}
+                onChange={(event) => setIncludeCorners(event.target.checked)}
+                className="h-3.5 w-3.5 rounded border border-white/30 bg-black/40 text-[#E8DCC0]"
+              />
+              Include corner photos
+            </label>
+          )}
+          {includedImageUrls.length > 0 && (
+            <div className="text-[9px] uppercase tracking-[0.3em] text-white/40">
+              {includeCorners ? "Includes corners" : "Includes front + back"}
+            </div>
+          )}
         </div>
 
         {/* Text content */}
