@@ -81,9 +81,11 @@ export default function SingleListing() {
     listingData?.cardAttributes?.grading?.value ||
     listingData?.cardAttributes?.grade ||
     "";
-  const cardType = reviewIdentity?.cardType || "";
+  const cardType = reviewIdentity?.cardType || listingData?.cardType || "";
   const isSlabbedMode =
-    cardType === "slabbed" || reviewIdentity?.isSlabbed === true;
+    cardType === "slabbed" ||
+    reviewIdentity?.isSlabbed === true ||
+    listingData?.isSlabbed === true;
   const isSlabbed = reviewIdentity?.isSlabbed === true || isSlabbedMode;
   const backOcrStatus = reviewIdentity?.backOcrStatus || "";
   const showGraded = isSlabbed || reviewIdentity?.graded === true;

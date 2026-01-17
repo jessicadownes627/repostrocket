@@ -56,7 +56,7 @@ import {
 } from "../engines/visionHelpers";
 import { smartPriceSense } from "../engines/smartPriceSense";
 import CardDetailSidebar from "../components/CardDetailSidebar";
-import { deriveAltTextFromFilename, getPhotoUrl, mapPhotosToUrls } from "../utils/photoHelpers";
+import { getPhotoUrl, mapPhotosToUrls } from "../utils/photoHelpers";
 import { getPremiumStatus } from "../store/premiumStore";
 import { generateMagicDraft } from "../utils/generateMagicDraft";
 import {
@@ -144,9 +144,8 @@ function normalizeBatchItems(payload = []) {
 
     return {
       ...item,
-      photos: normalizedExtras.length
-        ? [...basePhotos, ...normalizedExtras]
-        : basePhotos,
+      photos: basePhotos,
+      secondaryPhotos: normalizedExtras.length ? normalizedExtras : item?.secondaryPhotos || [],
     };
   });
 }
@@ -164,16 +163,150 @@ function isBabyApparelListing(item = {}) {
   );
 }
 
+function buildCardPhotos(item = {}) {
+  const front = item?.photos?.[0] || null;
+  const back = item?.secondaryPhotos?.[0] || null;
+  const frontCorners = Array.isArray(item?.frontCorners) ? item.frontCorners : [];
+  const backCorners = Array.isArray(item?.backCorners) ? item.backCorners : [];
+  const cornerPhotos = Array.isArray(item?.cornerPhotos) ? item.cornerPhotos : [];
+  const findCornerBySide = (side) =>
+    cornerPhotos.find((entry) =>
+      String(entry?.side || "").toLowerCase().includes(side)
+    ) || null;
+  const frontCorner =
+    frontCorners[0] || findCornerBySide("front") || null;
+  const backCorner =
+    backCorners[0] || findCornerBySide("back") || null;
+  return {
+    front,
+    back,
+    corners: {
+      front: frontCorner,
+      back: backCorner,
+    },
+    frontCorners: frontCorners.length ? frontCorners : frontCorner ? [frontCorner] : [],
+    backCorners: backCorners.length ? backCorners : backCorner ? [backCorner] : [],
+  };
+}
+
+function composeSportsListing(identity = {}) {
+  if (!identity || typeof identity !== "object") return { title: "", description: "" };
+  const year = identity.year ? String(identity.year).trim() : "";
+  const brand = identity.brand ? String(identity.brand).trim() : "";
+  const setName = identity.setName ? String(identity.setName).trim() : "";
+  const player = identity.player ? String(identity.player).trim() : "";
+  const cardNumber = identity.cardNumber ? String(identity.cardNumber).trim() : "";
+
+  const titleParts = [year, brand, setName, player].filter(Boolean);
+  let title = titleParts.join(" ").trim();
+  if (cardNumber) {
+    title = title ? `${title} #${cardNumber}` : `#${cardNumber}`;
+  }
+
+  const baseParts = [year, brand, setName]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+  let description = baseParts
+    ? `Authentic ${baseParts} card featuring ${player}.`
+    : "";
+  if (brand || setName) {
+    const brandLine = [brand, setName].filter(Boolean).join(" ").trim();
+    description += description
+      ? `\n\nOfficial ${brandLine} issue.`
+      : `Official ${brandLine} issue.`;
+  }
+  const conditionLine = "Condition as shown. Ships securely.";
+  description += description ? `\n\n${conditionLine}` : conditionLine;
+
+  return { title, description };
+}
+
 export default function LaunchDeckBatch() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { batchMode, setListing, replaceReviewIdentity } = useListingStore();
-  const isSportsBatch = batchMode === "sports_cards";
+  const { setListing, replaceReviewIdentity } = useListingStore();
 
   const fallbackItems = useMemo(() => [], []);
   const rawItems = location.state?.items;
   const items = Array.isArray(rawItems) ? rawItems : fallbackItems;
-  const normalizedItems = useMemo(() => normalizeBatchItems(items), [items]);
+  const isSportsBatch = useMemo(
+    () =>
+      items.some(
+        (item) =>
+          item?.isSportsBatch === true || item?.batchType === "sports"
+      ),
+    [items]
+  );
+
+  const mergeByIdentity = useCallback((entries) => {
+    const merged = new Map();
+    const result = [];
+    entries.forEach((item) => {
+      if (!item) return;
+      const identity = item.reviewIdentity || {};
+      const keyParts = [
+        identity.player,
+        identity.year,
+        identity.setName || identity.brand,
+        identity.team,
+        identity.sport,
+      ]
+        .filter(Boolean)
+        .map((value) => String(value).toLowerCase().trim());
+      const hasIdentityKey = keyParts.length > 0;
+      const key = hasIdentityKey ? keyParts.join("|") : null;
+
+      if (!key) {
+        result.push(item);
+        return;
+      }
+
+      const existing = merged.get(key);
+      if (!existing) {
+        merged.set(key, { ...item });
+        return;
+      }
+
+      const next = { ...existing };
+      if (!next.photos?.length && item.photos?.length) next.photos = item.photos;
+      if (!next.secondaryPhotos?.length && item.secondaryPhotos?.length) {
+        next.secondaryPhotos = item.secondaryPhotos;
+      } else if (!next.secondaryPhotos?.length && item.photos?.length) {
+        next.secondaryPhotos = item.photos;
+      }
+
+      if (!next.cornerPhotos?.length && item.cornerPhotos?.length) {
+        next.cornerPhotos = item.cornerPhotos;
+      }
+      if (!next.frontCorners?.length && item.frontCorners?.length) {
+        next.frontCorners = item.frontCorners;
+      }
+      if (!next.backCorners?.length && item.backCorners?.length) {
+        next.backCorners = item.backCorners;
+      }
+
+      if (!next.reviewIdentity && item.reviewIdentity) {
+        next.reviewIdentity = item.reviewIdentity;
+      }
+
+      merged.set(key, next);
+    });
+    return result.concat([...merged.values()]);
+  }, []);
+
+  const filteredItems = useMemo(
+    () => items.filter((item) => !item?.isMerged && !item?.usedAsBack),
+    [items]
+  );
+  const mergedItems = useMemo(
+    () => mergeByIdentity(filteredItems),
+    [filteredItems, mergeByIdentity]
+  );
+  const normalizedItems = useMemo(
+    () => normalizeBatchItems(mergedItems),
+    [mergedItems]
+  );
   const [processing, setProcessing] = useState(!normalizedItems.length);
   const [progress, setProgress] = useState(0);
   const [processedItems, setProcessedItems] = useState(normalizedItems);
@@ -189,6 +322,11 @@ export default function LaunchDeckBatch() {
     getPremiumStatus() ||
     (typeof window !== "undefined" &&
       window.localStorage.getItem("rr_dev_premium") === "true");
+
+  const renderItems = useMemo(
+    () => (isSportsBatch ? mergeByIdentity(processedItems) : processedItems),
+    [isSportsBatch, processedItems, mergeByIdentity]
+  );
 
   const handleEditCard = useCallback(
     (item) => {
@@ -295,6 +433,7 @@ export default function LaunchDeckBatch() {
       finalBase,
       initialSnapshot,
       parsedDraft,
+      identityListing,
       autoCategory,
       autoBrand,
       seoKeywords,
@@ -312,15 +451,13 @@ export default function LaunchDeckBatch() {
       const next = { ...prev };
 
       const shouldApplyTitle =
-        isPremiumUser &&
-        parsedDraft &&
+        ((parsedDraft && isPremiumUser) || identityListing) &&
         finalBase.title &&
         (!prev.title || prev.title === initialSnapshot.title);
       if (shouldApplyTitle) next.title = finalBase.title;
 
       const shouldApplyDescription =
-        isPremiumUser &&
-        parsedDraft &&
+        ((parsedDraft && isPremiumUser) || identityListing) &&
         finalBase.description &&
         (!prev.description || prev.description === initialSnapshot.description);
       if (shouldApplyDescription) next.description = finalBase.description;
@@ -343,8 +480,13 @@ export default function LaunchDeckBatch() {
         (!prevTagsKey || prevTagsKey === initialTagsKey);
       if (shouldApplyTags) next.tags = finalTags;
 
-      next.autoCategory = autoCategory;
-      next.autoBrand = autoBrand;
+      if (isSportsBatch) {
+        next.autoCategory = null;
+        next.autoBrand = null;
+      } else {
+        next.autoCategory = autoCategory;
+        next.autoBrand = autoBrand;
+      }
       next.seoKeywords = seoKeywords;
 
       if (priceSenseData) next.priceSense = priceSenseData;
@@ -420,8 +562,28 @@ export default function LaunchDeckBatch() {
         (finalBase?.category || "").toLowerCase().includes("card") ||
         isSportsCardPhoto(mapPhotosToUrls(photoEntries));
       const isApparelCategory = isBabyApparelListing(finalBase);
+      const identity = seedItem?.reviewIdentity || null;
+      const hasResolvedCardIdentity = Boolean(
+        identity?.player &&
+          (identity?.year ||
+            identity?.brand ||
+            identity?.setName ||
+            identity?.team ||
+            identity?.sport)
+      );
+      const shouldSkipMagicFill = isSportsBatch || hasResolvedCardIdentity;
 
-      if (isPremiumUser) {
+      let identityListing = null;
+      if (hasResolvedCardIdentity) {
+        identityListing = composeSportsListing(identity);
+        finalBase = {
+          ...finalBase,
+          title: identityListing.title || "",
+          description: identityListing.description || "",
+        };
+      }
+
+      if (isPremiumUser && !shouldSkipMagicFill) {
         try {
           const draft = await generateMagicDraft(finalBase, {
             glowMode: true,
@@ -555,6 +717,7 @@ export default function LaunchDeckBatch() {
           finalBase,
           initialSnapshot,
           parsedDraft,
+          identityListing,
           autoCategory,
           autoBrand,
           seoKeywords,
@@ -590,7 +753,7 @@ export default function LaunchDeckBatch() {
         options.onProgress();
       }
     },
-    [applyAutoFields, isPremiumUser, updateItem]
+    [applyAutoFields, isPremiumUser, isSportsBatch, updateItem]
   );
 
   const refreshItem = useCallback(
@@ -640,13 +803,13 @@ export default function LaunchDeckBatch() {
 
   // Recompute groups when processed items change
   useEffect(() => {
-    if (isSportsBatch && processedItems && processedItems.length) {
-      const groups = groupSportsCards(processedItems);
+    if (isSportsBatch && renderItems && renderItems.length) {
+      const groups = groupSportsCards(renderItems);
       setCardGroups(groups);
     } else {
       setCardGroups(null);
     }
-  }, [isSportsBatch, processedItems]);
+  }, [isSportsBatch, renderItems]);
 
   // Re-apply transforms when platform changes
   useEffect(() => {
@@ -659,6 +822,7 @@ export default function LaunchDeckBatch() {
         const baseListing = item.autoListing;
         let transformed = baseListing;
 
+        if (platform === "all") return item;
         if (platform === "ebay") transformed = transformForEbay(baseListing);
         if (platform === "whatnot") transformed = transformForWhatnot(baseListing);
         if (platform === "mercari") transformed = transformForMercari(baseListing);
@@ -671,19 +835,18 @@ export default function LaunchDeckBatch() {
     });
   }, [platform]);
 
-  // Apply Smart Group Filter
-  let displayedItems = processedItems;
-
+  // Apply Smart Group Filter (sports-only) on merged cards
+  let displayedItems = renderItems;
   if (isSportsBatch && activeGroupFilter !== "all" && cardGroups) {
     displayedItems = cardGroups[activeGroupFilter] || [];
   }
 
   const copyTargetItem =
-    activeDetailIndex !== null && processedItems[activeDetailIndex]
-      ? processedItems[activeDetailIndex]
+    activeDetailIndex !== null && renderItems[activeDetailIndex]
+      ? renderItems[activeDetailIndex]
       : displayedItems.length
       ? displayedItems[0]
-      : processedItems[0];
+      : renderItems[0];
 
   const candidateCopyText = useMemo(() => {
     if (!copyTargetItem) return "";
@@ -746,7 +909,7 @@ export default function LaunchDeckBatch() {
         {/* Platform Toggle Toolbar */}
         <div className="mb-6 mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-3">
-            {["ebay", "whatnot", "mercari"].map((p) => (
+            {["all", "ebay", "mercari", "poshmark", "whatnot"].map((p) => (
               <button
                 key={p}
                 onClick={() => setPlatform(p)}
@@ -756,9 +919,11 @@ export default function LaunchDeckBatch() {
                     : "bg-black/30 text-white border-white/20 hover:bg-black/50"
                 }`}
               >
+                {p === "all" && "Show all"}
                 {p === "ebay" && "eBay"}
-                {p === "whatnot" && "Whatnot"}
                 {p === "mercari" && "Mercari"}
+                {p === "poshmark" && "Poshmark"}
+                {p === "whatnot" && "Whatnot"}
               </button>
             ))}
           </div>
@@ -893,7 +1058,7 @@ export default function LaunchDeckBatch() {
 
       <h1 className="ld-title">LaunchDeck — Batch Mode</h1>
 
-      {(displayedItems.length ? displayedItems : processedItems).length === 0 && (
+      {displayedItems.length === 0 && (
         <div className="pt-4 text-sm text-[#d6c7a1]/70">
           {isSportsBatch
             ? "No sports cards selected for launch."
@@ -902,28 +1067,45 @@ export default function LaunchDeckBatch() {
       )}
 
       <div className="ld-grid">
-        {(displayedItems.length ? displayedItems : processedItems).map(
-          (item, index) => (
+        {displayedItems.map((item, index) => {
+          const renderItem = {
+            ...item,
+            photos: buildCardPhotos(item),
+          };
+          if (isSportsBatch && renderItem.reviewIdentity) {
+            const identityListing = composeSportsListing(renderItem.reviewIdentity);
+            if (!renderItem.title && identityListing.title) {
+              renderItem.title = identityListing.title;
+            }
+            if (!renderItem.description && identityListing.description) {
+              renderItem.description = identityListing.description;
+            }
+          }
+          const sourceIndex = processedItems.findIndex(
+            (entry) => entry?.id && entry.id === item?.id
+          );
+          return (
             <BatchCard
-              key={index}
-              item={item}
-              index={index}
+              key={item?.id || index}
+              item={renderItem}
+              index={sourceIndex >= 0 ? sourceIndex : index}
               updateItem={updateItem}
               setActiveDetailIndex={
                 isSportsBatch ? setActiveDetailIndex : undefined
               }
               isSportsBatch={isSportsBatch}
+              platform={platform}
               onEditItem={handleEditCard}
               onRefreshItem={refreshItem}
             />
-          )
-        )}
+          );
+        })}
       </div>
 
       {isSportsBatch && activeDetailIndex !== null && (
         <CardDetailSidebar
           item={
-            processedItems[activeDetailIndex] ??
+            renderItems[activeDetailIndex] ??
             items[activeDetailIndex]
           }
           index={activeDetailIndex}
@@ -1067,6 +1249,7 @@ function BatchCard({
   setActiveDetailIndex,
   onRefreshItem,
   isSportsBatch,
+  platform,
   onEditItem,
 }) {
   const outputRef = useRef(null);
@@ -1084,7 +1267,19 @@ function BatchCard({
 
   const [quickFixMode, setQuickFixMode] = useState(null);
   const [quickFixValue, setQuickFixValue] = useState("");
-  const backInputRef = useRef(null);
+  const [includeCorners, setIncludeCorners] = useState(false);
+
+  const isSlabbed =
+    item?.reviewIdentity?.isSlabbed === true ||
+    item?.reviewIdentity?.cardType === "slabbed" ||
+    item?.cardType === "slabbed" ||
+    item?.isSlabbed === true;
+
+  useEffect(() => {
+    if (isSportsBatch) {
+      console.log("BATCH CARD FINAL", item);
+    }
+  }, [isSportsBatch, item]);
 
   const applyQuickFix = () => {
     if (!quickFixMode) return;
@@ -1127,7 +1322,47 @@ function BatchCard({
     );
   };
 
-  const cornerPhotos = item?.cornerPhotos || [];
+  const cardPhotos =
+    item?.photos && !Array.isArray(item.photos)
+      ? item.photos
+      : buildCardPhotos(item);
+  const cornerPhotos = isSlabbed ? [] : item?.cornerPhotos || [];
+  const frontCorners = isSlabbed
+    ? []
+    : cardPhotos?.frontCorners?.length
+    ? cardPhotos.frontCorners
+    : cardPhotos?.corners?.front
+    ? [cardPhotos.corners.front]
+    : [];
+  const backCorners = isSlabbed
+    ? []
+    : cardPhotos?.backCorners?.length
+    ? cardPhotos.backCorners
+    : cardPhotos?.corners?.back
+    ? [cardPhotos.corners.back]
+    : [];
+  const cornerUrls = useMemo(() => {
+    if (isSlabbed) return [];
+    const sources = cornerPhotos.length
+      ? cornerPhotos
+      : [...frontCorners, ...backCorners];
+    return sources.map((entry) => getPhotoUrl(entry)).filter(Boolean);
+  }, [isSlabbed, cornerPhotos, frontCorners, backCorners]);
+
+  const frontThumb = getPhotoUrl(cardPhotos?.front);
+  const backThumb = getPhotoUrl(cardPhotos?.back);
+  const frontCornerThumb = !isSlabbed && includeCorners
+    ? getPhotoUrl(frontCorners[0])
+    : "";
+  const backCornerThumb = !isSlabbed && includeCorners
+    ? getPhotoUrl(backCorners[0])
+    : "";
+
+  const identity = item?.reviewIdentity || null;
+  const identityListing = identity?.player
+    ? composeSportsListing(identity)
+    : { title: "", description: "" };
+  const cardHeadline = identityListing.title || "";
   const handleSaveCornerImages = async () => {
     if (!cornerPhotos.length) return;
     const payload = cornerPhotos
@@ -1158,24 +1393,6 @@ function BatchCard({
     );
   };
 
-  const handleBackUpload = (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const entry = {
-      url: URL.createObjectURL(file),
-      altText: deriveAltTextFromFilename(file.name) || "card back photo",
-      file,
-    };
-    const nextSeed = {
-      ...item,
-      secondaryPhotos: [entry],
-      cardIntel: null,
-    };
-    updateItem(index, () => nextSeed);
-    if (onRefreshItem) {
-      onRefreshItem(index, nextSeed);
-    }
-  };
 
   async function handlePlatformClick(key) {
     const formatter = platformFormatters[key];
@@ -1197,12 +1414,25 @@ function BatchCard({
     let magic = null;
     let auto = null;
 
+    const identityCandidate = item?.reviewIdentity || null;
+    const hasResolvedCardIdentity = Boolean(
+      identityCandidate?.player &&
+        (identityCandidate?.year ||
+          identityCandidate?.brand ||
+          identityCandidate?.setName ||
+          identityCandidate?.team ||
+          identityCandidate?.sport)
+    );
+    const shouldSkipMagicFill = isSportsBatch || hasResolvedCardIdentity;
+
     try {
       review = await runAIReview(item);
     } catch {}
-    try {
-      magic = await runMagicFill(item);
-    } catch {}
+    if (!shouldSkipMagicFill) {
+      try {
+        magic = await runMagicFill(item);
+      } catch {}
+    }
     try {
       auto = await runAutoFill(item);
     } catch {}
@@ -1255,6 +1485,10 @@ function BatchCard({
     description:
       platformPreview.summaryDescription || item.description,
   });
+  const platformsToShow =
+    platform === "all"
+      ? ["ebay", "mercari", "poshmark", "whatnot"]
+      : [platform || "ebay"];
   const apparelAttrs = item?.apparelAttributes || {};
   const hasApparelSignals =
     !!item?.apparelIntel &&
@@ -1266,19 +1500,79 @@ function BatchCard({
 
   return (
     <div className="ld-card">
-      {/* Shared Preview UI — one card per marketplace */}
+      <div className="mb-4">
+        <div className="grid grid-cols-4 gap-2">
+          {[
+            { url: frontThumb, label: "Front" },
+            { url: backThumb, label: "Back" },
+            { url: frontCornerThumb, label: "Front corner" },
+            { url: backCornerThumb, label: "Back corner" },
+          ].map((entry, idx) =>
+            entry.url ? (
+              <img
+                key={`${entry.label}-${idx}`}
+                src={entry.url}
+                alt={entry.label}
+                className="h-14 w-full rounded-lg object-cover border border-white/10"
+              />
+            ) : (
+              <div
+                key={`${entry.label}-${idx}`}
+                className="h-14 w-full rounded-lg border border-dashed border-white/15 bg-black/30"
+                aria-label={`${entry.label} placeholder`}
+              />
+            )
+          )}
+        </div>
+        {!isSlabbed && cornerUrls.length > 0 && (
+          <div className="mt-2">
+            <label className="flex items-center gap-2 text-[10px] uppercase tracking-[0.3em] text-white/60">
+              <input
+                type="checkbox"
+                checked={includeCorners}
+                onChange={(event) => setIncludeCorners(event.target.checked)}
+                className="h-3.5 w-3.5 rounded border border-white/30 bg-black/40 text-[#E8DCC0]"
+              />
+              Include corner photos
+            </label>
+          </div>
+        )}
+      </div>
+
+      {cardHeadline && (
+        <div className="mb-3">
+          <div className="text-[11px] uppercase tracking-[0.35em] text-white/60 mb-1">
+            Card Summary
+          </div>
+          <div className="text-sm text-white/85">{cardHeadline}</div>
+        </div>
+      )}
+
+      {/* Shared Preview UI — one card per item */}
       <div className="space-y-4 mb-4">
-        {["ebay", "poshmark", "mercari"].map((platformKey) => (
+        {platformsToShow.map((platformKey) => (
           <PreviewCard
             key={platformKey}
             platform={platformKey}
             item={item}
+            titleOverride={cardHeadline}
+            includeCorners={includeCorners}
+            onIncludeCornersChange={setIncludeCorners}
+            showCornerToggle={false}
+            hideThumbnail
+            suppressFallback={isSportsBatch}
             platformTitle={
               platformPreview?.titles
                 ? platformPreview.titles[platformKey]
                 : undefined
             }
-            platformDescription={platformDescriptions[platformKey]}
+            platformDescription={
+              (isSportsBatch && identityListing.description
+                ? identityListing.description
+                : platformDescriptions[platformKey]) ||
+              platformPreview.summaryDescription ||
+              item.description
+            }
             onEdit={
               isSportsBatch
                 ? () => onEditItem?.(item)
@@ -1288,58 +1582,6 @@ function BatchCard({
             }
           />
         ))}
-      </div>
-
-      <div className="flex flex-col md:flex-row gap-4 mb-4">
-        <div className="flex-1">
-          <div className="text-[11px] uppercase tracking-[0.35em] text-white/60 mb-2">
-            Front Photo
-          </div>
-          {getPhotoUrl(item?.photos?.[0]) ? (
-            <img
-              src={getPhotoUrl(item.photos[0])}
-              alt="Front of card"
-              className="w-full rounded-xl border border-white/10 object-cover"
-            />
-          ) : (
-            <div className="rounded-xl border border-dashed border-white/15 p-6 text-center text-xs text-white/50">
-              No front photo
-            </div>
-          )}
-        </div>
-        <div className="flex-1">
-          <div className="text-[11px] uppercase tracking-[0.35em] text-white/60 mb-2 flex items-center justify-between">
-            <span>Back Photo</span>
-            <button
-              className="text-[10px] uppercase tracking-[0.35em] text-[#E8DCC0] hover:text-white transition"
-              onClick={() => backInputRef.current?.click()}
-              type="button"
-            >
-              {item?.secondaryPhotos?.length ? "Replace" : "Add"}
-            </button>
-          </div>
-          {item?.secondaryPhotos?.length ? (
-            <img
-              src={getPhotoUrl(item.secondaryPhotos[0])}
-              alt="Back of card"
-              className="w-full rounded-xl border border-white/10 object-cover"
-            />
-          ) : (
-            <div
-              className="rounded-xl border border-dashed border-white/15 p-6 text-center text-xs text-white/50 cursor-pointer hover:border-white/40 transition"
-              onClick={() => backInputRef.current?.click()}
-            >
-              Optional — add the back for higher confidence
-            </div>
-          )}
-          <input
-            type="file"
-            accept="image/*"
-            ref={backInputRef}
-            className="hidden"
-            onChange={handleBackUpload}
-          />
-        </div>
       </div>
 
       {(item.autoCategory || item.autoBrand) && (
@@ -1758,19 +2000,21 @@ function BatchCard({
         </div>
       )}
 
-      <div className="ld-platform-buttons">
-        {Object.keys(platformFormatters).map((key) => (
-          <button
-            key={key}
-            className={`ld-platform-btn ${
-              activePlatform === key ? "ld-platform-btn-active" : ""
-            }`}
-            onClick={() => handlePlatformClick(key)}
-          >
-            {key.toUpperCase()}
-          </button>
-        ))}
-      </div>
+      {!isSportsBatch && (
+        <div className="ld-platform-buttons">
+          {Object.keys(platformFormatters).map((key) => (
+            <button
+              key={key}
+              className={`ld-platform-btn ${
+                activePlatform === key ? "ld-platform-btn-active" : ""
+              }`}
+              onClick={() => handlePlatformClick(key)}
+            >
+              {key.toUpperCase()}
+            </button>
+          ))}
+        </div>
+      )}
 
       {formattedOutput && (
         <div ref={outputRef} className="ld-output-block">

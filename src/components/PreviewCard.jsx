@@ -34,6 +34,8 @@ function platformMeta(key) {
       return { label: "Poshmark", accent: "#F5E7D0" };
     case "mercari":
       return { label: "Mercari", accent: "#F5E7D0" };
+    case "whatnot":
+      return { label: "Whatnot", accent: "#F5E7D0" };
     case "depop":
       return { label: "Depop", accent: "#F5E7D0" };
     case "grailed":
@@ -53,6 +55,12 @@ export default function PreviewCard({
   onLaunch,
   platformImage,
   isPrimary = false,
+  titleOverride,
+  includeCorners: includeCornersProp,
+  onIncludeCornersChange,
+  showCornerToggle = true,
+  hideThumbnail = false,
+  suppressFallback = false,
 }) {
   if (!item) return null;
 
@@ -83,11 +91,11 @@ export default function PreviewCard({
 
   const launchUrl = links[platform];
 
-  const displayTitle = platformTitle || item.title || "Untitled Listing";
-  const displayDescription =
-    platformDescription ||
-    item.description ||
-    "Description not added yet.";
+  const displayTitle = titleOverride || platformTitle || item.title || "";
+  const displayDescription = platformDescription || item.description || "";
+  const finalTitle = displayTitle || (suppressFallback ? "" : "Untitled Listing");
+  const finalDescription =
+    displayDescription || (suppressFallback ? "" : "Description not added yet.");
   const isSlabbedMode =
     item.reviewIdentity?.cardType === "slabbed" ||
     item.reviewIdentity?.isSlabbed === true ||
@@ -109,6 +117,9 @@ export default function PreviewCard({
     ? item.cornerPhotos
     : [];
   const [includeCorners, setIncludeCorners] = useState(false);
+  const includeCornersValue =
+    typeof includeCornersProp === "boolean" ? includeCornersProp : includeCorners;
+  const setIncludeCornersValue = onIncludeCornersChange || setIncludeCorners;
   const cornerUrls = useMemo(() => {
     if (isSlabbedMode) return [];
     if (cornerPhotos.length) {
@@ -132,12 +143,13 @@ export default function PreviewCard({
     });
     return urls;
   }, [photoList, item.secondaryPhotos]);
-  const includedImageUrls = includeCorners
+  const includedImageUrls = includeCornersValue
     ? [...baseImageUrls, ...cornerUrls]
     : baseImageUrls;
 
   const renderCornerThumbs = () => {
     if (isSlabbedMode) return null;
+    if (!showCornerToggle) return null;
     if (!frontCorners.length && !backCorners.length) return null;
     return (
       <>
@@ -238,43 +250,45 @@ export default function PreviewCard({
 
       {/* Body */}
       <div className="flex gap-4 items-start">
-        {/* Thumbnail + corners */}
-        <div className="flex flex-col gap-2">
-          {previewPhoto ? (
-            <img
-              src={previewPhoto}
-              alt={`${label} preview`}
-              className="w-20 h-20 object-cover rounded-[14px] border border-[rgba(232,213,168,0.25)] shadow-[0_3px_10px_rgba(0,0,0,0.50)]"
-            />
-          ) : (
-            <div className="w-20 h-20 rounded-[14px] bg-black/40 border border-[rgba(255,255,255,0.05)]" />
-          )}
-          {renderCornerThumbs()}
-          {!isSlabbedMode &&
-            !frontCorners.length &&
-            !backCorners.length &&
-            cornerPhotos.length > 0 && (
-              <div className="text-[9px] uppercase tracking-[0.3em] text-white/50 mt-1">
-                Corners reviewed
+        {!hideThumbnail && (
+          <div className="flex flex-col gap-2">
+            {previewPhoto ? (
+              <img
+                src={previewPhoto}
+                alt={`${label} preview`}
+                className="w-20 h-20 object-cover rounded-[14px] border border-[rgba(232,213,168,0.25)] shadow-[0_3px_10px_rgba(0,0,0,0.50)]"
+              />
+            ) : (
+              <div className="w-20 h-20 rounded-[14px] bg-black/40 border border-[rgba(255,255,255,0.05)]" />
+            )}
+            {renderCornerThumbs()}
+            {!isSlabbedMode &&
+              showCornerToggle &&
+              !frontCorners.length &&
+              !backCorners.length &&
+              cornerPhotos.length > 0 && (
+                <div className="text-[9px] uppercase tracking-[0.3em] text-white/50 mt-1">
+                  Corners reviewed
+                </div>
+              )}
+            {!isSlabbedMode && cornerUrls.length > 0 && showCornerToggle && (
+              <label className="mt-1 flex items-center gap-2 text-[10px] uppercase tracking-[0.3em] text-white/60">
+                <input
+                  type="checkbox"
+                  checked={includeCornersValue}
+                  onChange={(event) => setIncludeCornersValue(event.target.checked)}
+                  className="h-3.5 w-3.5 rounded border border-white/30 bg-black/40 text-[#E8DCC0]"
+                />
+                Include corner photos
+              </label>
+            )}
+            {showCornerToggle && includedImageUrls.length > 0 && (
+              <div className="text-[9px] uppercase tracking-[0.3em] text-white/40">
+                {includeCornersValue ? "Includes corners" : "Includes front + back"}
               </div>
             )}
-          {!isSlabbedMode && cornerUrls.length > 0 && (
-            <label className="mt-1 flex items-center gap-2 text-[10px] uppercase tracking-[0.3em] text-white/60">
-              <input
-                type="checkbox"
-                checked={includeCorners}
-                onChange={(event) => setIncludeCorners(event.target.checked)}
-                className="h-3.5 w-3.5 rounded border border-white/30 bg-black/40 text-[#E8DCC0]"
-              />
-              Include corner photos
-            </label>
-          )}
-          {includedImageUrls.length > 0 && (
-            <div className="text-[9px] uppercase tracking-[0.3em] text-white/40">
-              {includeCorners ? "Includes corners" : "Includes front + back"}
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Text content */}
         <div className="flex-1">
@@ -286,8 +300,8 @@ export default function PreviewCard({
               : "text-[14px] text-white/70 group-hover:text-white/85"
           }`}
         >
-          {displayTitle}
-        </div>
+            {finalTitle}
+          </div>
 
         {/* Details line */}
         <div
@@ -315,7 +329,7 @@ export default function PreviewCard({
                 : "text-white/40 group-hover:text-white/70"
             }`}
           >
-            {displayDescription}
+            {finalDescription}
           </div>
 
           {Array.isArray(item.tags) && item.tags.length > 0 && (
@@ -332,49 +346,55 @@ export default function PreviewCard({
           )}
 
           {/* Copy actions – secondary */}
-          <div className="flex flex-col gap-2 mb-4">
-            <button
-              type="button"
-              className="w-full text-[11px] px-3 py-2 rounded-xl border border-[rgba(232,213,168,0.45)] text-[rgba(232,213,168,0.9)] bg-transparent hover:bg-black/25 transition"
-              onClick={() =>
-                navigator?.clipboard?.writeText &&
-                navigator.clipboard.writeText(displayTitle)
-              }
-            >
-              Copy Title
-            </button>
-            <button
-              type="button"
-              className="w-full text-[11px] px-3 py-2 rounded-xl border border-[rgba(232,213,168,0.35)] text-[rgba(232,213,168,0.85)] bg-transparent hover:bg-black/25 transition"
-              onClick={() =>
-                navigator?.clipboard?.writeText &&
-                navigator.clipboard.writeText(displayDescription)
-              }
-            >
-              Copy Description
-            </button>
-            {item.price && (
-              <button
-                type="button"
-                className="w-full text-[11px] px-3 py-2 rounded-xl border border-[rgba(232,213,168,0.35)] text-[rgba(232,213,168,0.85)] bg-transparent hover:bg-black/25 transition"
-                onClick={() =>
-                  navigator?.clipboard?.writeText &&
-                  navigator.clipboard.writeText(
-                    typeof item.price === "number"
-                      ? item.price.toString()
-                      : item.price || ""
-                  )
-                }
-              >
-                Copy Price
-              </button>
-            )}
+          {(finalTitle || finalDescription || item.price) && (
+            <div className="flex flex-col gap-2 mb-4">
+              {finalTitle && (
+                <button
+                  type="button"
+                  className="w-full text-[11px] px-3 py-2 rounded-xl border border-[rgba(232,213,168,0.45)] text-[rgba(232,213,168,0.9)] bg-transparent hover:bg-black/25 transition"
+                  onClick={() =>
+                    navigator?.clipboard?.writeText &&
+                    navigator.clipboard.writeText(finalTitle)
+                  }
+                >
+                  Copy Title
+                </button>
+              )}
+              {finalDescription && (
+                <button
+                  type="button"
+                  className="w-full text-[11px] px-3 py-2 rounded-xl border border-[rgba(232,213,168,0.35)] text-[rgba(232,213,168,0.85)] bg-transparent hover:bg-black/25 transition"
+                  onClick={() =>
+                    navigator?.clipboard?.writeText &&
+                    navigator.clipboard.writeText(finalDescription)
+                  }
+                >
+                  Copy Description
+                </button>
+              )}
+              {item.price && (
+                <button
+                  type="button"
+                  className="w-full text-[11px] px-3 py-2 rounded-xl border border-[rgba(232,213,168,0.35)] text-[rgba(232,213,168,0.85)] bg-transparent hover:bg-black/25 transition"
+                  onClick={() =>
+                    navigator?.clipboard?.writeText &&
+                    navigator.clipboard.writeText(
+                      typeof item.price === "number"
+                        ? item.price.toString()
+                        : item.price || ""
+                    )
+                  }
+                >
+                  Copy Price
+                </button>
+              )}
+            </div>
+          )}
           </div>
         </div>
-      </div>
 
       {/* Launch row */}
-        <div className="px-4 pb-5 pt-1">
+      <div className="px-4 pb-5 pt-1">
           <button
             type="button"
             disabled={!launchUrl}
@@ -385,8 +405,8 @@ export default function PreviewCard({
                   platform,
                   label,
                   launchUrl,
-                  title: displayTitle,
-                  description: displayDescription,
+                  title: finalTitle,
+                  description: finalDescription,
                   price: item.price,
                 });
                 return;

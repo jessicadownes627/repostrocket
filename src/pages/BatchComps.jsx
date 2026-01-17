@@ -8,7 +8,7 @@ import { deriveAltTextFromFilename } from "../utils/photoHelpers";
 function BatchCompsInner() {
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
-  const { batchItems, setBatch } = useBatchStore();
+  const { batchItems, setBatch, updateBatchItem } = useBatchStore();
   const { setBatchMode } = useListingStore();
 
   useEffect(() => {
@@ -38,12 +38,15 @@ function BatchCompsInner() {
             category: "Sports Cards",
             photos: [frontPhoto],
             secondaryPhotos: [],
+            frontImage: frontPhoto,
+            backImage: null,
             cornerPhotos: [],
             cardIntel: null,
             cardAttributes: null,
             pricing: null,
             prepComplete: false,
             approvedForAnalysis: false,
+            status: "needs_back",
           });
         } catch (err) {
           console.error("Failed to prepare card photo", err);
@@ -57,6 +60,24 @@ function BatchCompsInner() {
     [batchItems, prepareEntry, setBatch]
   );
 
+  const handleBackForCard = useCallback(
+    async (item, fileList) => {
+      if (!item?.id || !fileList?.length) return;
+      const file = Array.from(fileList)[0];
+      try {
+        const backPhoto = await prepareEntry(file);
+        updateBatchItem(item.id, {
+          secondaryPhotos: [backPhoto],
+          backImage: backPhoto,
+          status: "ready",
+        });
+      } catch (err) {
+        console.error("Failed to prepare back photo", err);
+      }
+    },
+    [prepareEntry, updateBatchItem]
+  );
+
   const handleDrop = async (event) => {
     event.preventDefault();
     if (event.dataTransfer?.files?.length) {
@@ -68,6 +89,7 @@ function BatchCompsInner() {
     fileInputRef.current?.click();
   };
 
+
   const handlePrepCard = (item) => {
     if (!item?.id) return;
     navigate(`/batch-card-prep?cardId=${item.id}`);
@@ -75,20 +97,98 @@ function BatchCompsInner() {
 
   const renderCard = (item) => {
     const preview = item.photos?.[0]?.url || "";
-    const status = item.prepComplete ? "Prep complete" : "Needs prep";
+    const backPreview = item.secondaryPhotos?.[0]?.url || "";
+    const status = item.prepComplete ? "Prep complete" : "Ready to review";
+    const backInputId = `back-upload-${item.id}`;
+    const backCandidates = batchItems.filter(
+      (candidate) =>
+        candidate.id !== item.id &&
+        !candidate.isMerged &&
+        !candidate.usedAsBack &&
+        candidate.photos?.[0]?.url
+    );
     return (
       <div key={item.id} className="lux-card border border-white/10 p-4 flex flex-col">
-        {preview && (
-          <img
-            src={preview}
-            alt={item.photos?.[0]?.altText || "Card preview"}
-            className="w-full h-56 object-cover rounded-xl mb-3 border border-white/10"
+        <div className="flex flex-col gap-3 mb-3">
+          {preview ? (
+            <img
+              src={preview}
+              alt={item.photos?.[0]?.altText || "Front of card"}
+              className="w-full h-40 object-cover rounded-xl border border-white/10"
+            />
+          ) : (
+            <div className="w-full h-40 rounded-xl border border-dashed border-white/15 flex items-center justify-center text-xs text-white/50">
+              Front needed
+            </div>
+          )}
+          {backPreview ? (
+            <img
+              src={backPreview}
+              alt={item.secondaryPhotos?.[0]?.altText || "Back of card"}
+              className="w-full h-40 object-cover rounded-xl border border-white/10"
+            />
+          ) : (
+            <label
+              htmlFor={backInputId}
+              className="w-full h-40 rounded-xl border border-dashed border-white/25 flex items-center justify-center text-xs text-[#E8DCC0] cursor-pointer hover:border-white/50 transition"
+            >
+              Add back of card
+            </label>
+          )}
+          <input
+            id={backInputId}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => handleBackForCard(item, e.target.files)}
           />
-        )}
+        </div>
         <div className="text-xs uppercase tracking-[0.3em] text-white/60 mb-1">
           {item.title || "Batch Card"}
         </div>
         <div className="text-sm text-white/80 mb-4">{status}</div>
+        {backCandidates.length > 0 && !backPreview && (
+          <div className="mb-4">
+            <div className="text-[10px] uppercase tracking-[0.3em] text-white/50 mb-2">
+              Possible backs
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {backCandidates.map((candidate) => (
+                <button
+                  key={candidate.id}
+                  type="button"
+                  className="rounded-lg overflow-hidden border border-white/15 hover:border-white/40 transition"
+                  onClick={() => {
+                    const backPhoto = candidate.photos?.[0];
+                    if (!backPhoto) return;
+                    updateBatchItem(item.id, {
+                      secondaryPhotos: [backPhoto],
+                      backImage: backPhoto,
+                    });
+                    updateBatchItem(candidate.id, {
+                      usedAsBack: true,
+                      isMerged: true,
+                      mergedInto: item.id,
+                    });
+                  }}
+                >
+                  <img
+                    src={candidate.photos?.[0]?.url}
+                    alt={candidate.photos?.[0]?.altText || "Back candidate"}
+                    className="w-full h-16 object-cover"
+                  />
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="mt-3 text-xs uppercase tracking-[0.3em] text-white/60 hover:text-white transition"
+              onClick={() => updateBatchItem(item.id, { backImage: null })}
+            >
+              No back / Skip for now
+            </button>
+          </div>
+        )}
         <button
           type="button"
           className="lux-continue-btn"
@@ -114,8 +214,7 @@ function BatchCompsInner() {
           Batch Sports Cards
         </h1>
         <p className="text-center text-white/65 text-sm mb-8">
-          Upload front photos for each card. Then prep them one-by-one using the Magic
-          Card Studio.
+          Upload photos, then pair backs if available.
         </p>
 
         <div
@@ -124,7 +223,7 @@ function BatchCompsInner() {
           onDragOver={(e) => e.preventDefault()}
           onDrop={handleDrop}
         >
-          <p className="text-lg opacity-80 mb-2">Drop card photos or tap to upload</p>
+          <p className="text-lg opacity-80 mb-2">Upload card photos</p>
           <p className="text-sm opacity-60">JPEG / PNG / HEIC — multiple files supported</p>
           <input
             type="file"
@@ -137,9 +236,16 @@ function BatchCompsInner() {
         </div>
 
         {batchItems.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-8">
-            {batchItems.map((item) => renderCard(item))}
-          </div>
+          <>
+            <div className="text-xs uppercase tracking-[0.35em] text-white/60 text-center mt-10 mb-4">
+              Step 2 — Pair backs (optional)
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {batchItems
+                .filter((item) => !item.isMerged && !item.usedAsBack)
+                .map((item) => renderCard(item))}
+            </div>
+          </>
         ) : (
           <div className="py-6 text-center text-sm text-[#d6c7a1]/70">
             No cards loaded yet. Drop photos above to start the batch flow.

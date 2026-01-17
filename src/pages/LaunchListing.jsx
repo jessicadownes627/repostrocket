@@ -82,7 +82,10 @@ export default function LaunchListing() {
     : "";
 
   const isSlabbedMode =
-    reviewIdentity?.cardType === "slabbed" || reviewIdentity?.isSlabbed === true;
+    reviewIdentity?.cardType === "slabbed" ||
+    reviewIdentity?.isSlabbed === true ||
+    listingData?.cardType === "slabbed" ||
+    listingData?.isSlabbed === true;
 
   const summaryDescription = useMemo(() => {
     if (description && description.length > 0) return description;

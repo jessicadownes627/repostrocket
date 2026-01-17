@@ -53,13 +53,32 @@ export async function handler(event) {
       };
     }
 
-    const {
-      listing = {},
-      userCategory = "",
-      glowMode = false,
-      photoContext = "",
-      photoDataUrl = null,
-    } = JSON.parse(event.body || "{}");
+    const parsedBody = JSON.parse(event.body || "{}");
+    const listing = parsedBody.listing || parsedBody || {};
+    const userCategory = parsedBody.userCategory || "";
+    const glowMode = parsedBody.glowMode || false;
+    const photoContext = parsedBody.photoContext || "";
+    const photoDataUrl = parsedBody.photoDataUrl || null;
+    const requestedMode = parsedBody.magicFillMode || listing.magicFillMode || "";
+
+    const resolvedIdentity = resolveCardIdentity(listing);
+    const cardListingReady = isCardListingReady(resolvedIdentity);
+    const magicFillMode = requestedMode || (cardListingReady ? "card_listing" : "discovery");
+
+    if (magicFillMode === "card_listing") {
+      const listingResult = buildCardListing(resolvedIdentity);
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          ...listingResult,
+          debug: {
+            mode: "card_listing",
+            confidence: "high",
+          },
+        }),
+      };
+    }
+
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
     const normalizedImageUrl = (() => {
@@ -200,6 +219,9 @@ function normalizeCardIntel(intel) {
     set: sanitizeField(intel.setName || intel.set || "", 120),
     card_number: sanitizeField(intel.cardNumber || "", 24),
     brand: sanitizeField(intel.brand || "", 80),
+    grader: sanitizeField(intel.grader || "", 40),
+    grade: sanitizeField(intel.grade || "", 12),
+    isSlabbed: Boolean(intel.isSlabbed),
   };
 }
 
@@ -211,6 +233,76 @@ function normalizeApparelIntel(intel) {
     size: sanitizeField(intel.size || "", 40),
     condition: sanitizeField(intel.condition || "", 80),
     notes: sanitizeField(intel.notes || "", 120),
+  };
+}
+
+function resolveCardIdentity(listing = {}) {
+  const fromCardIntel = normalizeCardIntel(listing.cardIntel || listing.card_intel);
+  const fromReview = listing.reviewIdentity || listing.cardIdentity || null;
+  const identity = {
+    player: fromCardIntel?.player || fromReview?.player || "",
+    team: fromCardIntel?.team || fromReview?.team || "",
+    sport: fromCardIntel?.sport || fromReview?.sport || "",
+    year: fromCardIntel?.year || fromReview?.year || "",
+    setName: fromCardIntel?.set || fromReview?.setName || "",
+    brand: fromCardIntel?.brand || fromReview?.brand || "",
+    cardNumber: fromCardIntel?.card_number || fromReview?.cardNumber || "",
+    grader: fromCardIntel?.grader || fromReview?.grader || "",
+    grade: fromCardIntel?.grade || fromReview?.grade || "",
+    isSlabbed: Boolean(fromCardIntel?.isSlabbed || fromReview?.isSlabbed),
+  };
+  return identity;
+}
+
+function isCardListingReady(identity = {}) {
+  if (!identity.player) return false;
+  const hasCore = Boolean(
+    identity.year || identity.setName || identity.brand
+  );
+  const hasContext = Boolean(identity.team || identity.sport);
+  return hasCore && hasContext;
+}
+
+function buildCardListing(identity = {}) {
+  const year = identity.year ? String(identity.year).trim() : "";
+  const brand = identity.brand ? String(identity.brand).trim() : "";
+  const setName = identity.setName ? String(identity.setName).trim() : "";
+  const player = identity.player ? String(identity.player).trim() : "";
+  const team = identity.team ? String(identity.team).trim() : "";
+  const sport = identity.sport ? String(identity.sport).trim() : "";
+  const cardNumber = identity.cardNumber
+    ? String(identity.cardNumber).trim()
+    : "";
+
+  const titleParts = [year, brand, setName, player].filter(Boolean);
+  let title = titleParts.join(" ");
+  if (cardNumber) {
+    title = title ? `${title} #${cardNumber}` : `#${cardNumber}`;
+  }
+  if (team) {
+    title = title ? `${title} – ${team}` : team;
+  }
+
+  const baseLineParts = [year, brand, setName, player, sport]
+    .filter(Boolean)
+    .join(" ");
+  let description = baseLineParts
+    ? `${baseLineParts} card${team ? ` featuring the ${team}` : ""}.`
+    : "";
+  if (brand) {
+    description += description ? `\n\nOfficial ${brand} issue.` : `Official ${brand} issue.`;
+  }
+  const conditionLine = identity.isSlabbed || identity.grade || identity.grader
+    ? "Condition graded. Please review images for details."
+    : "Condition ungraded. Please review images for details.";
+  description += description ? `\n\n${conditionLine}` : conditionLine;
+
+  return {
+    title,
+    description,
+    tags: [],
+    category_choice: "Other",
+    style_choices: [],
   };
 }
 
