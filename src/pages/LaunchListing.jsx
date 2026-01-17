@@ -248,7 +248,7 @@ export default function LaunchListing() {
 
         <div className="text-center mb-6">
           <button
-            onClick={() => navigate("/dashboard")}
+            onClick={() => navigate(-1)}
             className="inline-flex items-center gap-2 px-5 py-2 border border-white/25 rounded-full text-xs tracking-[0.3em] text-white/80 hover:bg-white/10 transition"
           >
             <span>←</span>
@@ -443,7 +443,7 @@ export default function LaunchListing() {
 
           <div className="mt-8 text-center">
             <button
-              onClick={() => navigate("/dashboard")}
+              onClick={() => navigate(-1)}
               className="lux-quiet-btn uppercase tracking-[0.35em] text-[11px] px-6 py-3 hover:opacity-100 opacity-80"
             >
               ← Back to Home

@@ -66,8 +66,14 @@ export default function PreviewCard({
   const displaySize = shouldDisplaySize(item) ? item.size : "";
   const launchButtonLabel = `Open ${label}`;
   const headerTitle = `Ready for ${label}`;
-  const headerSubtext =
-    "Formatted to match this marketplace’s listing flow and category structure.";
+  const marketplaceNotes = {
+    ebay: "Best for sports cards.",
+    poshmark: "Best for lifestyle resale.",
+    mercari: "Best for fast local sales.",
+  };
+  const headerSubtext = `Prepared for ${label} with a ready-to-use title and description. ${
+    marketplaceNotes[platform] || ""
+  }`.trim();
 
   const links = buildListingExportLinks({
     title: item.title || "",
@@ -342,9 +348,6 @@ export default function PreviewCard({
           >
             {launchUrl ? launchButtonLabel : "Launch unavailable"}
           </button>
-          <p className="text-[11px] text-white/50 mt-2">
-            Opens in a new tab with your listing details prepared — you stay in full control.
-          </p>
         </div>
     </div>
   );

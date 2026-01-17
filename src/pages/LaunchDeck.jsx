@@ -277,8 +277,12 @@ export default function LaunchDeck() {
         <h1 className="text-[30px] font-semibold tracking-tight sparkly-header header-glitter">
           Launch Your Listing
         </h1>
+        <div className="magic-cta-bar mb-4" />
+        <div className="text-[11px] uppercase tracking-[0.35em] text-white/50 mb-4">
+          Step 4 — Launch
+        </div>
         <p className="text-sm opacity-70 mt-1 mb-2">
-          Choose where to post your prepared listing.
+          Your listing is ready. Choose where to post it.
         </p>
       </div>
 
