@@ -28,7 +28,7 @@ export default function MultiDetect() {
       setCount(crops.length);
 
       const batchItems = crops.map((src, idx) => {
-        const frontImage = {
+        const photo = {
           url: src,
           altText: `detected card ${idx + 1}`,
         };
@@ -37,16 +37,7 @@ export default function MultiDetect() {
             typeof crypto !== "undefined" && crypto.randomUUID
               ? crypto.randomUUID()
               : `card-${Date.now()}-${Math.random()}`,
-          frontImage,
-          backImage: null,
-          photos: [frontImage],
-          secondaryPhotos: [],
-          frontCorners: [],
-          backCorners: [],
-          cornerPhotos: [],
-          reviewIdentity: null,
-          cardType: "raw",
-          status: "needs_back",
+          photo,
         };
       });
 

@@ -103,15 +103,20 @@ export default function SportsBatchReview() {
               const title = composeCardTitle(identity);
               const frontSrc =
                 item.frontImage?.url || item.photos?.[0]?.url || "";
+              const backEntry = item.backImage || item.secondaryPhotos?.[0] || null;
               const backSrc =
-                item.backImage?.url || item.secondaryPhotos?.[0]?.url || "";
+                backEntry?.url ||
+                backEntry?.dataUrl ||
+                backEntry?.preview ||
+                "";
+              const backImageExists = Boolean(backEntry);
               const backConfidence =
-                item.backImage?.confidence ??
-                item.backImage?.confidenceScore ??
-                item.backImage?.score ??
+                backEntry?.confidence ??
+                backEntry?.confidenceScore ??
+                backEntry?.score ??
                 null;
               const showBackConfirmNote =
-                Boolean(backSrc) &&
+                backImageExists &&
                 typeof backConfidence === "number" &&
                 backConfidence < 0.6;
               const isSlabbed =
@@ -149,8 +154,12 @@ export default function SportsBatchReview() {
                       {renderThumbnail(frontSrc, "Front")}
                     </div>
                     <div className="flex flex-col gap-2">
-                      {backSrc ? (
-                        renderThumbnail(backSrc, "Back")
+                      {backImageExists ? (
+                        backSrc ? (
+                          renderThumbnail(backSrc, "Back")
+                        ) : (
+                          <div className="h-16 w-16 rounded-lg border border-white/10" />
+                        )
                       ) : (
                         <div className="h-16 w-16 rounded-lg border border-dashed border-white/20 flex items-center justify-center text-[10px] uppercase tracking-[0.25em] text-white/50">
                           Back missing

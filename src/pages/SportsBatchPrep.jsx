@@ -42,94 +42,80 @@ export default function SportsBatchPrep() {
       }
 
       if (!entries.length) return;
-      const incoming = [];
-      for (let i = 0; i < entries.length; i += 2) {
-        const frontPhoto = entries[i];
-        const backPhoto = entries[i + 1] || null;
-        let frontCorners = [];
-        let backCorners = [];
-        let cornerPhotos = [];
-        let status = backPhoto ? "needs_attention" : "needs_back";
+      const incoming = entries.map((photo) => ({
+        id: crypto.randomUUID
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        photo,
+      }));
 
-        if (frontPhoto && backPhoto) {
-          try {
-            const preview = await buildCornerPreviewFromEntries(frontPhoto, backPhoto);
-            if (preview?.entries?.length) {
-              const split = splitCornerEntries(preview.entries);
-              frontCorners = split.front;
-              backCorners = split.back;
-              cornerPhotos = preview.entries;
-              if (frontCorners.length >= 4 && backCorners.length >= 4) {
-                status = "ready";
-              }
-            }
-          } catch (err) {
-            console.error("Failed to auto-crop corners", err);
-          }
-        }
-
-        incoming.push({
-          id: crypto.randomUUID
-            ? crypto.randomUUID()
-            : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-          frontImage: frontPhoto,
-          backImage: backPhoto,
-          photos: frontPhoto ? [frontPhoto] : [],
-          secondaryPhotos: backPhoto ? [backPhoto] : [],
-          frontCorners,
-          backCorners,
-          cornerPhotos,
-          reviewIdentity: null,
-          cardType: "raw",
-          status,
-        });
-      }
-
-      if (incoming.length) {
-        setBatch([...batchItems, ...incoming]);
-      }
+      setBatch([...batchItems, ...incoming]);
     },
-    [batchItems, prepareEntry, setBatch, splitCornerEntries]
+    [batchItems, prepareEntry, setBatch]
   );
 
   const handleUploadClick = () => {
     fileInputRef.current?.click();
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
+    if (!batchItems.length) return;
+    const paired = [];
+    for (let i = 0; i < batchItems.length; i += 2) {
+      const frontPhoto = batchItems[i]?.photo || null;
+      const backPhoto = batchItems[i + 1]?.photo || null;
+      let frontCorners = [];
+      let backCorners = [];
+      let cornerPhotos = [];
+      let status = backPhoto ? "needs_attention" : "needs_back";
+
+      if (frontPhoto && backPhoto) {
+        try {
+          const preview = await buildCornerPreviewFromEntries(frontPhoto, backPhoto);
+          if (preview?.entries?.length) {
+            const split = splitCornerEntries(preview.entries);
+            frontCorners = split.front;
+            backCorners = split.back;
+            cornerPhotos = preview.entries;
+            if (frontCorners.length >= 4) {
+              status = "ready";
+            }
+          }
+        } catch (err) {
+          console.error("Failed to auto-crop corners", err);
+        }
+      }
+
+      paired.push({
+        id: crypto.randomUUID
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        frontImage: frontPhoto,
+        backImage: backPhoto,
+        photos: frontPhoto ? [frontPhoto] : [],
+        secondaryPhotos: backPhoto ? [backPhoto] : [],
+        frontCorners,
+        backCorners,
+        cornerPhotos,
+        reviewIdentity: null,
+        cardType: "raw",
+        status,
+      });
+    }
+    setBatch(paired);
     navigate("/sports-batch-review");
   };
 
-  const renderCard = (item) => {
-    const preview = item.photos?.[0]?.url || "";
-    const backPreview = item.secondaryPhotos?.[0]?.url || "";
+  const renderPhoto = (item) => {
+    const preview = item.photo?.url || "";
+    if (!preview) return null;
     return (
-      <div key={item.id} className="lux-card border border-white/10 p-4 flex flex-col">
-        <div className="flex flex-col gap-3 mb-3">
-          {preview ? (
-            <img
-              src={preview}
-              alt={item.photos?.[0]?.altText || "Front of card"}
-              className="w-full h-40 object-cover rounded-xl border border-white/10"
-            />
-          ) : (
-            <div className="w-full h-40 rounded-xl border border-dashed border-white/15 flex items-center justify-center text-xs text-white/50">
-              Front needed
-            </div>
-          )}
-          {backPreview ? (
-            <img
-              src={backPreview}
-              alt={item.secondaryPhotos?.[0]?.altText || "Back of card"}
-              className="w-full h-40 object-cover rounded-xl border border-white/10"
-            />
-          ) : (
-            <div className="w-full h-40 rounded-xl border border-dashed border-white/25 flex items-center justify-center text-xs text-white/60">
-              Back missing
-            </div>
-          )}
-        </div>
-      </div>
+      <img
+        key={item.id}
+        src={preview}
+        alt={item.photos?.[0]?.altText || "Card photo"}
+        className="w-full aspect-[3/4] object-cover rounded-xl border border-white/10"
+      />
     );
   };
 
@@ -175,12 +161,12 @@ export default function SportsBatchPrep() {
         </div>
 
         {batchItems.length > 0 ? (
-          <div className="grid gap-6">
-            {batchItems.map(renderCard)}
+          <div className="grid grid-cols-2 gap-4">
+            {batchItems.map(renderPhoto)}
           </div>
         ) : (
           <div className="lux-card border border-white/10 p-8 text-center text-white/60">
-            Add your front photos to begin.
+            Add your photos to begin.
           </div>
         )}
 
