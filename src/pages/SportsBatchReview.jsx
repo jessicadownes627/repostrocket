@@ -343,7 +343,6 @@ export default function SportsBatchReview() {
                 identity.isSlabbed === true || item.cardType === "slabbed";
               const frontCorners = isSlabbed ? [] : item.frontCorners || [];
               const backCorners = isSlabbed ? [] : item.backCorners || [];
-              const showDetails = openCardId === item.id;
               const showCorners = openCornerId === item.id;
               const showDescription = openDescriptionId === item.id;
               const readyStatus =
@@ -352,6 +351,11 @@ export default function SportsBatchReview() {
                 frontCorners.length >= 4;
               const analysisStatus = item.analysisStatus || "";
               const description = item.description || composeIdentityDescription(identity);
+              const playerConfidence = identity?.confidence?.player || "";
+              const lowConfidencePlayer = playerConfidence === "low";
+              const headerTitle = lowConfidencePlayer
+                ? "Review card details"
+                : title || identity.player || "Review card details";
 
               return (
                 <div
@@ -374,7 +378,7 @@ export default function SportsBatchReview() {
                         Card
                       </div>
                       <div className="text-lg text-white">
-                        {title || identity.player || "Untitled card"}
+                        {headerTitle}
                       </div>
                       {analysisStatus === "analyzing" && (
                         <div className="text-xs uppercase tracking-[0.25em] text-white/40">
@@ -411,28 +415,17 @@ export default function SportsBatchReview() {
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    className="text-xs uppercase tracking-[0.25em] text-[#E8DCC0] text-left"
-                    onClick={() => handleToggleDetails(item.id)}
-                  >
-                    {showDetails ? "Hide details" : "Review details"}
-                  </button>
-
-                  {showDetails && (
-                    <div className="grid gap-3 text-sm text-white/80">
-                      {identityRows.map((row) => {
-                        const value = identity[row.key];
-                        if (!value) return null;
-                        return (
-                          <div key={row.key} className="flex justify-between">
-                            <span className="text-white/50">{row.label}</span>
-                            <span>{value}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                  <div className="grid gap-3 text-sm text-white/80">
+                    {identityRows.map((row) => {
+                      const value = identity[row.key];
+                      return (
+                        <div key={row.key} className="flex justify-between">
+                          <span className="text-white/50">{row.label}</span>
+                          <span>{value || "Not confirmed"}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
 
                   {description && (
                     <button
@@ -440,7 +433,7 @@ export default function SportsBatchReview() {
                       className="text-xs uppercase tracking-[0.25em] text-[#E8DCC0] text-left"
                       onClick={() => handleToggleDescription(item.id)}
                     >
-                      {showDescription ? "Hide description" : "Preview description"}
+                      {showDescription ? "Hide description" : "Description preview"}
                     </button>
                   )}
 
@@ -450,15 +443,13 @@ export default function SportsBatchReview() {
                     </div>
                   )}
 
-                  {!readyStatus && (
-                    <button
-                      type="button"
-                      className="text-xs uppercase tracking-[0.25em] text-[#E8DCC0] text-left"
-                      onClick={() => openEditModal(item)}
-                    >
-                      Edit details
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className="text-xs uppercase tracking-[0.25em] text-[#E8DCC0] text-left"
+                    onClick={() => openEditModal(item)}
+                  >
+                    Edit details
+                  </button>
 
                   {!isSlabbed && (
                     <div className="border-t border-white/10 pt-4">
