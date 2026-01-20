@@ -47,6 +47,8 @@ export default function SportsBatchLaunch() {
   const { batchItems, preparedPlatforms, setPreparedPlatforms } =
     useSportsBatchStore();
   const [activeFilter, setActiveFilter] = useState("all");
+  const [includeCorners, setIncludeCorners] = useState(true);
+  const [saveCorners, setSaveCorners] = useState(false);
 
   const items = useMemo(() => batchItems || [], [batchItems]);
   const activePlatforms = useMemo(
@@ -147,6 +149,35 @@ export default function SportsBatchLaunch() {
               </div>
             </div>
 
+            <div className="lux-card border border-white/10 p-5 mb-6">
+              <div className="text-xs uppercase tracking-[0.3em] text-white/50 mb-3">
+                Listing images
+              </div>
+              <div className="flex flex-col gap-4 text-sm text-white/70">
+                <label className="flex items-center justify-between gap-4">
+                  <span>Use cropped corners in listings?</span>
+                  <input
+                    type="checkbox"
+                    checked={includeCorners}
+                    onChange={() => setIncludeCorners((prev) => !prev)}
+                    className="h-5 w-5 accent-[#E8DCC0]"
+                  />
+                </label>
+                <label className="flex items-center justify-between gap-4">
+                  <span>Save corner images?</span>
+                  <input
+                    type="checkbox"
+                    checked={saveCorners}
+                    onChange={() => setSaveCorners((prev) => !prev)}
+                    className="h-5 w-5 accent-[#E8DCC0]"
+                  />
+                </label>
+                <div className="text-xs text-white/50">
+                  You can download them later if needed.
+                </div>
+              </div>
+            </div>
+
             <div className="lux-card border border-white/10 p-5 mb-8">
               <div className="text-xs uppercase tracking-[0.3em] text-white/50 mb-3">
                 Show
@@ -197,14 +228,9 @@ export default function SportsBatchLaunch() {
                   item.backImage?.url || item.secondaryPhotos?.[0]?.url || "";
                 const isSlabbed =
                   identity.isSlabbed === true || item.cardType === "slabbed";
-                const frontCorner =
-                  !isSlabbed && item.frontCorners?.length
-                    ? item.frontCorners[0]
-                    : null;
-                const backCorner =
-                  !isSlabbed && item.backCorners?.length
-                    ? item.backCorners[0]
-                    : null;
+                const frontCorners = !isSlabbed ? item.frontCorners || [] : [];
+                const backCorners = !isSlabbed ? item.backCorners || [] : [];
+                const showCorners = includeCorners && !isSlabbed;
 
                 const exportLinks = buildListingExportLinks({
                   title,
@@ -226,15 +252,29 @@ export default function SportsBatchLaunch() {
                     <div className="flex flex-wrap gap-3 mb-5">
                       {renderThumbnail(frontSrc, "Front")}
                       {renderThumbnail(backSrc, "Back")}
-                      {renderThumbnail(
-                        frontCorner?.url || frontCorner,
-                        "Front corner"
-                      )}
-                      {renderThumbnail(
-                        backCorner?.url || backCorner,
-                        "Back corner"
-                      )}
                     </div>
+                    {showCorners && (frontCorners.length || backCorners.length) ? (
+                      <div className="grid gap-3 mb-5">
+                        <div className="grid grid-cols-4 gap-3">
+                          {frontCorners.slice(0, 4).map((corner, idx) => (
+                            <img
+                              key={`front-${item.id}-${idx}`}
+                              src={corner.url || corner}
+                              alt={`Front corner ${idx + 1}`}
+                              className="h-16 w-16 rounded-lg border border-white/10 object-cover"
+                            />
+                          ))}
+                          {backCorners.slice(0, 4).map((corner, idx) => (
+                            <img
+                              key={`back-${item.id}-${idx}`}
+                              src={corner.url || corner}
+                              alt={`Back corner ${idx + 1}`}
+                              className="h-16 w-16 rounded-lg border border-white/10 object-cover"
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
 
                     <div className="grid gap-4">
                       {visiblePlatforms.map((platformId) => {

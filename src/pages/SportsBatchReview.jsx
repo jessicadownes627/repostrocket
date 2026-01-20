@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSportsBatchStore } from "../store/useSportsBatchStore";
 import { composeCardTitle } from "../utils/composeCardTitle";
+import { buildCornerPreviewFromEntries } from "../utils/cardIntelClient";
 
 const identityRows = [
   { key: "player", label: "Player" },
@@ -14,13 +15,49 @@ const identityRows = [
 
 export default function SportsBatchReview() {
   const navigate = useNavigate();
-  const { batchItems } = useSportsBatchStore();
+  const { batchItems, updateBatchItem } = useSportsBatchStore();
   const [openCardId, setOpenCardId] = useState(null);
+  const [openCornerId, setOpenCornerId] = useState(null);
 
   const items = useMemo(() => batchItems || [], [batchItems]);
 
   const handleToggleDetails = (id) => {
     setOpenCardId((prev) => (prev === id ? null : id));
+  };
+
+  const handleToggleCorners = (id) => {
+    setOpenCornerId((prev) => (prev === id ? null : id));
+  };
+
+  const splitCornerEntries = (entries) => {
+    const front = [];
+    const back = [];
+    entries.forEach((entry) => {
+      if (entry.side === "Front") front.push(entry);
+      if (entry.side === "Back") back.push(entry);
+    });
+    return { front, back };
+  };
+
+  const handleRecrop = async (item) => {
+    if (!item?.frontImage || !item?.backImage) return;
+    try {
+      const preview = await buildCornerPreviewFromEntries(
+        item.frontImage,
+        item.backImage
+      );
+      if (!preview?.entries?.length) return;
+      const split = splitCornerEntries(preview.entries);
+      updateBatchItem(item.id, {
+        frontCorners: split.front,
+        backCorners: split.back,
+        cornerPhotos: preview.entries,
+        status:
+          split.front.length >= 4 ? "ready" : "needs_attention",
+      });
+    } catch (err) {
+      console.error("Failed to recrop corners", err);
+    }
   };
 
   const renderThumbnail = (src, alt) => {
@@ -73,30 +110,34 @@ export default function SportsBatchReview() {
               const frontCorners = isSlabbed ? [] : item.frontCorners || [];
               const backCorners = isSlabbed ? [] : item.backCorners || [];
               const showDetails = openCardId === item.id;
+              const showCorners = openCornerId === item.id;
+              const readyStatus =
+                Boolean(frontSrc) &&
+                Boolean(backSrc) &&
+                frontCorners.length >= 4;
 
               return (
                 <div
                   key={item.id}
                   className="lux-card border border-white/10 p-5 flex flex-col gap-4"
                 >
-                  <div className="flex flex-col gap-2">
-                    <div className="text-sm uppercase tracking-[0.25em] text-white/50">
-                      Card
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex flex-col gap-2">
+                      <div className="text-sm uppercase tracking-[0.25em] text-white/50">
+                        Card
+                      </div>
+                      <div className="text-lg text-white">
+                        {title || identity.player || "Untitled card"}
+                      </div>
                     </div>
-                    <div className="text-lg text-white">
-                      {title || identity.player || "Untitled card"}
+                    <div className="text-xs uppercase tracking-[0.25em] text-white/60">
+                      {readyStatus ? "✅ Ready" : "⚠ Needs attention"}
                     </div>
                   </div>
 
                   <div className="flex flex-wrap gap-3">
                     {renderThumbnail(frontSrc, "Front")}
                     {renderThumbnail(backSrc, "Back")}
-                    {frontCorners.slice(0, 1).map((corner, idx) =>
-                      renderThumbnail(corner.url || corner, `Front corner ${idx + 1}`)
-                    )}
-                    {backCorners.slice(0, 1).map((corner, idx) =>
-                      renderThumbnail(corner.url || corner, `Back corner ${idx + 1}`)
-                    )}
                   </div>
 
                   <button
@@ -119,6 +160,39 @@ export default function SportsBatchReview() {
                           </div>
                         );
                       })}
+                    </div>
+                  )}
+
+                  {!isSlabbed && (
+                    <div className="border-t border-white/10 pt-4">
+                      <button
+                        type="button"
+                        className="text-xs uppercase tracking-[0.25em] text-[#E8DCC0] text-left"
+                        onClick={() => handleToggleCorners(item.id)}
+                      >
+                        {showCorners ? "Hide corners" : "Corners (4) ▸"}
+                      </button>
+                      {showCorners && (
+                        <div className="mt-4 grid gap-3">
+                          <div className="grid grid-cols-4 gap-3">
+                            {frontCorners.slice(0, 4).map((corner, idx) => (
+                              <img
+                                key={`front-${item.id}-${idx}`}
+                                src={corner.url || corner}
+                                alt={`Front corner ${idx + 1}`}
+                                className="h-16 w-16 rounded-lg border border-white/10 object-cover"
+                              />
+                            ))}
+                          </div>
+                          <button
+                            type="button"
+                            className="text-xs uppercase tracking-[0.25em] text-white/60 text-left"
+                            onClick={() => handleRecrop(item)}
+                          >
+                            Re-crop corners
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
