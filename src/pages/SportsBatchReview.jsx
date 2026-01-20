@@ -47,6 +47,18 @@ const composeIdentityDescription = (identity = {}) => {
   return lines.join("\n");
 };
 
+const isQualityPlayerName = (value) => {
+  if (!value || typeof value !== "string") return false;
+  const trimmed = value.trim();
+  if (trimmed.length < 5) return false;
+  if (/\d/.test(trimmed)) return false;
+  const tokens = trimmed.split(/\s+/).filter(Boolean);
+  if (tokens.length < 2) return false;
+  if (tokens.some((token) => token.length < 2)) return false;
+  if (/(^|\s)[A-Za-z]{1}($|\s)/.test(trimmed)) return false;
+  return true;
+};
+
 export default function SportsBatchReview() {
   const navigate = useNavigate();
   const { batchItems, updateBatchItem, setBatch } = useSportsBatchStore();
@@ -198,6 +210,7 @@ export default function SportsBatchReview() {
   useEffect(() => {
     const runAnalysisForCard = async (item) => {
       if (!item?.id) return;
+      if (item.analysisStatus === "complete" || item.cardIntelResolved) return;
       if (item.reviewIdentity?.player) return;
       if (inFlightRef.current.has(item.id)) return;
       inFlightRef.current.add(item.id);
@@ -277,6 +290,7 @@ export default function SportsBatchReview() {
         updateBatchItem(item.id, {
           reviewIdentity: initialIdentity,
           analysisStatus: "complete",
+          cardIntelResolved: true,
           title: composedTitle || item.title || "",
           description: composedDescription || item.description || "",
         });
@@ -318,6 +332,7 @@ export default function SportsBatchReview() {
                 return {
                   ...prev,
                   reviewIdentity: merged,
+                  cardIntelResolved: true,
                   title: nextTitle || prev?.title || "",
                   description: nextDescription || prev?.description || "",
                 };
@@ -394,25 +409,26 @@ export default function SportsBatchReview() {
               const description = item.description || composeIdentityDescription(identity);
               const playerConfidence = identity?.confidence?.player || "";
               const lowConfidencePlayer = playerConfidence === "low";
-              const headerTitle = lowConfidencePlayer
+              const validPlayerName =
+                identity.player && isQualityPlayerName(identity.player);
+              const headerTitle = lowConfidencePlayer || !validPlayerName
                 ? "Review card details"
                 : title || identity.player || "Review card details";
+              const identityValues = {
+                ...identity,
+                player: validPlayerName ? identity.player : "",
+              };
+              const missingFields = identityRows.filter(
+                (row) => !identityValues[row.key]
+              );
+              const showHelperLine = missingFields.length >= 2;
+              const identityIncomplete = missingFields.length > 0;
 
               return (
                 <div
                   key={item.id}
-                  className="relative lux-card border border-white/10 p-5 flex flex-col gap-4"
+                  className="lux-card border border-white/10 p-5 flex flex-col gap-4"
                 >
-                  <button
-                    type="button"
-                    className="absolute right-4 top-4 text-white/40 hover:text-white/80"
-                    aria-label="Remove card"
-                    onClick={() => {
-                      handleRemoveCard(item);
-                    }}
-                  >
-                    ✕
-                  </button>
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex flex-col gap-2">
                       <div className="text-sm uppercase tracking-[0.25em] text-white/50">
@@ -433,8 +449,18 @@ export default function SportsBatchReview() {
                   </div>
 
                   <div className="flex flex-wrap gap-6">
-                    <div className="flex flex-col gap-2">
+                    <div className="relative flex flex-col gap-2">
                       {renderThumbnail(frontSrc, "Front")}
+                      <button
+                        type="button"
+                        className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/70 border border-white/15 text-white/70 hover:text-white flex items-center justify-center text-xs"
+                        aria-label="Remove card"
+                        onClick={() => {
+                          handleRemoveCard(item);
+                        }}
+                      >
+                        ✕
+                      </button>
                     </div>
                     <div className="flex flex-col gap-2">
                       {backImageExists ? (
@@ -458,7 +484,7 @@ export default function SportsBatchReview() {
 
                   <div className="grid gap-3 text-sm text-white/80">
                     {identityRows.map((row) => {
-                      const value = identity[row.key];
+                      const value = identityValues[row.key];
                       return (
                         <div key={row.key} className="flex justify-between">
                           <span className="text-white/50">{row.label}</span>
@@ -467,6 +493,16 @@ export default function SportsBatchReview() {
                       );
                     })}
                   </div>
+                  {showHelperLine && (
+                    <div className="text-xs text-white/45">
+                      Some details couldn’t be confirmed automatically.
+                    </div>
+                  )}
+                  {analysisStatus === "analyzing" && identityIncomplete && (
+                    <div className="text-xs text-white/45">
+                      Some details may take up to 10 seconds to appear.
+                    </div>
+                  )}
 
                   {description && (
                     <button
@@ -486,7 +522,11 @@ export default function SportsBatchReview() {
 
                   <button
                     type="button"
-                    className="text-xs uppercase tracking-[0.25em] text-[#E8DCC0] text-left"
+                    className={`text-xs uppercase tracking-[0.25em] text-left ${
+                      identityIncomplete
+                        ? "text-[#E8DCC0] font-semibold"
+                        : "text-[#E8DCC0]"
+                    }`}
                     onClick={() => openEditModal(item)}
                   >
                     Edit details

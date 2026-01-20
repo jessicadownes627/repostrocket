@@ -114,9 +114,27 @@ export default function SportsBatchLaunch() {
         <h1 className="sparkly-header text-3xl mb-2 text-center">
           Launch — Sports Cards
         </h1>
-        <p className="text-center text-white/60 text-sm mb-8">
-          Your listings are ready. Choose where to post.
+        <p className="text-center text-white/70 text-sm">
+          Preparing listings… This usually takes about 20 seconds.
         </p>
+        <div className="max-w-md mx-auto mt-4 mb-6">
+          <div className="h-1 w-full rounded-full bg-white/10 overflow-hidden">
+            <div className="h-full w-1/3 bg-[#E8DCC0]/70 animate-pulse" />
+          </div>
+        </div>
+        <div className="text-center text-white/60 text-sm mb-8">
+          {items.length} cards · Platforms: {activePlatforms.join(", ") || "eBay"}
+          {includeCorners ? " · Corners included" : " · Corners off"}
+        </div>
+
+        <div className="flex justify-center mb-8">
+          <a
+            href="#sports-batch-listings"
+            className="px-6 py-3 rounded-full border border-[#E8DCC0] text-[#E8DCC0] text-xs uppercase tracking-[0.25em]"
+          >
+            Create listings
+          </a>
+        </div>
 
         {items.length === 0 ? (
           <div className="min-h-[50vh] flex items-center justify-center text-white/70 text-center">
@@ -216,7 +234,7 @@ export default function SportsBatchLaunch() {
               </div>
             </div>
 
-            <div className="grid gap-6">
+            <div id="sports-batch-listings" className="grid gap-6">
               {items.map((item) => {
                 const identity = item.reviewIdentity || {};
                 const title = composeCardTitle(identity);

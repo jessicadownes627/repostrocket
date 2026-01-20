@@ -110,12 +110,23 @@ export default function SportsBatchPrep() {
     const preview = item.photo?.url || "";
     if (!preview) return null;
     return (
-      <img
-        key={item.id}
-        src={preview}
-        alt={item.photos?.[0]?.altText || "Card photo"}
-        className="w-full aspect-[3/4] object-cover rounded-xl border border-white/10"
-      />
+      <div key={item.id} className="relative">
+        <img
+          src={preview}
+          alt={item.photo?.altText || "Card photo"}
+          className="w-full aspect-[3/4] object-cover rounded-xl border border-white/10"
+        />
+        <button
+          type="button"
+          className="absolute top-2 right-2 h-6 w-6 rounded-full bg-black/70 border border-white/20 text-white/70 hover:text-white flex items-center justify-center text-xs"
+          aria-label="Remove photo"
+          onClick={() => {
+            setBatch(batchItems.filter((entry) => entry.id !== item.id));
+          }}
+        >
+          ✕
+        </button>
+      </div>
     );
   };
 
