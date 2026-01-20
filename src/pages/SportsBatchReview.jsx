@@ -49,8 +49,7 @@ const composeIdentityDescription = (identity = {}) => {
 
 export default function SportsBatchReview() {
   const navigate = useNavigate();
-  const { batchItems, updateBatchItem } = useSportsBatchStore();
-  const [openCardId, setOpenCardId] = useState(null);
+  const { batchItems, updateBatchItem, setBatch } = useSportsBatchStore();
   const [openCornerId, setOpenCornerId] = useState(null);
   const [openDescriptionId, setOpenDescriptionId] = useState(null);
   const [editCardId, setEditCardId] = useState(null);
@@ -65,10 +64,6 @@ export default function SportsBatchReview() {
   const inFlightRef = useRef(new Set());
 
   const items = useMemo(() => batchItems || [], [batchItems]);
-
-  const handleToggleDetails = (id) => {
-    setOpenCardId((prev) => (prev === id ? null : id));
-  };
 
   const handleToggleCorners = (id) => {
     setOpenCornerId((prev) => (prev === id ? null : id));
@@ -361,8 +356,18 @@ export default function SportsBatchReview() {
               return (
                 <div
                   key={item.id}
-                  className="lux-card border border-white/10 p-5 flex flex-col gap-4"
+                  className="relative lux-card border border-white/10 p-5 flex flex-col gap-4"
                 >
+                  <button
+                    type="button"
+                    className="absolute right-4 top-4 text-white/40 hover:text-white/80"
+                    aria-label="Remove card"
+                    onClick={() => {
+                      setBatch(batchItems.filter((entry) => entry.id !== item.id));
+                    }}
+                  >
+                    ✕
+                  </button>
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex flex-col gap-2">
                       <div className="text-sm uppercase tracking-[0.25em] text-white/50">
