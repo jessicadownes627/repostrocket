@@ -53,6 +53,8 @@ export default function SportsBatchReview() {
   const [openCornerId, setOpenCornerId] = useState(null);
   const [openDescriptionId, setOpenDescriptionId] = useState(null);
   const [editCardId, setEditCardId] = useState(null);
+  const [undoToast, setUndoToast] = useState(null);
+  const undoTimerRef = useRef(null);
   const [editDraft, setEditDraft] = useState({
     player: "",
     year: "",
@@ -107,6 +109,45 @@ export default function SportsBatchReview() {
     });
     setEditCardId(null);
   };
+
+  const clearUndoToast = () => {
+    if (undoTimerRef.current) {
+      clearTimeout(undoTimerRef.current);
+      undoTimerRef.current = null;
+    }
+    setUndoToast(null);
+  };
+
+  const handleRemoveCard = (item) => {
+    if (!item?.id) return;
+    const index = batchItems.findIndex((entry) => entry.id === item.id);
+    if (index < 0) return;
+    const snapshot = { item, index };
+    setBatch(batchItems.filter((entry) => entry.id !== item.id));
+    setUndoToast(snapshot);
+    if (undoTimerRef.current) {
+      clearTimeout(undoTimerRef.current);
+    }
+    undoTimerRef.current = setTimeout(() => {
+      clearUndoToast();
+    }, 4000);
+  };
+
+  const handleUndoRemove = () => {
+    if (!undoToast?.item) return;
+    const next = [...batchItems];
+    next.splice(undoToast.index, 0, undoToast.item);
+    setBatch(next);
+    clearUndoToast();
+  };
+
+  useEffect(() => {
+    return () => {
+      if (undoTimerRef.current) {
+        clearTimeout(undoTimerRef.current);
+      }
+    };
+  }, []);
 
   const splitCornerEntries = (entries) => {
     const front = [];
@@ -367,7 +408,7 @@ export default function SportsBatchReview() {
                     className="absolute right-4 top-4 text-white/40 hover:text-white/80"
                     aria-label="Remove card"
                     onClick={() => {
-                      setBatch(batchItems.filter((entry) => entry.id !== item.id));
+                      handleRemoveCard(item);
                     }}
                   >
                     ✕
@@ -559,6 +600,20 @@ export default function SportsBatchReview() {
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {undoToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+          <div className="flex items-center gap-3 rounded-full border border-white/15 bg-black/90 px-4 py-2 text-xs uppercase tracking-[0.2em] text-white/80 shadow-[0_12px_30px_rgba(0,0,0,0.55)]">
+            <span>Card removed</span>
+            <button
+              type="button"
+              className="text-[#E8DCC0] hover:text-white"
+              onClick={handleUndoRemove}
+            >
+              Undo
+            </button>
           </div>
         </div>
       )}
