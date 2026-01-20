@@ -31,7 +31,6 @@ import {
   transformForWhatnot,
   transformForMercari,
 } from "../engines/platformTransforms";
-import { groupSportsCards } from "../engines/smartGrouping";
 import {
   predictCategoryFromPhoto,
   guessBrandFromPhoto,
@@ -189,123 +188,22 @@ function buildCardPhotos(item = {}) {
   };
 }
 
-function composeSportsListing(identity = {}) {
-  if (!identity || typeof identity !== "object") return { title: "", description: "" };
-  const year = identity.year ? String(identity.year).trim() : "";
-  const brand = identity.brand ? String(identity.brand).trim() : "";
-  const setName = identity.setName ? String(identity.setName).trim() : "";
-  const player = identity.player ? String(identity.player).trim() : "";
-  const cardNumber = identity.cardNumber ? String(identity.cardNumber).trim() : "";
-
-  const titleParts = [year, brand, setName, player].filter(Boolean);
-  let title = titleParts.join(" ").trim();
-  if (cardNumber) {
-    title = title ? `${title} #${cardNumber}` : `#${cardNumber}`;
-  }
-
-  const baseParts = [year, brand, setName]
-    .filter(Boolean)
-    .join(" ")
-    .trim();
-  let description = baseParts
-    ? `Authentic ${baseParts} card featuring ${player}.`
-    : "";
-  if (brand || setName) {
-    const brandLine = [brand, setName].filter(Boolean).join(" ").trim();
-    description += description
-      ? `\n\nOfficial ${brandLine} issue.`
-      : `Official ${brandLine} issue.`;
-  }
-  const conditionLine = "Condition as shown. Ships securely.";
-  description += description ? `\n\n${conditionLine}` : conditionLine;
-
-  return { title, description };
-}
-
 export default function LaunchDeckBatch() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { setListing, replaceReviewIdentity } = useListingStore();
+  const {
+    setListing,
+    replaceReviewIdentity,
+    selectedPlatforms,
+    setSelectedPlatforms,
+  } = useListingStore();
 
   const fallbackItems = useMemo(() => [], []);
   const rawItems = location.state?.items;
   const items = Array.isArray(rawItems) ? rawItems : fallbackItems;
-  const isSportsBatch = useMemo(
-    () =>
-      items.some(
-        (item) =>
-          item?.isSportsBatch === true || item?.batchType === "sports"
-      ),
-    [items]
-  );
-
-  const mergeByIdentity = useCallback((entries) => {
-    const merged = new Map();
-    const result = [];
-    entries.forEach((item) => {
-      if (!item) return;
-      const identity = item.reviewIdentity || {};
-      const keyParts = [
-        identity.player,
-        identity.year,
-        identity.setName || identity.brand,
-        identity.team,
-        identity.sport,
-      ]
-        .filter(Boolean)
-        .map((value) => String(value).toLowerCase().trim());
-      const hasIdentityKey = keyParts.length > 0;
-      const key = hasIdentityKey ? keyParts.join("|") : null;
-
-      if (!key) {
-        result.push(item);
-        return;
-      }
-
-      const existing = merged.get(key);
-      if (!existing) {
-        merged.set(key, { ...item });
-        return;
-      }
-
-      const next = { ...existing };
-      if (!next.photos?.length && item.photos?.length) next.photos = item.photos;
-      if (!next.secondaryPhotos?.length && item.secondaryPhotos?.length) {
-        next.secondaryPhotos = item.secondaryPhotos;
-      } else if (!next.secondaryPhotos?.length && item.photos?.length) {
-        next.secondaryPhotos = item.photos;
-      }
-
-      if (!next.cornerPhotos?.length && item.cornerPhotos?.length) {
-        next.cornerPhotos = item.cornerPhotos;
-      }
-      if (!next.frontCorners?.length && item.frontCorners?.length) {
-        next.frontCorners = item.frontCorners;
-      }
-      if (!next.backCorners?.length && item.backCorners?.length) {
-        next.backCorners = item.backCorners;
-      }
-
-      if (!next.reviewIdentity && item.reviewIdentity) {
-        next.reviewIdentity = item.reviewIdentity;
-      }
-
-      merged.set(key, next);
-    });
-    return result.concat([...merged.values()]);
-  }, []);
-
-  const filteredItems = useMemo(
-    () => items.filter((item) => !item?.isMerged && !item?.usedAsBack),
-    [items]
-  );
-  const mergedItems = useMemo(
-    () => mergeByIdentity(filteredItems),
-    [filteredItems, mergeByIdentity]
-  );
   const normalizedItems = useMemo(
-    () => normalizeBatchItems(mergedItems),
-    [mergedItems]
+    () => normalizeBatchItems(items),
+    [items]
   );
   const [processing, setProcessing] = useState(!normalizedItems.length);
   const [progress, setProgress] = useState(0);
@@ -313,8 +211,39 @@ export default function LaunchDeckBatch() {
   const [toolbarMode, setToolbarMode] = useState(null);
   const [toolbarValue, setToolbarValue] = useState("");
   const [platform, setPlatform] = useState("ebay");
-  const [cardGroups, setCardGroups] = useState(null);
-  const [activeGroupFilter, setActiveGroupFilter] = useState("all");
+  const allPlatforms = useMemo(
+    () => ["ebay", "mercari", "poshmark", "whatnot"],
+    []
+  );
+  const preparedPlatforms = useMemo(
+    () => (selectedPlatforms.length ? selectedPlatforms : allPlatforms),
+    [selectedPlatforms, allPlatforms]
+  );
+  const togglePreparedPlatform = useCallback(
+    (nextPlatform) => {
+      if (!nextPlatform) return;
+      if (!selectedPlatforms.length) {
+        setSelectedPlatforms([nextPlatform]);
+        return;
+      }
+      if (selectedPlatforms.includes(nextPlatform)) {
+        setSelectedPlatforms(
+          selectedPlatforms.filter((p) => p !== nextPlatform)
+        );
+        return;
+      }
+      setSelectedPlatforms([...selectedPlatforms, nextPlatform]);
+    },
+    [selectedPlatforms, setSelectedPlatforms]
+  );
+  const resetPreparedPlatforms = useCallback(() => {
+    setSelectedPlatforms([]);
+  }, [setSelectedPlatforms]);
+
+  useEffect(() => {
+    if (selectedPlatforms.length) return;
+    setSelectedPlatforms(["ebay", "mercari"]);
+  }, [selectedPlatforms.length, setSelectedPlatforms]);
   const [activeDetailIndex, setActiveDetailIndex] = useState(null);
   const [copyToast, setCopyToast] = useState("");
   const copyToastTimerRef = useRef(null);
@@ -323,10 +252,7 @@ export default function LaunchDeckBatch() {
     (typeof window !== "undefined" &&
       window.localStorage.getItem("rr_dev_premium") === "true");
 
-  const renderItems = useMemo(
-    () => (isSportsBatch ? mergeByIdentity(processedItems) : processedItems),
-    [isSportsBatch, processedItems, mergeByIdentity]
-  );
+  const renderItems = processedItems;
 
   const handleEditCard = useCallback(
     (item) => {
@@ -433,7 +359,6 @@ export default function LaunchDeckBatch() {
       finalBase,
       initialSnapshot,
       parsedDraft,
-      identityListing,
       autoCategory,
       autoBrand,
       seoKeywords,
@@ -451,13 +376,15 @@ export default function LaunchDeckBatch() {
       const next = { ...prev };
 
       const shouldApplyTitle =
-        ((parsedDraft && isPremiumUser) || identityListing) &&
+        parsedDraft &&
+        isPremiumUser &&
         finalBase.title &&
         (!prev.title || prev.title === initialSnapshot.title);
       if (shouldApplyTitle) next.title = finalBase.title;
 
       const shouldApplyDescription =
-        ((parsedDraft && isPremiumUser) || identityListing) &&
+        parsedDraft &&
+        isPremiumUser &&
         finalBase.description &&
         (!prev.description || prev.description === initialSnapshot.description);
       if (shouldApplyDescription) next.description = finalBase.description;
@@ -480,13 +407,8 @@ export default function LaunchDeckBatch() {
         (!prevTagsKey || prevTagsKey === initialTagsKey);
       if (shouldApplyTags) next.tags = finalTags;
 
-      if (isSportsBatch) {
-        next.autoCategory = null;
-        next.autoBrand = null;
-      } else {
-        next.autoCategory = autoCategory;
-        next.autoBrand = autoBrand;
-      }
+      next.autoCategory = autoCategory;
+      next.autoBrand = autoBrand;
       next.seoKeywords = seoKeywords;
 
       if (priceSenseData) next.priceSense = priceSenseData;
@@ -562,26 +484,7 @@ export default function LaunchDeckBatch() {
         (finalBase?.category || "").toLowerCase().includes("card") ||
         isSportsCardPhoto(mapPhotosToUrls(photoEntries));
       const isApparelCategory = isBabyApparelListing(finalBase);
-      const identity = seedItem?.reviewIdentity || null;
-      const hasResolvedCardIdentity = Boolean(
-        identity?.player &&
-          (identity?.year ||
-            identity?.brand ||
-            identity?.setName ||
-            identity?.team ||
-            identity?.sport)
-      );
-      const shouldSkipMagicFill = isSportsBatch || hasResolvedCardIdentity;
-
-      let identityListing = null;
-      if (hasResolvedCardIdentity) {
-        identityListing = composeSportsListing(identity);
-        finalBase = {
-          ...finalBase,
-          title: identityListing.title || "",
-          description: identityListing.description || "",
-        };
-      }
+      const shouldSkipMagicFill = false;
 
       if (isPremiumUser && !shouldSkipMagicFill) {
         try {
@@ -717,7 +620,6 @@ export default function LaunchDeckBatch() {
           finalBase,
           initialSnapshot,
           parsedDraft,
-          identityListing,
           autoCategory,
           autoBrand,
           seoKeywords,
@@ -753,7 +655,7 @@ export default function LaunchDeckBatch() {
         options.onProgress();
       }
     },
-    [applyAutoFields, isPremiumUser, isSportsBatch, updateItem]
+    [applyAutoFields, isPremiumUser, updateItem]
   );
 
   const refreshItem = useCallback(
@@ -801,16 +703,6 @@ export default function LaunchDeckBatch() {
     };
   }, [normalizedItems, processItem]);
 
-  // Recompute groups when processed items change
-  useEffect(() => {
-    if (isSportsBatch && renderItems && renderItems.length) {
-      const groups = groupSportsCards(renderItems);
-      setCardGroups(groups);
-    } else {
-      setCardGroups(null);
-    }
-  }, [isSportsBatch, renderItems]);
-
   // Re-apply transforms when platform changes
   useEffect(() => {
     setProcessedItems((prev) => {
@@ -835,18 +727,12 @@ export default function LaunchDeckBatch() {
     });
   }, [platform]);
 
-  // Apply Smart Group Filter (sports-only) on merged cards
-  let displayedItems = renderItems;
-  if (isSportsBatch && activeGroupFilter !== "all" && cardGroups) {
-    displayedItems = cardGroups[activeGroupFilter] || [];
-  }
+  const displayedItems = renderItems;
 
   const copyTargetItem =
     activeDetailIndex !== null && renderItems[activeDetailIndex]
       ? renderItems[activeDetailIndex]
-      : displayedItems.length
-      ? displayedItems[0]
-      : renderItems[0];
+      : displayedItems[0];
 
   const candidateCopyText = useMemo(() => {
     if (!copyTargetItem) return "";
@@ -874,8 +760,6 @@ export default function LaunchDeckBatch() {
   if (processing) {
     const processingHeadline = isPremiumUser
       ? "Analyzing your cards…"
-      : isSportsBatch
-      ? "Preparing cards…"
       : "Preparing items…";
     return (
       <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-10 text-center">
@@ -906,105 +790,85 @@ export default function LaunchDeckBatch() {
         className="ld-batch-wrapper"
         style={{ maxWidth: "1100px", margin: "0 auto", padding: "1rem", color: "white" }}
       >
-        {/* Platform Toggle Toolbar */}
-        <div className="mb-6 mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap items-center gap-3">
-            {["all", "ebay", "mercari", "poshmark", "whatnot"].map((p) => (
+        <h1 className="ld-title">Launch — Batch Listings</h1>
+
+        {/* Marketplace prep + view filter */}
+        <div className="mb-6 mt-2 flex flex-col gap-4">
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.35em] text-white/60 mb-2">
+              Prepare listings for
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
               <button
-                key={p}
-                onClick={() => setPlatform(p)}
-                className={`px-4 py-1.5 rounded-full text-sm border transition ${
-                  platform === p
+                type="button"
+                onClick={resetPreparedPlatforms}
+                className={`px-4 py-1.5 rounded-full text-xs border transition ${
+                  selectedPlatforms.length === 0
                     ? "bg-[#F5E7D0] text-black border-[#F5E7D0]"
                     : "bg-black/30 text-white border-white/20 hover:bg-black/50"
                 }`}
               >
-                {p === "all" && "Show all"}
-                {p === "ebay" && "eBay"}
-                {p === "mercari" && "Mercari"}
-                {p === "poshmark" && "Poshmark"}
-                {p === "whatnot" && "Whatnot"}
+                All platforms
               </button>
-            ))}
+              {allPlatforms.map((p) => {
+                const isPrepared = preparedPlatforms.includes(p);
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => togglePreparedPlatform(p)}
+                    className={`px-4 py-1.5 rounded-full text-xs border transition ${
+                      isPrepared
+                        ? "bg-[#F5E7D0]/80 text-black border-[#F5E7D0]"
+                        : "bg-black/30 text-white border-white/20 hover:bg-black/50"
+                    }`}
+                  >
+                    {p === "ebay" && "eBay"}
+                    {p === "mercari" && "Mercari"}
+                    {p === "poshmark" && "Poshmark"}
+                    {p === "whatnot" && "Whatnot"}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={handleBatchCopyListingText}
-            disabled={!hasBatchCopyText}
-            className="px-4 py-2 rounded-full text-[11px] uppercase tracking-[0.3em] border border-white/30 text-white/80 bg-white/5 hover:bg-white/20 transition disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Copy listing text
-          </button>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-3">
+              {["all", ...allPlatforms].map((p) => {
+                const isPrepared = p === "all" || preparedPlatforms.includes(p);
+                return (
+                  <button
+                    key={p}
+                    onClick={() => setPlatform(p)}
+                    disabled={!isPrepared}
+                    className={`px-4 py-1.5 rounded-full text-sm border transition ${
+                      platform === p
+                        ? "bg-[#F5E7D0] text-black border-[#F5E7D0]"
+                        : "bg-black/30 text-white border-white/20 hover:bg-black/50"
+                    } ${!isPrepared ? "opacity-40 cursor-not-allowed" : ""}`}
+                  >
+                    {p === "all" && "Show all"}
+                    {p === "ebay" && "eBay"}
+                    {p === "mercari" && "Mercari"}
+                    {p === "poshmark" && "Poshmark"}
+                    {p === "whatnot" && "Whatnot"}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              onClick={handleBatchCopyListingText}
+              disabled={!hasBatchCopyText}
+              className="px-4 py-2 rounded-full text-[11px] uppercase tracking-[0.3em] border border-white/30 text-white/80 bg-white/5 hover:bg-white/20 transition disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Copy listing text
+            </button>
+          </div>
         </div>
 
       {/* SMART GROUPING PANEL — TAPPABLE FILTERS */}
-      {isSportsBatch && cardGroups && (
-        <div className="bg-black/50 border border-white/10 p-4 rounded-xl mb-6 text-white/90">
-          <div className="text-lg font-cinzel mb-3 text-[#E8DCC0]">
-            Smart Groups
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            {[
-              { key: "highValue", label: "High Value" },
-              { key: "rookies", label: "Rookies" },
-              { key: "parallels", label: "Parallels / Serial" },
-              { key: "graded", label: "Graded / Slabbed" },
-              { key: "base", label: "Base Cards" },
-              { key: "bulk", label: "Bulk Lots" },
-            ].map((g) => (
-              <button
-                key={g.key}
-                onClick={() => {
-                  setActiveGroupFilter(
-                    activeGroupFilter === g.key ? "all" : g.key
-                  );
-                }}
-                className={`flex flex-col items-start p-2 rounded-lg border transition ${
-                  activeGroupFilter === g.key
-                    ? "border-[#E8DCC0] bg-[#E8DCC0]/10 text-[#E8DCC0]"
-                    : "border-white/10 bg-black/20 text-white/80 hover:bg-black/40"
-                }`}
-              >
-                <span className="font-semibold">{g.label}</span>
-                <span className="opacity-70">
-                  {cardGroups[g.key]?.length || 0} cards
-                </span>
-              </button>
-            ))}
-          </div>
-
-          {/* RESET FILTER BUTTON */}
-          {activeGroupFilter !== "all" && (
-            <button
-              onClick={() => setActiveGroupFilter("all")}
-              className="mt-4 w-full px-4 py-2 text-sm rounded-lg 
-          bg-[#F5E7D0] text-black font-semibold hover:bg-[#F0E1BF] transition"
-            >
-              Show All Cards
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Batch Image Tools */}
-      {isSportsBatch && (
-        <div className="flex gap-3 mb-4">
-          <button
-            className="px-4 py-2 bg-black/40 border border-white/20 rounded-lg text-white text-sm hover:bg-black/60 transition"
-            onClick={handleAutoCropAll}
-          >
-            Auto Crop All
-          </button>
-          <button
-            className="px-4 py-2 bg-black/40 border border-white/20 rounded-lg text-white text-sm hover:bg-black/60 transition"
-            onClick={handleEnhanceAll}
-          >
-            Enhance All
-          </button>
-        </div>
-      )}
-
       {/* Floating Batch Toolbar */}
       <div className="ld-toolbar">
         <div className="ld-toolbar-inner">
@@ -1056,13 +920,9 @@ export default function LaunchDeckBatch() {
         </div>
       </div>
 
-      <h1 className="ld-title">LaunchDeck — Batch Mode</h1>
-
       {displayedItems.length === 0 && (
         <div className="pt-4 text-sm text-[#d6c7a1]/70">
-          {isSportsBatch
-            ? "No sports cards selected for launch."
-            : "No items ready for launch."}
+          No items ready for launch.
         </div>
       )}
 
@@ -1072,15 +932,6 @@ export default function LaunchDeckBatch() {
             ...item,
             photos: buildCardPhotos(item),
           };
-          if (isSportsBatch && renderItem.reviewIdentity) {
-            const identityListing = composeSportsListing(renderItem.reviewIdentity);
-            if (!renderItem.title && identityListing.title) {
-              renderItem.title = identityListing.title;
-            }
-            if (!renderItem.description && identityListing.description) {
-              renderItem.description = identityListing.description;
-            }
-          }
           const sourceIndex = processedItems.findIndex(
             (entry) => entry?.id && entry.id === item?.id
           );
@@ -1090,10 +941,8 @@ export default function LaunchDeckBatch() {
               item={renderItem}
               index={sourceIndex >= 0 ? sourceIndex : index}
               updateItem={updateItem}
-              setActiveDetailIndex={
-                isSportsBatch ? setActiveDetailIndex : undefined
-              }
-              isSportsBatch={isSportsBatch}
+              setActiveDetailIndex={setActiveDetailIndex}
+              preparedPlatforms={preparedPlatforms}
               platform={platform}
               onEditItem={handleEditCard}
               onRefreshItem={refreshItem}
@@ -1102,7 +951,7 @@ export default function LaunchDeckBatch() {
         })}
       </div>
 
-      {isSportsBatch && activeDetailIndex !== null && (
+      {activeDetailIndex !== null && (
         <CardDetailSidebar
           item={
             renderItems[activeDetailIndex] ??
@@ -1138,7 +987,7 @@ export default function LaunchDeckBatch() {
                 toolbarMode === "pricing"
                   ? "e.g., 45"
                   : toolbarMode === "tags" || toolbarMode === "seo"
-                  ? "Comma-separated, e.g., rookie, refractor, parallel"
+                  ? "Comma-separated, e.g., vintage, bundle, size 8"
                   : "Type a value…"
               }
               value={toolbarValue}
@@ -1149,7 +998,7 @@ export default function LaunchDeckBatch() {
               {toolbarMode === "tags" &&
                 "Tags will be split on commas and cleaned."}
               {toolbarMode === "seo" &&
-                "SEO keywords help buyers find your cards faster."}
+                "SEO keywords help buyers find your listings faster."}
             </div>
 
             <div className="ld-modal-actions">
@@ -1248,7 +1097,7 @@ function BatchCard({
   updateItem,
   setActiveDetailIndex,
   onRefreshItem,
-  isSportsBatch,
+  preparedPlatforms,
   platform,
   onEditItem,
 }) {
@@ -1275,11 +1124,6 @@ function BatchCard({
     item?.cardType === "slabbed" ||
     item?.isSlabbed === true;
 
-  useEffect(() => {
-    if (isSportsBatch) {
-      console.log("BATCH CARD FINAL", item);
-    }
-  }, [isSportsBatch, item]);
 
   const applyQuickFix = () => {
     if (!quickFixMode) return;
@@ -1358,11 +1202,7 @@ function BatchCard({
     ? getPhotoUrl(backCorners[0])
     : "";
 
-  const identity = item?.reviewIdentity || null;
-  const identityListing = identity?.player
-    ? composeSportsListing(identity)
-    : { title: "", description: "" };
-  const cardHeadline = identityListing.title || "";
+  const cardHeadline = item?.title || "";
   const handleSaveCornerImages = async () => {
     if (!cornerPhotos.length) return;
     const payload = cornerPhotos
@@ -1414,25 +1254,12 @@ function BatchCard({
     let magic = null;
     let auto = null;
 
-    const identityCandidate = item?.reviewIdentity || null;
-    const hasResolvedCardIdentity = Boolean(
-      identityCandidate?.player &&
-        (identityCandidate?.year ||
-          identityCandidate?.brand ||
-          identityCandidate?.setName ||
-          identityCandidate?.team ||
-          identityCandidate?.sport)
-    );
-    const shouldSkipMagicFill = isSportsBatch || hasResolvedCardIdentity;
-
     try {
       review = await runAIReview(item);
     } catch {}
-    if (!shouldSkipMagicFill) {
-      try {
-        magic = await runMagicFill(item);
-      } catch {}
-    }
+    try {
+      magic = await runMagicFill(item);
+    } catch {}
     try {
       auto = await runAutoFill(item);
     } catch {}
@@ -1485,10 +1312,16 @@ function BatchCard({
     description:
       platformPreview.summaryDescription || item.description,
   });
+  const allowedPlatforms =
+    preparedPlatforms && preparedPlatforms.length
+      ? preparedPlatforms
+      : ["ebay", "mercari", "poshmark", "whatnot"];
   const platformsToShow =
     platform === "all"
-      ? ["ebay", "mercari", "poshmark", "whatnot"]
-      : [platform || "ebay"];
+      ? allowedPlatforms
+      : allowedPlatforms.includes(platform)
+      ? [platform]
+      : [];
   const apparelAttrs = item?.apparelAttributes || {};
   const hasApparelSignals =
     !!item?.apparelIntel &&
@@ -1560,24 +1393,22 @@ function BatchCard({
             onIncludeCornersChange={setIncludeCorners}
             showCornerToggle={false}
             hideThumbnail
-            suppressFallback={isSportsBatch}
+            suppressFallback={false}
             platformTitle={
               platformPreview?.titles
                 ? platformPreview.titles[platformKey]
                 : undefined
             }
             platformDescription={
-              (isSportsBatch && identityListing.description
-                ? identityListing.description
-                : platformDescriptions[platformKey]) ||
+              platformDescriptions[platformKey] ||
               platformPreview.summaryDescription ||
               item.description
             }
             onEdit={
-              isSportsBatch
-                ? () => onEditItem?.(item)
-                : setActiveDetailIndex
+              setActiveDetailIndex
                 ? () => setActiveDetailIndex(index)
+                : onEditItem
+                ? () => onEditItem(item)
                 : undefined
             }
           />
@@ -1997,22 +1828,6 @@ function BatchCard({
               Recommendation: {item.cardIntelligence.protection}
             </div>
           </div>
-        </div>
-      )}
-
-      {!isSportsBatch && (
-        <div className="ld-platform-buttons">
-          {Object.keys(platformFormatters).map((key) => (
-            <button
-              key={key}
-              className={`ld-platform-btn ${
-                activePlatform === key ? "ld-platform-btn-active" : ""
-              }`}
-              onClick={() => handlePlatformClick(key)}
-            >
-              {key.toUpperCase()}
-            </button>
-          ))}
         </div>
       )}
 

@@ -2,8 +2,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { detectCardsFromImage, cropCards } from "../engines/multiCardDetector";
-import { useListingStore } from "../store/useListingStore";
-import { saveListingToLibrary } from "../utils/savedListings";
+import { useSportsBatchStore } from "../store/useSportsBatchStore";
 
 export default function MultiDetect() {
   const [preview, setPreview] = useState(null);
@@ -11,13 +10,12 @@ export default function MultiDetect() {
   const [count, setCount] = useState(0);
 
   const navigate = useNavigate();
-  const { setBatchItems, setBatchMode } = useListingStore();
+  const { setBatch } = useSportsBatchStore();
 
   async function handleUpload(e) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setBatchMode("sports_cards");
     const base64 = await fileToBase64(file);
     setPreview(base64);
 
@@ -29,40 +27,33 @@ export default function MultiDetect() {
 
       setCount(crops.length);
 
-      const batchItems = crops.map((src, idx) => ({
-        id:
-          typeof crypto !== "undefined" && crypto.randomUUID
-            ? crypto.randomUUID()
-            : `card-${Date.now()}-${Math.random()}`,
-        photos: [
-          {
-            url: src,
-            altText: `detected card ${idx + 1}`,
-          },
-        ],
-        title: "",
-        description: "",
-        tags: [],
-        price: "",
-        condition: "",
-        notes: "",
-      }));
-
-      setBatchItems(batchItems);
-      batchItems.forEach((item) => {
-        if (!item?.id) return;
-        saveListingToLibrary({
-          ...item,
-          id: item.id,
-          type: "sports-card",
-          status: "draft",
-          createdAt: Date.now(),
-          incomplete: true,
-        });
+      const batchItems = crops.map((src, idx) => {
+        const frontImage = {
+          url: src,
+          altText: `detected card ${idx + 1}`,
+        };
+        return {
+          id:
+            typeof crypto !== "undefined" && crypto.randomUUID
+              ? crypto.randomUUID()
+              : `card-${Date.now()}-${Math.random()}`,
+          frontImage,
+          backImage: null,
+          photos: [frontImage],
+          secondaryPhotos: [],
+          frontCorners: [],
+          backCorners: [],
+          cornerPhotos: [],
+          reviewIdentity: null,
+          cardType: "raw",
+          status: "needs_back",
+        };
       });
+
+      setBatch(batchItems);
       setProcessing(false);
 
-      navigate("/batch-launch", { state: { items: batchItems } });
+      navigate("/sports-batch");
     } catch (err) {
       console.error("MultiDetect failed:", err);
       setProcessing(false);

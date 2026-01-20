@@ -222,7 +222,7 @@ export default function SportsCardSuite() {
           <div className="rounded-[32px] border-[2px] border-white/25 bg-gradient-to-b from-[#161210] via-[#0C0A0A] to-[#070606] shadow-[0_30px_85px_rgba(8,4,0,0.65)]">
             <button
               onClick={() =>
-                handleNavigate("/batch", "batchMode", {
+                handleNavigate("/sports-batch", "batchMode", {
                   state: { flow: "sports" },
                 })
               }

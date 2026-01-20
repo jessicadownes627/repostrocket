@@ -88,6 +88,8 @@ function Batch() {
 
     const items = photos.map((p, idx) => ({
       id: p.id,
+      batchType: "general",
+      isSportsBatch: false,
       photos: [
         {
           url: p.preview,

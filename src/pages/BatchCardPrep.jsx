@@ -547,25 +547,6 @@ export default function BatchCardPrep() {
     );
   }
 
-  const isSportsBatch = batchMode === "sports_cards";
-  const hasBackPhoto = Boolean(currentCard?.secondaryPhotos?.length);
-
-  if (isSportsBatch && !hasBackPhoto) {
-    return (
-      <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center gap-4 px-6 text-center">
-        <p className="text-lg text-white/70">
-          Back photo not paired yet. You can continue and add it later.
-        </p>
-        <button
-          type="button"
-          className="lux-continue-btn"
-          onClick={() => navigate("/batch-comps")}
-        >
-          Back to Batch Upload
-        </button>
-      </div>
-    );
-  }
 
   const goToCard = (id) => {
     if (!id) return;
@@ -970,8 +951,6 @@ export default function BatchCardPrep() {
           ? String(activePricing.suggestedListPrice)
           : "",
         category: "Sports Cards",
-        batchType: "sports",
-        isSportsBatch: true,
         cardAttributes: activeCardAttributes || null,
         cardIntel: activeCardIntel || null,
         reviewIdentity: activeReviewIdentity || currentCard?.reviewIdentity || null,
