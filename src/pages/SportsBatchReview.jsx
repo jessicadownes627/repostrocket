@@ -105,6 +105,15 @@ export default function SportsBatchReview() {
                 item.frontImage?.url || item.photos?.[0]?.url || "";
               const backSrc =
                 item.backImage?.url || item.secondaryPhotos?.[0]?.url || "";
+              const backConfidence =
+                item.backImage?.confidence ??
+                item.backImage?.confidenceScore ??
+                item.backImage?.score ??
+                null;
+              const showBackConfirmNote =
+                Boolean(backSrc) &&
+                typeof backConfidence === "number" &&
+                backConfidence < 0.6;
               const isSlabbed =
                 identity.isSlabbed === true || item.cardType === "slabbed";
               const frontCorners = isSlabbed ? [] : item.frontCorners || [];
@@ -135,9 +144,24 @@ export default function SportsBatchReview() {
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-3">
-                    {renderThumbnail(frontSrc, "Front")}
-                    {renderThumbnail(backSrc, "Back")}
+                  <div className="flex flex-wrap gap-6">
+                    <div className="flex flex-col gap-2">
+                      {renderThumbnail(frontSrc, "Front")}
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      {backSrc ? (
+                        renderThumbnail(backSrc, "Back")
+                      ) : (
+                        <div className="h-16 w-16 rounded-lg border border-dashed border-white/20 flex items-center justify-center text-[10px] uppercase tracking-[0.25em] text-white/50">
+                          Back missing
+                        </div>
+                      )}
+                      {showBackConfirmNote && (
+                        <div className="text-xs uppercase tracking-[0.25em] text-white/50">
+                          Back detected — please confirm
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <button
