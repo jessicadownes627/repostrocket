@@ -19,6 +19,15 @@ export default function SportsBatchReview() {
   const { batchItems, updateBatchItem } = useSportsBatchStore();
   const [openCardId, setOpenCardId] = useState(null);
   const [openCornerId, setOpenCornerId] = useState(null);
+  const [editCardId, setEditCardId] = useState(null);
+  const [editDraft, setEditDraft] = useState({
+    player: "",
+    year: "",
+    brand: "",
+    setName: "",
+    team: "",
+    sport: "",
+  });
   const inFlightRef = useRef(new Set());
 
   const items = useMemo(() => batchItems || [], [batchItems]);
@@ -29,6 +38,41 @@ export default function SportsBatchReview() {
 
   const handleToggleCorners = (id) => {
     setOpenCornerId((prev) => (prev === id ? null : id));
+  };
+
+  const openEditModal = (item) => {
+    const identity = item.reviewIdentity || {};
+    setEditDraft({
+      player: identity.player || "",
+      year: identity.year || "",
+      brand: identity.brand || "",
+      setName: identity.setName || "",
+      team: identity.team || "",
+      sport: identity.sport || "",
+    });
+    setEditCardId(item.id);
+  };
+
+  const closeEditModal = () => {
+    setEditCardId(null);
+  };
+
+  const handleEditSave = () => {
+    if (!editCardId) return;
+    updateBatchItem(editCardId, (prev) => {
+      const identity = prev?.reviewIdentity || {};
+      const nextIdentity = { ...identity };
+      const nextSources = { ...(identity._sources || {}) };
+      Object.entries(editDraft).forEach(([key, value]) => {
+        const trimmed = String(value || "").trim();
+        if (!trimmed) return;
+        nextIdentity[key] = trimmed;
+        nextSources[key] = "manual";
+      });
+      nextIdentity._sources = nextSources;
+      return { ...prev, reviewIdentity: nextIdentity };
+    });
+    setEditCardId(null);
   };
 
   const splitCornerEntries = (entries) => {
@@ -83,6 +127,7 @@ export default function SportsBatchReview() {
       if (item.reviewIdentity?.player) return;
       if (inFlightRef.current.has(item.id)) return;
       inFlightRef.current.add(item.id);
+      updateBatchItem(item.id, { analysisStatus: "analyzing" });
 
       const front = item.frontImage || item.photos?.[0] || null;
       const back = item.backImage || item.secondaryPhotos?.[0] || null;
@@ -153,7 +198,10 @@ export default function SportsBatchReview() {
           minimalPayload.backImage || minimalPayload.nameZoneCrops?.slabLabel
             ? "pending"
             : "complete";
-        updateBatchItem(item.id, { reviewIdentity: initialIdentity });
+        updateBatchItem(item.id, {
+          reviewIdentity: initialIdentity,
+          analysisStatus: "complete",
+        });
 
         if (minimalPayload.backImage || minimalPayload.nameZoneCrops?.slabLabel) {
           fetch("/.netlify/functions/cardIntel_back", {
@@ -194,6 +242,7 @@ export default function SportsBatchReview() {
         }
       } catch (err) {
         console.error("Sports batch analysis failed:", err);
+        updateBatchItem(item.id, { analysisStatus: "error" });
       }
     };
 
@@ -256,6 +305,7 @@ export default function SportsBatchReview() {
                 Boolean(frontSrc) &&
                 Boolean(backSrc) &&
                 frontCorners.length >= 4;
+              const analysisStatus = item.analysisStatus || "";
 
               return (
                 <div
@@ -270,6 +320,11 @@ export default function SportsBatchReview() {
                       <div className="text-lg text-white">
                         {title || identity.player || "Untitled card"}
                       </div>
+                      {analysisStatus === "analyzing" && (
+                        <div className="text-xs uppercase tracking-[0.25em] text-white/40">
+                          Analyzing…
+                        </div>
+                      )}
                     </div>
                     <div className="text-xs uppercase tracking-[0.25em] text-white/60">
                       {readyStatus ? "✅ Ready" : "⚠ Needs attention"}
@@ -323,6 +378,16 @@ export default function SportsBatchReview() {
                     </div>
                   )}
 
+                  {!readyStatus && (
+                    <button
+                      type="button"
+                      className="text-xs uppercase tracking-[0.25em] text-[#E8DCC0] text-left"
+                      onClick={() => openEditModal(item)}
+                    >
+                      Edit details
+                    </button>
+                  )}
+
                   {!isSlabbed && (
                     <div className="border-t border-white/10 pt-4">
                       <button
@@ -373,6 +438,67 @@ export default function SportsBatchReview() {
           </div>
         )}
       </div>
+      {editCardId && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#121212] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.55)]">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-xs uppercase tracking-[0.25em] text-white/60">
+                Edit details
+              </div>
+              <button
+                type="button"
+                className="text-xs uppercase tracking-[0.25em] text-white/50 hover:text-white/80"
+                onClick={closeEditModal}
+              >
+                Close
+              </button>
+            </div>
+            <div className="grid gap-3">
+              {[
+                { key: "player", label: "Player" },
+                { key: "year", label: "Year" },
+                { key: "brand", label: "Brand" },
+                { key: "setName", label: "Set" },
+                { key: "team", label: "Team" },
+                { key: "sport", label: "Sport" },
+              ].map((field) => (
+                <label key={field.key} className="text-xs text-white/60">
+                  <span className="block uppercase tracking-[0.25em] mb-1">
+                    {field.label}
+                  </span>
+                  <input
+                    type="text"
+                    value={editDraft[field.key]}
+                    onChange={(event) =>
+                      setEditDraft((prev) => ({
+                        ...prev,
+                        [field.key]: event.target.value,
+                      }))
+                    }
+                    className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-white/30"
+                  />
+                </label>
+              ))}
+            </div>
+            <div className="mt-4 flex gap-3">
+              <button
+                type="button"
+                className="flex-1 rounded-xl border border-white/20 py-2 text-[11px] uppercase tracking-[0.25em] text-white/70 hover:bg-white/10 transition"
+                onClick={handleEditSave}
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                className="flex-1 rounded-xl border border-white/10 py-2 text-[11px] uppercase tracking-[0.25em] text-white/40 hover:text-white/70 transition"
+                onClick={closeEditModal}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
