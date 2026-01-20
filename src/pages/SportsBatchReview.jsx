@@ -14,11 +14,45 @@ const identityRows = [
   { key: "sport", label: "Sport" },
 ];
 
+const resolveGradeLabel = (identity = {}) => {
+  const gradeValue =
+    identity?.grade && typeof identity.grade === "object"
+      ? identity.grade.value
+      : identity?.grade || "";
+  const gradeScale =
+    identity?.isSlabbed && identity?.grader
+      ? identity.grader
+      : identity?.grade && typeof identity.grade === "object"
+      ? identity.grade.scale
+      : identity?.grader || "";
+  if (identity?.isSlabbed) {
+    return gradeValue ? [gradeScale, gradeValue].filter(Boolean).join(" ") : "Graded";
+  }
+  return gradeValue
+    ? [identity?.condition, gradeValue].filter(Boolean).join(" ")
+    : "";
+};
+
+const composeIdentityDescription = (identity = {}) => {
+  const gradeLabel = resolveGradeLabel(identity);
+  const lines = [
+    identity.player && `Player: ${identity.player}`,
+    identity.brand && `Brand: ${identity.brand}`,
+    identity.setName && `Set: ${identity.setName}`,
+    identity.year && `Year: ${identity.year}`,
+    identity.team && `Team: ${identity.team}`,
+    identity.sport && `Sport: ${identity.sport}`,
+    gradeLabel && `Condition: ${gradeLabel}`,
+  ].filter(Boolean);
+  return lines.join("\n");
+};
+
 export default function SportsBatchReview() {
   const navigate = useNavigate();
   const { batchItems, updateBatchItem } = useSportsBatchStore();
   const [openCardId, setOpenCardId] = useState(null);
   const [openCornerId, setOpenCornerId] = useState(null);
+  const [openDescriptionId, setOpenDescriptionId] = useState(null);
   const [editCardId, setEditCardId] = useState(null);
   const [editDraft, setEditDraft] = useState({
     player: "",
@@ -38,6 +72,10 @@ export default function SportsBatchReview() {
 
   const handleToggleCorners = (id) => {
     setOpenCornerId((prev) => (prev === id ? null : id));
+  };
+
+  const handleToggleDescription = (id) => {
+    setOpenDescriptionId((prev) => (prev === id ? null : id));
   };
 
   const openEditModal = (item) => {
@@ -198,9 +236,13 @@ export default function SportsBatchReview() {
           minimalPayload.backImage || minimalPayload.nameZoneCrops?.slabLabel
             ? "pending"
             : "complete";
+        const composedTitle = composeCardTitle(initialIdentity);
+        const composedDescription = composeIdentityDescription(initialIdentity);
         updateBatchItem(item.id, {
           reviewIdentity: initialIdentity,
           analysisStatus: "complete",
+          title: composedTitle || item.title || "",
+          description: composedDescription || item.description || "",
         });
 
         if (minimalPayload.backImage || minimalPayload.nameZoneCrops?.slabLabel) {
@@ -235,7 +277,14 @@ export default function SportsBatchReview() {
                 const merged = mergeIdentity(currentIdentity, resolvedBack);
                 merged.backOcrLines = backOcrLines;
                 merged.backOcrStatus = "complete";
-                return { ...prev, reviewIdentity: merged };
+                const nextTitle = composeCardTitle(merged);
+                const nextDescription = composeIdentityDescription(merged);
+                return {
+                  ...prev,
+                  reviewIdentity: merged,
+                  title: nextTitle || prev?.title || "",
+                  description: nextDescription || prev?.description || "",
+                };
               });
             })
             .catch(() => {});
@@ -301,11 +350,13 @@ export default function SportsBatchReview() {
               const backCorners = isSlabbed ? [] : item.backCorners || [];
               const showDetails = openCardId === item.id;
               const showCorners = openCornerId === item.id;
+              const showDescription = openDescriptionId === item.id;
               const readyStatus =
                 Boolean(frontSrc) &&
                 Boolean(backSrc) &&
                 frontCorners.length >= 4;
               const analysisStatus = item.analysisStatus || "";
+              const description = item.description || composeIdentityDescription(identity);
 
               return (
                 <div
@@ -375,6 +426,22 @@ export default function SportsBatchReview() {
                           </div>
                         );
                       })}
+                    </div>
+                  )}
+
+                  {description && (
+                    <button
+                      type="button"
+                      className="text-xs uppercase tracking-[0.25em] text-[#E8DCC0] text-left"
+                      onClick={() => handleToggleDescription(item.id)}
+                    >
+                      {showDescription ? "Hide description" : "Preview description"}
+                    </button>
+                  )}
+
+                  {showDescription && description && (
+                    <div className="text-xs text-white/70 whitespace-pre-line">
+                      {description}
                     </div>
                   )}
 
