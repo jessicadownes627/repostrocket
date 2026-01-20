@@ -13,7 +13,11 @@ export function SportsBatchProvider({ children }) {
   const updateBatchItem = (id, fields) => {
     if (!id) return;
     setBatchItems((prev) =>
-      prev.map((item) => (item?.id === id ? { ...item, ...fields } : item))
+      prev.map((item) => {
+        if (item?.id !== id) return item;
+        const nextFields = typeof fields === "function" ? fields(item) : fields;
+        return { ...item, ...(nextFields || {}) };
+      })
     );
   };
 
