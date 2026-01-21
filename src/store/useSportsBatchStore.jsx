@@ -4,10 +4,15 @@ const SportsBatchContext = createContext(null);
 
 export function SportsBatchProvider({ children }) {
   const [batchItems, setBatchItems] = useState([]);
+  const [draftPhotos, setDraftPhotos] = useState([]);
   const [preparedPlatforms, setPreparedPlatforms] = useState(["ebay"]);
 
   const setBatch = (items) => {
     setBatchItems(Array.isArray(items) ? items : []);
+  };
+
+  const setDraft = (items) => {
+    setDraftPhotos(Array.isArray(items) ? items : []);
   };
 
   const updateBatchItem = (id, fields) => {
@@ -24,13 +29,15 @@ export function SportsBatchProvider({ children }) {
   const value = useMemo(
     () => ({
       batchItems,
+      draftPhotos,
       preparedPlatforms,
       setPreparedPlatforms,
       setBatch,
       setBatchItems,
+      setDraftPhotos: setDraft,
       updateBatchItem,
     }),
-    [batchItems, preparedPlatforms]
+    [batchItems, draftPhotos, preparedPlatforms]
   );
 
   return (

@@ -10,7 +10,7 @@ export default function MultiDetect() {
   const [count, setCount] = useState(0);
 
   const navigate = useNavigate();
-  const { setBatch } = useSportsBatchStore();
+  const { setDraftPhotos } = useSportsBatchStore();
 
   async function handleUpload(e) {
     const file = e.target.files?.[0];
@@ -38,10 +38,11 @@ export default function MultiDetect() {
               ? crypto.randomUUID()
               : `card-${Date.now()}-${Math.random()}`,
           photo,
+          removable: true,
         };
       });
 
-      setBatch(batchItems);
+      setDraftPhotos(batchItems);
       setProcessing(false);
 
       navigate("/sports-batch");

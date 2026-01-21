@@ -3,12 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { useSportsBatchStore } from "../store/useSportsBatchStore";
 import { buildCornerPreviewFromEntries } from "../utils/cardIntelClient";
 import { convertHeicIfNeeded } from "../utils/imageTools";
-import { deriveAltTextFromFilename } from "../utils/photoHelpers";
+import { deriveAltTextFromFilename, photoEntryToDataUrl } from "../utils/photoHelpers";
 
 export default function SportsBatchPrep() {
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
-  const { batchItems, setBatch } = useSportsBatchStore();
+  const { batchItems, draftPhotos, setBatch, setDraftPhotos } = useSportsBatchStore();
 
   const prepareEntry = useCallback(async (file) => {
     const processed = await convertHeicIfNeeded(file);
@@ -47,11 +47,12 @@ export default function SportsBatchPrep() {
           ? crypto.randomUUID()
           : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
         photo,
+        removable: true,
       }));
 
-      setBatch([...batchItems, ...incoming]);
+      setDraftPhotos([...(draftPhotos || []), ...incoming]);
     },
-    [batchItems, prepareEntry, setBatch]
+    [draftPhotos, prepareEntry, setDraftPhotos]
   );
 
   const handleUploadClick = () => {
@@ -59,15 +60,31 @@ export default function SportsBatchPrep() {
   };
 
   const handleContinue = async () => {
-    if (!batchItems.length) return;
-    const paired = [];
-    for (let i = 0; i < batchItems.length; i += 2) {
-      const frontPhoto = batchItems[i]?.photo || null;
-      const backPhoto = batchItems[i + 1]?.photo || null;
-      let frontCorners = [];
-      let backCorners = [];
-      let cornerPhotos = [];
-      let status = backPhoto ? "needs_attention" : "needs_back";
+    if (!draftPhotos.length) {
+      navigate("/sports-batch-review");
+      return;
+    }
+      const paired = [];
+      for (let i = 0; i < draftPhotos.length; i += 2) {
+        const frontPhoto = draftPhotos[i]?.photo || null;
+        const backPhoto = draftPhotos[i + 1]?.photo || null;
+        if (!frontPhoto) {
+          continue;
+        }
+        const analysisFront = await photoEntryToDataUrl(frontPhoto);
+        const analysisBack = backPhoto ? await photoEntryToDataUrl(backPhoto) : "";
+        const analysisImages = {
+          front: analysisFront
+            ? { url: analysisFront, altText: frontPhoto.altText || "card front" }
+            : null,
+          back: analysisBack
+            ? { url: analysisBack, altText: backPhoto?.altText || "card back" }
+            : null,
+        };
+        let frontCorners = [];
+        let backCorners = [];
+        let cornerPhotos = [];
+        let status = backPhoto ? "needs_attention" : "needs_back";
 
       if (frontPhoto && backPhoto) {
         try {
@@ -86,23 +103,25 @@ export default function SportsBatchPrep() {
         }
       }
 
-      paired.push({
-        id: crypto.randomUUID
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-        frontImage: frontPhoto,
-        backImage: backPhoto,
-        photos: frontPhoto ? [frontPhoto] : [],
-        secondaryPhotos: backPhoto ? [backPhoto] : [],
-        frontCorners,
-        backCorners,
-        cornerPhotos,
-        reviewIdentity: null,
-        cardType: "raw",
-        status,
-      });
-    }
-    setBatch(paired);
+        paired.push({
+          id: crypto.randomUUID
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          frontImage: frontPhoto,
+          backImage: backPhoto,
+          photos: frontPhoto ? [frontPhoto] : [],
+          secondaryPhotos: backPhoto ? [backPhoto] : [],
+          frontCorners,
+          backCorners,
+          cornerPhotos,
+          analysisImages,
+          reviewIdentity: null,
+          cardType: "raw",
+          status,
+        });
+      }
+    setBatch([...(batchItems || []), ...paired]);
+    setDraftPhotos([]);
     navigate("/sports-batch-review");
   };
 
@@ -116,16 +135,18 @@ export default function SportsBatchPrep() {
           alt={item.photo?.altText || "Card photo"}
           className="w-full aspect-[3/4] object-cover rounded-xl border border-white/10"
         />
-        <button
-          type="button"
-          className="absolute top-2 right-2 h-6 w-6 rounded-full bg-black/70 border border-white/20 text-white/70 hover:text-white flex items-center justify-center text-xs"
-          aria-label="Remove photo"
-          onClick={() => {
-            setBatch(batchItems.filter((entry) => entry.id !== item.id));
-          }}
-        >
-          ✕
-        </button>
+        {item.removable && (
+          <button
+            type="button"
+            className="absolute top-2 right-2 h-6 w-6 rounded-full bg-black/70 border border-white/20 text-white/70 hover:text-white flex items-center justify-center text-xs"
+            aria-label="Remove photo"
+            onClick={() => {
+              setDraftPhotos(draftPhotos.filter((entry) => entry.id !== item.id));
+            }}
+          >
+            ✕
+          </button>
+        )}
       </div>
     );
   };
@@ -171,17 +192,17 @@ export default function SportsBatchPrep() {
           </div>
         </div>
 
-        {batchItems.length > 0 ? (
+        {draftPhotos.length > 0 ? (
           <div className="grid grid-cols-2 gap-4">
-            {batchItems.map(renderPhoto)}
+            {draftPhotos.map(renderPhoto)}
           </div>
         ) : (
           <div className="lux-card border border-white/10 p-8 text-center text-white/60">
-            Add your photos to begin.
+            {batchItems.length ? "Cards preserved. Add more photos to continue." : "Add your photos to begin."}
           </div>
         )}
 
-        {batchItems.length > 0 && (
+        {(draftPhotos.length > 0 || batchItems.length > 0) && (
           <div className="mt-8">
             <button
               type="button"

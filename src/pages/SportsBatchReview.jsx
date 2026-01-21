@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSportsBatchStore } from "../store/useSportsBatchStore";
 import { composeCardTitle } from "../utils/composeCardTitle";
-import { buildCornerPreviewFromEntries, prepareCardIntelPayload } from "../utils/cardIntelClient";
-import { resolveCardFacts as cardFactsResolver } from "../utils/cardFactsResolver";
+import { analyzeCardImages, buildCornerPreviewFromEntries } from "../utils/cardIntelClient";
+import { convertHeicIfNeeded } from "../utils/imageTools";
+import { deriveAltTextFromFilename, photoEntryToDataUrl } from "../utils/photoHelpers";
 
 const identityRows = [
   { key: "player", label: "Player" },
@@ -122,6 +123,69 @@ export default function SportsBatchReview() {
     setEditCardId(null);
   };
 
+  const prepareEntry = async (file) => {
+    const processed = await convertHeicIfNeeded(file);
+    const usable = processed instanceof File ? processed : file;
+    const url = URL.createObjectURL(usable);
+    const altText = deriveAltTextFromFilename(usable?.name) || "card back photo";
+    return { url, altText, file: usable };
+  };
+
+  const handleBackUpload = async (item, fileList) => {
+    if (!item?.id || !fileList?.length) return;
+    const file = Array.from(fileList)[0];
+    try {
+      const backPhoto = await prepareEntry(file);
+      const analysisFront = item.analysisImages?.front?.url
+        ? item.analysisImages.front.url
+        : item.frontImage
+        ? await photoEntryToDataUrl(item.frontImage)
+        : "";
+      const analysisBack = await photoEntryToDataUrl(backPhoto);
+      const analysisImages = {
+        front: analysisFront
+          ? { url: analysisFront, altText: item.frontImage?.altText || "card front" }
+          : null,
+        back: analysisBack
+          ? { url: analysisBack, altText: backPhoto.altText || "card back" }
+          : null,
+      };
+      const identity = item.reviewIdentity || {};
+      const isSlabbed = identity.isSlabbed === true || item.cardType === "slabbed";
+      let frontCorners = Array.isArray(item.frontCorners) ? item.frontCorners : [];
+      let backCorners = Array.isArray(item.backCorners) ? item.backCorners : [];
+      let cornerPhotos = Array.isArray(item.cornerPhotos) ? item.cornerPhotos : [];
+      let status = "needs_attention";
+
+      if (!isSlabbed && item.frontImage) {
+        const preview = await buildCornerPreviewFromEntries(item.frontImage, backPhoto);
+        if (preview?.entries?.length) {
+          const split = splitCornerEntries(preview.entries);
+          frontCorners = split.front;
+          backCorners = split.back;
+          cornerPhotos = preview.entries;
+          if (frontCorners.length >= 4) {
+            status = "ready";
+          }
+        }
+      } else if (isSlabbed) {
+        status = "ready";
+      }
+
+      updateBatchItem(item.id, {
+        backImage: backPhoto,
+        secondaryPhotos: [backPhoto],
+        frontCorners,
+        backCorners,
+        cornerPhotos,
+        analysisImages,
+        status,
+      });
+    } catch (err) {
+      console.error("Failed to attach back photo", err);
+    }
+  };
+
   const clearUndoToast = () => {
     if (undoTimerRef.current) {
       clearTimeout(undoTimerRef.current);
@@ -216,80 +280,59 @@ export default function SportsBatchReview() {
       inFlightRef.current.add(item.id);
       updateBatchItem(item.id, { analysisStatus: "analyzing" });
 
-      const front = item.frontImage || item.photos?.[0] || null;
-      const back = item.backImage || item.secondaryPhotos?.[0] || null;
-      const payload = {
-        category: "Sports Cards",
-        photos: front ? [front] : [],
-        secondaryPhotos: back ? [back] : [],
-        frontCorners: Array.isArray(item.frontCorners) ? item.frontCorners : [],
-        backCorners: Array.isArray(item.backCorners) ? item.backCorners : [],
-      };
-
       try {
-        const prep = await prepareCardIntelPayload(payload, {
-          photos: [...payload.photos, ...payload.secondaryPhotos],
-          requestId: `analysis-${Date.now()}-${item.id}`,
-          includeBackImage: Boolean(back),
-          disableCrops: true,
-          includeNameZones: true,
-        });
-        if (!prep || prep.error || prep.cancelled) return;
-
-        const minimalPayload = {
-          frontImage: prep.payload?.frontImage || null,
-          backImage: prep.payload?.backImage || null,
-          nameZoneCrops: prep.payload?.nameZoneCrops || null,
-          backNameZoneCrops: prep.payload?.backNameZoneCrops || null,
-          frontCorners: payload.frontCorners,
-          backCorners: payload.backCorners,
-          altText: {
-            front: prep.payload?.altText?.front || "",
-            back: prep.payload?.altText?.back || "",
+        const front = item.analysisImages?.front || item.frontImage || item.photos?.[0] || null;
+        if (!front) return;
+        let analysisImages = item.analysisImages || null;
+        if (!analysisImages) {
+          const frontDataUrl = await photoEntryToDataUrl(front);
+          if (!frontDataUrl) {
+            updateBatchItem(item.id, { analysisStatus: "error", cardIntelResolved: true });
+            return;
+          }
+          analysisImages = {
+            front: { url: frontDataUrl, altText: front.altText || "card front" },
+            back: null,
+          };
+          updateBatchItem(item.id, { analysisImages });
+        }
+        const stableFront = analysisImages?.front || front;
+        const stableBack = analysisImages?.back || null;
+        const intel = await analyzeCardImages(
+          {
+            photos: [stableFront],
+            secondaryPhotos: stableBack ? [stableBack] : [],
           },
-          hints: prep.payload?.hints || {},
-          requestId: prep.payload?.requestId,
-          imageHash: prep.payload?.imageHash,
-        };
-
-        const response = await fetch("/.netlify/functions/cardIntel_front", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(minimalPayload),
-        });
-        if (!response.ok) return;
-        const data = await response.json();
-        const ocrLines = Array.isArray(data?.ocrLines) ? data.ocrLines : [];
-        const slabLabelLines = Array.isArray(data?.slabLabelLines)
-          ? data.slabLabelLines
-          : [];
-        const resolved = cardFactsResolver({ ocrLines, slabLabelLines });
+          {
+            requestId: `analysis-${Date.now()}-${item.id}`,
+            includeBackImage: Boolean(stableBack),
+            disableCrops: true,
+            includeNameZones: true,
+            frontDataUrl: analysisImages?.front?.url || null,
+            backDataUrl: analysisImages?.back?.url || null,
+          }
+        );
+        if (!intel || intel.error) {
+          updateBatchItem(item.id, { analysisStatus: "error", cardIntelResolved: true });
+          return;
+        }
         const mergeIdentity = (base, incoming) => {
           const next = { ...(base || {}) };
           Object.entries(incoming || {}).forEach(([key, value]) => {
             if (key === "_sources") return;
             if (value === "" || value === null || value === undefined) return;
-            if (key === "isSlabbed" && value === true) {
-              next.isSlabbed = true;
-              return;
-            }
             if (next[key] !== undefined && next[key] !== null && next[key] !== "") return;
             next[key] = value;
           });
           next._sources = { ...(next._sources || {}), ...(incoming?._sources || {}) };
           return next;
         };
-        const initialIdentity = mergeIdentity(item.reviewIdentity, resolved);
+        const initialIdentity = mergeIdentity(item.reviewIdentity, intel);
         const gradeValue =
           initialIdentity?.grade && typeof initialIdentity.grade === "object"
             ? initialIdentity.grade.value
             : initialIdentity?.grade;
         initialIdentity.isSlabbed = Boolean(initialIdentity?.grader && gradeValue);
-        initialIdentity.frontOcrLines = ocrLines;
-        initialIdentity.backOcrStatus =
-          minimalPayload.backImage || minimalPayload.nameZoneCrops?.slabLabel
-            ? "pending"
-            : "complete";
         const composedTitle = composeCardTitle(initialIdentity);
         const composedDescription = composeIdentityDescription(initialIdentity);
         updateBatchItem(item.id, {
@@ -299,71 +342,35 @@ export default function SportsBatchReview() {
           title: composedTitle || item.title || "",
           description: composedDescription || item.description || "",
         });
-
-        if (minimalPayload.backImage || minimalPayload.nameZoneCrops?.slabLabel) {
-          fetch("/.netlify/functions/cardIntel_back", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              backImage: minimalPayload.backImage,
-              nameZoneCrops: minimalPayload.nameZoneCrops,
-              backNameZoneCrops: minimalPayload.backNameZoneCrops,
-              requestId: minimalPayload.requestId,
-              imageHash: minimalPayload.imageHash,
-            }),
-          })
-            .then((backResponse) => (backResponse.ok ? backResponse.json() : null))
-            .then((backData) => {
-              if (!backData || backData.status !== "ok") return;
-              const backOcrLines = Array.isArray(backData?.backOcrLines)
-                ? backData.backOcrLines
-                : [];
-              const slabLines = Array.isArray(backData?.slabLabelLines)
-                ? backData.slabLabelLines
-                : [];
-              if (!backOcrLines.length && !slabLines.length) return;
-              updateBatchItem(item.id, (prev) => {
-                const currentIdentity = prev?.reviewIdentity || item.reviewIdentity || {};
-                const resolvedBack = cardFactsResolver({
-                  ocrLines: currentIdentity.frontOcrLines || ocrLines,
-                  backOcrLines,
-                  slabLabelLines: slabLines,
-                });
-                const merged = mergeIdentity(currentIdentity, resolvedBack);
-                const mergedGradeValue =
-                  merged?.grade && typeof merged.grade === "object"
-                    ? merged.grade.value
-                    : merged?.grade;
-                merged.isSlabbed = Boolean(merged?.grader && mergedGradeValue);
-                merged.backOcrLines = backOcrLines;
-                merged.backOcrStatus = "complete";
-                const nextTitle = composeCardTitle(merged);
-                const nextDescription = composeIdentityDescription(merged);
-                return {
-                  ...prev,
-                  reviewIdentity: merged,
-                  cardIntelResolved: true,
-                  title: nextTitle || prev?.title || "",
-                  description: nextDescription || prev?.description || "",
-                };
-              });
-            })
-            .catch(() => {});
-        }
       } catch (err) {
         console.error("Sports batch analysis failed:", err);
         updateBatchItem(item.id, { analysisStatus: "error" });
+      } finally {
+        inFlightRef.current.delete(item.id);
       }
     };
 
-    items.forEach((item) => {
-      runAnalysisForCard(item);
-    });
+    const hasActive = items.some((item) => item.analysisStatus === "analyzing");
+    if (hasActive) return;
+    const nextItem = items.find(
+      (item) =>
+        item &&
+        item.id &&
+        item.analysisStatus !== "complete" &&
+        !item.cardIntelResolved &&
+        !item.reviewIdentity?.player
+    );
+    if (nextItem) {
+      runAnalysisForCard(nextItem);
+    }
   }, [items, updateBatchItem]);
 
   return (
     <div className="min-h-screen bg-black text-white px-6 py-10">
       <div className="max-w-5xl mx-auto">
+        <div className="w-full mb-6">
+          <div className="h-[1px] w-full bg-[#E8DCC0]/60" />
+        </div>
         <button
           type="button"
           onClick={() => navigate("/sports-batch")}
@@ -374,9 +381,12 @@ export default function SportsBatchReview() {
         <h1 className="sparkly-header text-3xl mb-2 text-center">
           Review Batch Cards
         </h1>
-        <p className="text-center text-white/65 text-sm mb-8">
-          Confirm details before launch.
-        </p>
+        <div className="w-full mb-6">
+          <div className="text-center text-white/65 text-sm py-2">
+            Confirm details before launch.
+          </div>
+          <div className="h-[1px] w-full bg-[#E8DCC0]/60" />
+        </div>
 
         {items.length === 0 ? (
           <div className="min-h-[50vh] flex items-center justify-center text-white/70 text-center">
@@ -384,7 +394,7 @@ export default function SportsBatchReview() {
           </div>
         ) : (
           <div className="grid gap-6">
-            {items.map((item) => {
+            {items.map((item, index) => {
               const identity = item.reviewIdentity || {};
               const title = composeCardTitle(identity);
               const frontSrc =
@@ -405,48 +415,61 @@ export default function SportsBatchReview() {
                 backImageExists &&
                 typeof backConfidence === "number" &&
                 backConfidence < 0.6;
+              const backInputId = `back-upload-${item.id}`;
               const isSlabbed =
                 identity.isSlabbed === true || item.cardType === "slabbed";
               const frontCorners = isSlabbed ? [] : item.frontCorners || [];
               const backCorners = isSlabbed ? [] : item.backCorners || [];
               const showCorners = openCornerId === item.id;
               const showDescription = openDescriptionId === item.id;
+              const analysisStatus = item.analysisStatus || "";
+              const isAnalyzing = analysisStatus === "analyzing" || analysisStatus === "running";
+              const analysisComplete =
+                analysisStatus === "complete" || analysisStatus === "error";
+              const manualPlayerConfirmed = identity?._sources?.player === "manual";
+              const playerConfirmed =
+                Boolean(identity.player) && validPlayerName && !lowConfidencePlayer;
               const readyStatus =
+                analysisComplete &&
+                (playerConfirmed || manualPlayerConfirmed) &&
                 Boolean(frontSrc) &&
                 Boolean(backSrc) &&
                 frontCorners.length >= 4;
-              const analysisStatus = item.analysisStatus || "";
               const description = item.description || composeIdentityDescription(identity);
               const playerConfidence = identity?.confidence?.player || "";
               const lowConfidencePlayer = playerConfidence === "low";
-              const validPlayerName =
-                identity.player && isQualityPlayerName(identity.player);
-              const headerTitle = lowConfidencePlayer || !validPlayerName
+              const headerTitle = isAnalyzing
                 ? "Review card details"
                 : title || identity.player || "Review card details";
-              console.log({
-                player: identity?.player,
-                grader: identity?.grader,
-                grade: identity?.grade,
-                graded: identity?.graded,
-                isSlabbed: identity?.isSlabbed,
-              });
               const identityValues = {
                 ...identity,
-                player: validPlayerName ? identity.player : "",
+                player: identity.player || "",
               };
               const missingFields = identityRows.filter(
                 (row) => !identityValues[row.key]
               );
               const showHelperLine = missingFields.length >= 2;
               const identityIncomplete = missingFields.length > 0;
+              console.log({
+                analysisStatus,
+                isReady: readyStatus,
+                identityKeys: Object.keys(identity || {}),
+              });
 
               return (
-                <div
-                  key={item.id}
-                  className="lux-card border border-white/10 p-5 flex flex-col gap-4"
-                >
-                  <div className="flex items-start justify-between gap-4">
+                <div key={item.id}>
+                  <div className="relative lux-card border border-white/10 p-5 flex flex-col gap-4">
+                    <button
+                      type="button"
+                      className="absolute right-4 top-4 text-white/40 hover:text-white/80 z-10"
+                      aria-label="Remove card"
+                      onClick={() => {
+                        handleRemoveCard(item);
+                      }}
+                    >
+                      ✕
+                    </button>
+                    <div className="flex items-start justify-between gap-4 pr-8">
                     <div className="flex flex-col gap-2">
                       <div className="text-sm uppercase tracking-[0.25em] text-white/50">
                         Card
@@ -454,30 +477,19 @@ export default function SportsBatchReview() {
                       <div className="text-lg text-white">
                         {headerTitle}
                       </div>
-                      {analysisStatus === "analyzing" && (
-                        <div className="text-xs uppercase tracking-[0.25em] text-white/40">
-                          Analyzing…
-                        </div>
-                      )}
                     </div>
                     <div className="text-xs uppercase tracking-[0.25em] text-white/60">
-                      {readyStatus ? "✅ Ready" : "⚠ Needs attention"}
+                      {isAnalyzing
+                        ? "Analyzing card details…"
+                        : readyStatus
+                        ? "✅ Ready"
+                        : "⚠ Needs attention"}
                     </div>
                   </div>
 
                   <div className="flex flex-wrap gap-6">
-                    <div className="relative flex flex-col gap-2">
+                    <div className="flex flex-col gap-2">
                       {renderThumbnail(frontSrc, "Front")}
-                      <button
-                        type="button"
-                        className="absolute top-1 right-1 h-6 w-6 rounded-full bg-black/70 border border-white/15 text-white/70 hover:text-white flex items-center justify-center text-xs"
-                        aria-label="Remove card"
-                        onClick={() => {
-                          handleRemoveCard(item);
-                        }}
-                      >
-                        ✕
-                      </button>
                     </div>
                     <div className="flex flex-col gap-2">
                       {backImageExists ? (
@@ -487,9 +499,21 @@ export default function SportsBatchReview() {
                           <div className="h-16 w-16 rounded-lg border border-white/10" />
                         )
                       ) : (
-                        <div className="h-16 w-16 rounded-lg border border-dashed border-white/20 flex items-center justify-center text-[10px] uppercase tracking-[0.25em] text-white/50">
-                          Back missing
-                        </div>
+                        <>
+                          <label
+                            htmlFor={backInputId}
+                            className="h-16 w-16 rounded-lg border border-dashed border-white/20 flex items-center justify-center text-[10px] uppercase tracking-[0.25em] text-white/50 cursor-pointer hover:border-white/40"
+                          >
+                            Back missing
+                          </label>
+                          <input
+                            id={backInputId}
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(event) => handleBackUpload(item, event.target.files)}
+                          />
+                        </>
                       )}
                       {showBackConfirmNote && (
                         <div className="text-xs uppercase tracking-[0.25em] text-white/50">
@@ -499,29 +523,52 @@ export default function SportsBatchReview() {
                     </div>
                   </div>
 
-                  <div className="grid gap-3 text-sm text-white/80">
-                    {identityRows.map((row) => {
-                      const value = identityValues[row.key];
-                      return (
+                  {analysisComplete ? (
+                    <>
+                      <div className="grid gap-3 text-sm text-white/80">
+                        {identityRows.map((row) => {
+                          const value = identityValues[row.key];
+                          return (
+                            <div key={row.key} className="flex justify-between">
+                              <span className="text-white/50">{row.label}</span>
+                              <span>{value || "Not confirmed"}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {showHelperLine && (
+                        <div className="text-xs text-white/45">
+                          Some details couldn’t be confirmed automatically.
+                        </div>
+                      )}
+                      {lowConfidencePlayer && identity.player && (
+                        <div className="text-xs text-white/45">
+                          Player needs confirmation.
+                        </div>
+                      )}
+                      {analysisStatus === "error" && (
+                        <div className="text-xs text-white/45">
+                          We couldn’t auto-detect details — edit manually
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="grid gap-3 text-sm text-white/70">
+                      {identityRows.map((row) => (
                         <div key={row.key} className="flex justify-between">
                           <span className="text-white/50">{row.label}</span>
-                          <span>{value || "Not confirmed"}</span>
+                          <span className="inline-block h-3 w-16 rounded-full bg-white/10" />
                         </div>
-                      );
-                    })}
-                  </div>
-                  {showHelperLine && (
-                    <div className="text-xs text-white/45">
-                      Some details couldn’t be confirmed automatically.
+                      ))}
                     </div>
                   )}
-                  {analysisStatus === "analyzing" && identityIncomplete && (
+                  {isAnalyzing && identityIncomplete && (
                     <div className="text-xs text-white/45">
                       Some details may take up to 10 seconds to appear.
                     </div>
                   )}
 
-                  {description && (
+                  {analysisComplete && description && (
                     <button
                       type="button"
                       className="text-xs uppercase tracking-[0.25em] text-[#E8DCC0] text-left"
@@ -531,7 +578,7 @@ export default function SportsBatchReview() {
                     </button>
                   )}
 
-                  {showDescription && description && (
+                  {analysisComplete && showDescription && description && (
                     <div className="text-xs text-white/70 whitespace-pre-line">
                       {description}
                     </div>
@@ -540,7 +587,7 @@ export default function SportsBatchReview() {
                   <button
                     type="button"
                     className={`text-xs uppercase tracking-[0.25em] text-left ${
-                      identityIncomplete
+                      identityIncomplete || isAnalyzing
                         ? "text-[#E8DCC0] font-semibold"
                         : "text-[#E8DCC0]"
                     }`}
@@ -549,7 +596,54 @@ export default function SportsBatchReview() {
                     Edit details
                   </button>
 
-                  {!isSlabbed && (
+                  {editCardId === item.id && (
+                    <div className="mt-3 grid gap-3">
+                      {[
+                        { key: "player", label: "Player" },
+                        { key: "year", label: "Year" },
+                        { key: "brand", label: "Brand" },
+                        { key: "setName", label: "Set" },
+                        { key: "team", label: "Team" },
+                        { key: "sport", label: "Sport" },
+                      ].map((field) => (
+                        <label key={field.key} className="text-xs text-white/60">
+                          <span className="block uppercase tracking-[0.25em] mb-1">
+                            {field.label}
+                          </span>
+                          <input
+                            type="text"
+                            value={editDraft[field.key]}
+                            onChange={(event) =>
+                              setEditDraft((prev) => ({
+                                ...prev,
+                                [field.key]: event.target.value,
+                              }))
+                            }
+                            className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-white/30"
+                          />
+                        </label>
+                      ))}
+                      <div className="flex gap-3">
+                        <button
+                          type="button"
+                          className="flex-1 rounded-xl border border-white/20 py-2 text-[11px] uppercase tracking-[0.25em] text-white/70 hover:bg-white/10 transition"
+                          onClick={handleEditSave}
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          className="flex-1 rounded-xl border border-white/10 py-2 text-[11px] uppercase tracking-[0.25em] text-white/40 hover:text-white/70 transition"
+                          onClick={closeEditModal}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+
+                  {!isSlabbed && !isAnalyzing && (
                     <div className="border-t border-white/10 pt-4">
                       <button
                         type="button"
@@ -581,6 +675,10 @@ export default function SportsBatchReview() {
                       )}
                     </div>
                   )}
+                  </div>
+                  {index < items.length - 1 && (
+                    <div className="h-[1px] w-full bg-[#E8DCC0]/35 mt-6" />
+                  )}
                 </div>
               );
             })}
@@ -599,67 +697,6 @@ export default function SportsBatchReview() {
           </div>
         )}
       </div>
-      {editCardId && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#121212] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.55)]">
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-xs uppercase tracking-[0.25em] text-white/60">
-                Edit details
-              </div>
-              <button
-                type="button"
-                className="text-xs uppercase tracking-[0.25em] text-white/50 hover:text-white/80"
-                onClick={closeEditModal}
-              >
-                Close
-              </button>
-            </div>
-            <div className="grid gap-3">
-              {[
-                { key: "player", label: "Player" },
-                { key: "year", label: "Year" },
-                { key: "brand", label: "Brand" },
-                { key: "setName", label: "Set" },
-                { key: "team", label: "Team" },
-                { key: "sport", label: "Sport" },
-              ].map((field) => (
-                <label key={field.key} className="text-xs text-white/60">
-                  <span className="block uppercase tracking-[0.25em] mb-1">
-                    {field.label}
-                  </span>
-                  <input
-                    type="text"
-                    value={editDraft[field.key]}
-                    onChange={(event) =>
-                      setEditDraft((prev) => ({
-                        ...prev,
-                        [field.key]: event.target.value,
-                      }))
-                    }
-                    className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-white/30"
-                  />
-                </label>
-              ))}
-            </div>
-            <div className="mt-4 flex gap-3">
-              <button
-                type="button"
-                className="flex-1 rounded-xl border border-white/20 py-2 text-[11px] uppercase tracking-[0.25em] text-white/70 hover:bg-white/10 transition"
-                onClick={handleEditSave}
-              >
-                Save
-              </button>
-              <button
-                type="button"
-                className="flex-1 rounded-xl border border-white/10 py-2 text-[11px] uppercase tracking-[0.25em] text-white/40 hover:text-white/70 transition"
-                onClick={closeEditModal}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       {undoToast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
           <div className="flex items-center gap-3 rounded-full border border-white/15 bg-black/90 px-4 py-2 text-xs uppercase tracking-[0.2em] text-white/80 shadow-[0_12px_30px_rgba(0,0,0,0.55)]">
