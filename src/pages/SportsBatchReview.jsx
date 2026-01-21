@@ -280,6 +280,11 @@ export default function SportsBatchReview() {
           return next;
         };
         const initialIdentity = mergeIdentity(item.reviewIdentity, resolved);
+        const gradeValue =
+          initialIdentity?.grade && typeof initialIdentity.grade === "object"
+            ? initialIdentity.grade.value
+            : initialIdentity?.grade;
+        initialIdentity.isSlabbed = Boolean(initialIdentity?.grader && gradeValue);
         initialIdentity.frontOcrLines = ocrLines;
         initialIdentity.backOcrStatus =
           minimalPayload.backImage || minimalPayload.nameZoneCrops?.slabLabel
@@ -325,6 +330,11 @@ export default function SportsBatchReview() {
                   slabLabelLines: slabLines,
                 });
                 const merged = mergeIdentity(currentIdentity, resolvedBack);
+                const mergedGradeValue =
+                  merged?.grade && typeof merged.grade === "object"
+                    ? merged.grade.value
+                    : merged?.grade;
+                merged.isSlabbed = Boolean(merged?.grader && mergedGradeValue);
                 merged.backOcrLines = backOcrLines;
                 merged.backOcrStatus = "complete";
                 const nextTitle = composeCardTitle(merged);
@@ -414,6 +424,13 @@ export default function SportsBatchReview() {
               const headerTitle = lowConfidencePlayer || !validPlayerName
                 ? "Review card details"
                 : title || identity.player || "Review card details";
+              console.log({
+                player: identity?.player,
+                grader: identity?.grader,
+                grade: identity?.grade,
+                graded: identity?.graded,
+                isSlabbed: identity?.isSlabbed,
+              });
               const identityValues = {
                 ...identity,
                 player: validPlayerName ? identity.player : "",
