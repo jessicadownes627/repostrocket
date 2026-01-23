@@ -1,14 +1,38 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSportsBatchStore } from "../store/useSportsBatchStore";
-import { buildCornerPreviewFromEntries } from "../utils/cardIntelClient";
 import { convertHeicIfNeeded } from "../utils/imageTools";
-import { deriveAltTextFromFilename, photoEntryToDataUrl } from "../utils/photoHelpers";
+import { deriveAltTextFromFilename } from "../utils/photoHelpers";
+import { db } from "../db/firebase";
+import { auth, storage } from "../lib/firebase";
+import { doc, setDoc, updateDoc, serverTimestamp, increment } from "firebase/firestore";
+import { ref, uploadBytes } from "firebase/storage";
+import { v4 as uuidv4 } from "uuid";
+import { onAuthStateChanged, signInAnonymously } from "firebase/auth";
 
 export default function SportsBatchPrep() {
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
-  const { batchItems, draftPhotos, setBatch, setDraftPhotos } = useSportsBatchStore();
+  const { batchItems, draftPhotos, batchMeta, setDraftPhotos, setBatchMeta } =
+    useSportsBatchStore();
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  useEffect(() => {
+    if (!auth.currentUser) {
+      signInAnonymously(auth).catch(console.error);
+    }
+  }, []);
+
+  const waitForAuth = () =>
+    new Promise((resolve, reject) => {
+      if (auth.currentUser) return resolve(auth.currentUser);
+      const unsub = onAuthStateChanged(auth, (user) => {
+        if (user) {
+          unsub();
+          resolve(user);
+        }
+      });
+    });
 
   const prepareEntry = useCallback(async (file) => {
     const processed = await convertHeicIfNeeded(file);
@@ -18,21 +42,16 @@ export default function SportsBatchPrep() {
     return { url, altText, file: usable };
   }, []);
 
-  const splitCornerEntries = useCallback((entries) => {
-    const front = [];
-    const back = [];
-    entries.forEach((entry) => {
-      if (entry.side === "Front") front.push(entry);
-      if (entry.side === "Back") back.push(entry);
-    });
-    return { front, back };
-  }, []);
-
   const handleFiles = useCallback(
     async (fileList) => {
-      if (!fileList?.length) return;
+      if (!fileList?.length || isUploading) return;
+      const selected = Array.from(fileList);
+      if (selected.length > 50) {
+        alert("Please select 50 photos or fewer.");
+        return;
+      }
       const entries = [];
-      for (const file of Array.from(fileList)) {
+      for (const file of selected) {
         try {
           const frontPhoto = await prepareEntry(file);
           entries.push(frontPhoto);
@@ -51,77 +70,67 @@ export default function SportsBatchPrep() {
       }));
 
       setDraftPhotos([...(draftPhotos || []), ...incoming]);
+      setUploadError("");
+      setIsUploading(true);
+      const user = await waitForAuth();
+      console.log("Signed in as:", user.uid);
+
+      const currentBatchId = batchMeta?.id || uuidv4();
+      const batchRef = doc(db, "batches", currentBatchId);
+      if (!batchMeta?.id) {
+        await setDoc(batchRef, {
+          userId: "anonymous",
+          createdAt: serverTimestamp(),
+          maxUploads: 50,
+          totalUploads: 0,
+          processedUploads: 0,
+          pairedCards: 0,
+          status: "uploading",
+        });
+        setBatchMeta({ id: currentBatchId, status: "uploading" });
+      }
+
+      try {
+        for (const entry of incoming) {
+          const uploadId = uuidv4();
+          const storagePath = `batch/${currentBatchId}/uploads/${uploadId}.jpg`;
+          const storageRef = ref(storage, storagePath);
+          await uploadBytes(storageRef, entry.photo.file, {
+            contentType: entry.photo.file?.type || "image/jpeg",
+          });
+          await setDoc(doc(db, "batches", currentBatchId, "uploads", uploadId), {
+            storagePath,
+            createdAt: serverTimestamp(),
+            status: "pending",
+          });
+          await updateDoc(batchRef, {
+            totalUploads: increment(1),
+          });
+        }
+      } catch (err) {
+        console.error("Batch upload failed:", err);
+        setUploadError("We couldn’t upload your photos. Please try again.");
+      } finally {
+        setIsUploading(false);
+      }
     },
-    [draftPhotos, prepareEntry, setDraftPhotos]
+    [
+      batchMeta?.id,
+      db,
+      draftPhotos,
+      isUploading,
+      prepareEntry,
+      setBatchMeta,
+      setDraftPhotos,
+      storage,
+    ]
   );
 
   const handleUploadClick = () => {
     fileInputRef.current?.click();
   };
 
-  const handleContinue = async () => {
-    if (!draftPhotos.length) {
-      navigate("/sports-batch-review");
-      return;
-    }
-      const paired = [];
-      for (let i = 0; i < draftPhotos.length; i += 2) {
-        const frontPhoto = draftPhotos[i]?.photo || null;
-        const backPhoto = draftPhotos[i + 1]?.photo || null;
-        if (!frontPhoto) {
-          continue;
-        }
-        const analysisFront = await photoEntryToDataUrl(frontPhoto);
-        const analysisBack = backPhoto ? await photoEntryToDataUrl(backPhoto) : "";
-        const analysisImages = {
-          front: analysisFront
-            ? { url: analysisFront, altText: frontPhoto.altText || "card front" }
-            : null,
-          back: analysisBack
-            ? { url: analysisBack, altText: backPhoto?.altText || "card back" }
-            : null,
-        };
-        let frontCorners = [];
-        let backCorners = [];
-        let cornerPhotos = [];
-        let status = backPhoto ? "needs_attention" : "needs_back";
-
-      if (frontPhoto && backPhoto) {
-        try {
-          const preview = await buildCornerPreviewFromEntries(frontPhoto, backPhoto);
-          if (preview?.entries?.length) {
-            const split = splitCornerEntries(preview.entries);
-            frontCorners = split.front;
-            backCorners = split.back;
-            cornerPhotos = preview.entries;
-            if (frontCorners.length >= 4) {
-              status = "ready";
-            }
-          }
-        } catch (err) {
-          console.error("Failed to auto-crop corners", err);
-        }
-      }
-
-        paired.push({
-          id: crypto.randomUUID
-            ? crypto.randomUUID()
-            : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-          frontImage: frontPhoto,
-          backImage: backPhoto,
-          photos: frontPhoto ? [frontPhoto] : [],
-          secondaryPhotos: backPhoto ? [backPhoto] : [],
-          frontCorners,
-          backCorners,
-          cornerPhotos,
-          analysisImages,
-          reviewIdentity: null,
-          cardType: "raw",
-          status,
-        });
-      }
-    setBatch([...(batchItems || []), ...paired]);
-    setDraftPhotos([]);
+  const handleContinue = () => {
     navigate("/sports-batch-review");
   };
 
@@ -199,6 +208,16 @@ export default function SportsBatchPrep() {
         ) : (
           <div className="lux-card border border-white/10 p-8 text-center text-white/60">
             {batchItems.length ? "Cards preserved. Add more photos to continue." : "Add your photos to begin."}
+          </div>
+        )}
+        {isUploading && (
+          <div className="mt-6 text-center text-sm text-white/70">
+            Uploading photos…
+          </div>
+        )}
+        {uploadError && (
+          <div className="mt-4 text-center text-sm text-red-300">
+            {uploadError}
           </div>
         )}
 

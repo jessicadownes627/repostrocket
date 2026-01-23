@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useSportsBatchStore } from "../store/useSportsBatchStore";
 import { composeCardTitle } from "../utils/composeCardTitle";
 import { buildListingExportLinks } from "../utils/exportListing";
+import { resolveCardFacts as cardFactsResolver } from "../utils/cardFactsResolver";
 
 const PLATFORM_OPTIONS = [
   { id: "ebay", label: "eBay" },
@@ -44,17 +45,22 @@ const composeSportsDescription = (identity = {}) => {
 
 export default function SportsBatchLaunch() {
   const navigate = useNavigate();
-  const { batchItems, preparedPlatforms, setPreparedPlatforms } =
+  const { batchItems, preparedPlatforms, setPreparedPlatforms, updateBatchItem } =
     useSportsBatchStore();
   const [activeFilter, setActiveFilter] = useState("all");
   const [includeCorners, setIncludeCorners] = useState(true);
   const [saveCorners, setSaveCorners] = useState(false);
+  const [analysisCount, setAnalysisCount] = useState(0);
+  const [analysisInFlight, setAnalysisInFlight] = useState(false);
 
   const items = useMemo(() => batchItems || [], [batchItems]);
   const activePlatforms = useMemo(
     () => (preparedPlatforms?.length ? preparedPlatforms : ["ebay"]),
     [preparedPlatforms]
   );
+  const totalCards = items.length;
+  const progressFraction =
+    totalCards > 0 ? Math.min(analysisCount / totalCards, 1) : 0;
 
   useEffect(() => {
     if (!preparedPlatforms?.length) {
@@ -101,6 +107,97 @@ export default function SportsBatchLaunch() {
     }
   };
 
+  const mergeIdentity = (base, incoming) => {
+    const next = { ...(base || {}) };
+    Object.entries(incoming || {}).forEach(([key, value]) => {
+      if (key === "_sources") return;
+      if (value === "" || value === null || value === undefined) return;
+      if (next[key] !== undefined && next[key] !== null && next[key] !== "") return;
+      next[key] = value;
+    });
+    next._sources = { ...(next._sources || {}), ...(incoming?._sources || {}) };
+    return next;
+  };
+
+  const handleGenerateListings = async () => {
+    if (analysisInFlight || !items.length) return;
+    setAnalysisInFlight(true);
+    setAnalysisCount(0);
+    for (const item of items) {
+      if (!item?.id) {
+        setAnalysisCount((prev) => prev + 1);
+        continue;
+      }
+      if (item.cardIntelResolved) {
+        setAnalysisCount((prev) => prev + 1);
+        continue;
+      }
+      const frontImageUrl = item.analysisImages?.frontUrl || "";
+      const backImageUrl = item.analysisImages?.backUrl || null;
+      console.log("Batch payload", { frontImageUrl, backImageUrl });
+      if (!frontImageUrl) {
+        updateBatchItem(item.id, { analysisStatus: "error", cardIntelResolved: true });
+        setAnalysisCount((prev) => prev + 1);
+        continue;
+      }
+      try {
+        const response = await fetch("/.netlify/functions/cardIntel_v2", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            frontImageUrl,
+            backImageUrl,
+            requestId: `analysis-${Date.now()}-${item.id}`,
+          }),
+        });
+        if (!response.ok) {
+          updateBatchItem(item.id, {
+            analysisStatus: "error",
+            cardIntelResolved: true,
+          });
+          setAnalysisCount((prev) => prev + 1);
+          continue;
+        }
+        const data = await response.json();
+        if (!data || data.error) {
+          updateBatchItem(item.id, {
+            analysisStatus: "error",
+            cardIntelResolved: true,
+          });
+          setAnalysisCount((prev) => prev + 1);
+          continue;
+        }
+        const resolved = cardFactsResolver({
+          ocrLines: data.ocrLines || [],
+          backOcrLines: data.backOcrLines || [],
+          slabLabelLines: data.slabLabelLines || [],
+        });
+        const mergedIdentity = mergeIdentity(item.reviewIdentity, resolved);
+        const gradeValue =
+          mergedIdentity?.grade && typeof mergedIdentity.grade === "object"
+            ? mergedIdentity.grade.value
+            : mergedIdentity?.grade;
+        mergedIdentity.isSlabbed = Boolean(mergedIdentity?.grader && gradeValue);
+        const composedTitle = composeCardTitle(mergedIdentity);
+        const composedDescription = composeSportsDescription(mergedIdentity);
+        updateBatchItem(item.id, {
+          reviewIdentity: mergedIdentity,
+          analysisStatus: "complete",
+          cardIntelResolved: true,
+          title: composedTitle || item.title || "",
+          description: composedDescription || item.description || "",
+        });
+      } catch (err) {
+        console.error("Sports batch analysis failed:", err);
+        updateBatchItem(item.id, { analysisStatus: "error", cardIntelResolved: true });
+      }
+      setAnalysisCount((prev) => prev + 1);
+    }
+    setAnalysisInFlight(false);
+    const anchor = document.getElementById("sports-batch-listings");
+    if (anchor) anchor.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   return (
     <div className="min-h-screen bg-black text-white px-6 py-10">
       <div className="max-w-6xl mx-auto">
@@ -119,7 +216,10 @@ export default function SportsBatchLaunch() {
         </p>
         <div className="max-w-md mx-auto mt-4 mb-6">
           <div className="h-1 w-full rounded-full bg-white/10 overflow-hidden">
-            <div className="h-full w-1/3 bg-[#E8DCC0]/70 animate-pulse" />
+            <div
+              className="h-full bg-[#E8DCC0]/70 transition-all duration-500"
+              style={{ width: `${Math.max(progressFraction * 100, 6)}%` }}
+            />
           </div>
         </div>
         <div className="text-center text-white/60 text-sm mb-8">
@@ -128,12 +228,13 @@ export default function SportsBatchLaunch() {
         </div>
 
         <div className="flex justify-center mb-8">
-          <a
-            href="#sports-batch-listings"
+          <button
+            type="button"
+            onClick={handleGenerateListings}
             className="px-6 py-3 rounded-full border border-[#E8DCC0] text-[#E8DCC0] text-xs uppercase tracking-[0.25em]"
           >
             Create listings
-          </a>
+          </button>
         </div>
 
         {items.length === 0 ? (

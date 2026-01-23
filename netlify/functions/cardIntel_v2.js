@@ -11,6 +11,17 @@ Rules:
 - Do not add commentary or extra keys.
 `;
 
+async function fetchImageAsDataUrl(url) {
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch image: ${url}`);
+  }
+  const buffer = Buffer.from(await res.arrayBuffer());
+  const mimeType = res.headers.get("content-type") || "image/jpeg";
+  const base64 = buffer.toString("base64");
+  return `data:${mimeType};base64,${base64}`;
+}
+
 export async function handler(event) {
   try {
     if (!process.env.OPENAI_API_KEY) {
@@ -21,8 +32,21 @@ export async function handler(event) {
     }
 
     const body = JSON.parse(event.body || "{}");
-    const { frontImage, backImage, requestId, imageHash, nameZoneCrops } =
-      body || {};
+    let {
+      frontImage,
+      backImage,
+      frontImageUrl,
+      backImageUrl,
+      requestId,
+      imageHash,
+      nameZoneCrops,
+    } = body || {};
+    if (!frontImage && frontImageUrl) {
+      frontImage = await fetchImageAsDataUrl(frontImageUrl);
+    }
+    if (!backImage && backImageUrl) {
+      backImage = await fetchImageAsDataUrl(backImageUrl);
+    }
     if (!frontImage) {
       return {
         statusCode: 400,

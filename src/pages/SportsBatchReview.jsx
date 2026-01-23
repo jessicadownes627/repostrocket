@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSportsBatchStore } from "../store/useSportsBatchStore";
+import { db } from "../db/firebase";
+import { storage } from "../lib/firebase";
+import { collection, doc, getDocs } from "firebase/firestore";
+import { getDownloadURL, ref as storageRef } from "firebase/storage";
 import { composeCardTitle } from "../utils/composeCardTitle";
-import { analyzeCardImages, buildCornerPreviewFromEntries } from "../utils/cardIntelClient";
+import { buildCornerPreviewFromEntries } from "../utils/cardIntelClient";
 import { convertHeicIfNeeded } from "../utils/imageTools";
 import { deriveAltTextFromFilename, photoEntryToDataUrl } from "../utils/photoHelpers";
 
@@ -62,10 +66,13 @@ const isQualityPlayerName = (value) => {
 
 export default function SportsBatchReview() {
   const navigate = useNavigate();
-  const { batchItems, updateBatchItem, setBatch } = useSportsBatchStore();
+  const { batchItems, updateBatchItem, setBatch, batchMeta } = useSportsBatchStore();
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const [openCornerId, setOpenCornerId] = useState(null);
   const [openDescriptionId, setOpenDescriptionId] = useState(null);
   const [editCardId, setEditCardId] = useState(null);
+  const [fixCardId, setFixCardId] = useState(null);
   const [undoToast, setUndoToast] = useState(null);
   const undoTimerRef = useRef(null);
   const [editDraft, setEditDraft] = useState({
@@ -76,9 +83,93 @@ export default function SportsBatchReview() {
     team: "",
     sport: "",
   });
-  const inFlightRef = useRef(new Set());
 
   const items = useMemo(() => batchItems || [], [batchItems]);
+  const [uploadsById, setUploadsById] = useState({});
+  const [uploadsList, setUploadsList] = useState([]);
+
+  useEffect(() => {
+    const batchId = batchMeta?.id;
+    if (!batchId) {
+      setBatch([]);
+      return;
+    }
+
+    let isActive = true;
+    const loadBatchCards = async () => {
+      setIsLoading(true);
+      setLoadError("");
+      try {
+        const uploadsSnap = await getDocs(
+          collection(db, "batches", batchId, "uploads")
+        );
+        const uploads = await Promise.all(
+          uploadsSnap.docs.map(async (docSnap) => {
+            const data = docSnap.data() || {};
+            let url = "";
+            if (data.storagePath) {
+              url = await getDownloadURL(storageRef(storage, data.storagePath));
+            }
+            return {
+              id: docSnap.id,
+              batchId,
+              url,
+              ...data,
+            };
+          })
+        );
+
+        const uploadsMap = {};
+        uploads.forEach((upload) => {
+          uploadsMap[upload.id] = upload;
+        });
+
+        const hydrated = uploads.map((upload) => {
+          const isFront = upload.side === "front";
+          const isBack = upload.side === "back";
+          const frontImage = isFront && upload.url
+            ? { url: upload.url, altText: "card front", uploadId: upload.id }
+            : null;
+          const backImage = isBack && upload.url
+            ? { url: upload.url, altText: "card back", uploadId: upload.id }
+            : null;
+          return {
+            id: upload.cardId || upload.id,
+            batchId,
+            frontUploadId: isFront ? upload.id : null,
+            backUploadId: isBack ? upload.id : null,
+            frontImage,
+            backImage,
+            photos: frontImage ? [frontImage] : [],
+            secondaryPhotos: backImage ? [backImage] : [],
+            status: upload.paired ? "ready" : "needs_attention",
+            pairingLocked: upload.pairingLocked || false,
+            reviewIdentity: upload.reviewIdentity || {},
+          };
+        });
+
+        if (isActive) {
+          setBatch(hydrated);
+          setUploadsById(uploadsMap);
+          setUploadsList(Object.values(uploadsMap));
+        }
+      } catch (err) {
+        console.error("Failed to load batch cards", err);
+        if (isActive) {
+          setLoadError("We couldn’t load your batch. Please refresh.");
+        }
+      } finally {
+        if (isActive) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadBatchCards();
+    return () => {
+      isActive = false;
+    };
+  }, [batchMeta?.id, setBatch]);
 
   const handleToggleCorners = (id) => {
     setOpenCornerId((prev) => (prev === id ? null : id));
@@ -121,6 +212,30 @@ export default function SportsBatchReview() {
       return { ...prev, reviewIdentity: nextIdentity };
     });
     setEditCardId(null);
+  };
+
+  const handleFixPairing = async (item, uploadId, side) => {
+    if (!item?.id || !item?.batchId || !uploadId) return;
+    try {
+      const cardRef = doc(db, "batches", item.batchId, "cards", item.id);
+      const nextFront =
+        side === "front" ? uploadId : item.frontUploadId || null;
+      const nextBack =
+        side === "back" ? uploadId : item.backUploadId || null;
+      await updateDoc(cardRef, {
+        frontUploadId: nextFront,
+        backUploadId: nextBack,
+        pairingSource: "manual",
+        pairingLocked: true,
+      });
+      await updateDoc(doc(db, "batches", item.batchId, "uploads", uploadId), {
+        paired: true,
+        cardId: item.id,
+      });
+      setFixCardId(null);
+    } catch (err) {
+      console.error("Failed to fix pairing", err);
+    }
   };
 
   const prepareEntry = async (file) => {
@@ -271,99 +386,6 @@ export default function SportsBatchReview() {
     );
   };
 
-  useEffect(() => {
-    const runAnalysisForCard = async (item) => {
-      if (!item?.id) return;
-      if (item.analysisStatus === "complete" || item.cardIntelResolved) return;
-      if (item.reviewIdentity?.player) return;
-      if (inFlightRef.current.has(item.id)) return;
-      inFlightRef.current.add(item.id);
-      updateBatchItem(item.id, { analysisStatus: "analyzing" });
-
-      try {
-        const front = item.analysisImages?.front || item.frontImage || item.photos?.[0] || null;
-        if (!front) return;
-        let analysisImages = item.analysisImages || null;
-        if (!analysisImages) {
-          const frontDataUrl = await photoEntryToDataUrl(front);
-          if (!frontDataUrl) {
-            updateBatchItem(item.id, { analysisStatus: "error", cardIntelResolved: true });
-            return;
-          }
-          analysisImages = {
-            front: { url: frontDataUrl, altText: front.altText || "card front" },
-            back: null,
-          };
-          updateBatchItem(item.id, { analysisImages });
-        }
-        const stableFront = analysisImages?.front || front;
-        const stableBack = analysisImages?.back || null;
-        const intel = await analyzeCardImages(
-          {
-            photos: [stableFront],
-            secondaryPhotos: stableBack ? [stableBack] : [],
-          },
-          {
-            requestId: `analysis-${Date.now()}-${item.id}`,
-            includeBackImage: Boolean(stableBack),
-            disableCrops: true,
-            includeNameZones: true,
-            frontDataUrl: analysisImages?.front?.url || null,
-            backDataUrl: analysisImages?.back?.url || null,
-          }
-        );
-        if (!intel || intel.error) {
-          updateBatchItem(item.id, { analysisStatus: "error", cardIntelResolved: true });
-          return;
-        }
-        const mergeIdentity = (base, incoming) => {
-          const next = { ...(base || {}) };
-          Object.entries(incoming || {}).forEach(([key, value]) => {
-            if (key === "_sources") return;
-            if (value === "" || value === null || value === undefined) return;
-            if (next[key] !== undefined && next[key] !== null && next[key] !== "") return;
-            next[key] = value;
-          });
-          next._sources = { ...(next._sources || {}), ...(incoming?._sources || {}) };
-          return next;
-        };
-        const initialIdentity = mergeIdentity(item.reviewIdentity, intel);
-        const gradeValue =
-          initialIdentity?.grade && typeof initialIdentity.grade === "object"
-            ? initialIdentity.grade.value
-            : initialIdentity?.grade;
-        initialIdentity.isSlabbed = Boolean(initialIdentity?.grader && gradeValue);
-        const composedTitle = composeCardTitle(initialIdentity);
-        const composedDescription = composeIdentityDescription(initialIdentity);
-        updateBatchItem(item.id, {
-          reviewIdentity: initialIdentity,
-          analysisStatus: "complete",
-          cardIntelResolved: true,
-          title: composedTitle || item.title || "",
-          description: composedDescription || item.description || "",
-        });
-      } catch (err) {
-        console.error("Sports batch analysis failed:", err);
-        updateBatchItem(item.id, { analysisStatus: "error" });
-      } finally {
-        inFlightRef.current.delete(item.id);
-      }
-    };
-
-    const hasActive = items.some((item) => item.analysisStatus === "analyzing");
-    if (hasActive) return;
-    const nextItem = items.find(
-      (item) =>
-        item &&
-        item.id &&
-        item.analysisStatus !== "complete" &&
-        !item.cardIntelResolved &&
-        !item.reviewIdentity?.player
-    );
-    if (nextItem) {
-      runAnalysisForCard(nextItem);
-    }
-  }, [items, updateBatchItem]);
 
   return (
     <div className="min-h-screen bg-black text-white px-6 py-10">
@@ -388,7 +410,15 @@ export default function SportsBatchReview() {
           <div className="h-[1px] w-full bg-[#E8DCC0]/60" />
         </div>
 
-        {items.length === 0 ? (
+        {isLoading ? (
+          <div className="min-h-[50vh] flex items-center justify-center text-white/70 text-center">
+            Loading batch cards…
+          </div>
+        ) : loadError ? (
+          <div className="min-h-[50vh] flex items-center justify-center text-red-300 text-center">
+            {loadError}
+          </div>
+        ) : items.length === 0 ? (
           <div className="min-h-[50vh] flex items-center justify-center text-white/70 text-center">
             No sports batch items found. Start from Sports Card Suite → Batch.
           </div>
@@ -427,6 +457,7 @@ export default function SportsBatchReview() {
               const analysisComplete =
                 analysisStatus === "complete" || analysisStatus === "error";
               const manualPlayerConfirmed = identity?._sources?.player === "manual";
+              const validPlayerName = isQualityPlayerName(identity.player);
               const playerConfirmed =
                 Boolean(identity.player) && validPlayerName && !lowConfidencePlayer;
               const readyStatus =
@@ -450,6 +481,10 @@ export default function SportsBatchReview() {
               );
               const showHelperLine = missingFields.length >= 2;
               const identityIncomplete = missingFields.length > 0;
+              const showFixPairing = item.pairingLocked !== true;
+              const unpairedUploads = uploadsList.filter(
+                (upload) => upload?.paired !== true && !upload?.cardId
+              );
               console.log({
                 analysisStatus,
                 isReady: readyStatus,
@@ -486,6 +521,17 @@ export default function SportsBatchReview() {
                         : "⚠ Needs attention"}
                     </div>
                   </div>
+                  {showFixPairing && (
+                    <button
+                      type="button"
+                      className="text-xs uppercase tracking-[0.25em] text-white/50 hover:text-white/80"
+                      onClick={() =>
+                        setFixCardId((prev) => (prev === item.id ? null : item.id))
+                      }
+                    >
+                      Fix pairing
+                    </button>
+                  )}
 
                   <div className="flex flex-wrap gap-6">
                     <div className="flex flex-col gap-2">
@@ -522,6 +568,49 @@ export default function SportsBatchReview() {
                       )}
                     </div>
                   </div>
+                  {showFixPairing && fixCardId === item.id && (
+                    <div className="border border-white/10 rounded-xl p-4 text-sm text-white/70">
+                      <div className="text-xs uppercase tracking-[0.25em] text-white/40 mb-3">
+                        Select replacement
+                      </div>
+                      {unpairedUploads.length ? (
+                        <div className="grid gap-3">
+                          {unpairedUploads.map((upload) => (
+                            <div
+                              key={upload.id}
+                              className="flex items-center justify-between gap-3"
+                            >
+                              <img
+                                src={upload.url}
+                                alt="Upload preview"
+                                className="h-12 w-12 rounded-lg border border-white/10 object-cover"
+                              />
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  className="px-3 py-1 rounded-full border border-white/20 text-xs uppercase tracking-[0.2em] text-white/60 hover:text-white"
+                                  onClick={() => handleFixPairing(item, upload.id, "front")}
+                                >
+                                  Set front
+                                </button>
+                                <button
+                                  type="button"
+                                  className="px-3 py-1 rounded-full border border-white/20 text-xs uppercase tracking-[0.2em] text-white/60 hover:text-white"
+                                  onClick={() => handleFixPairing(item, upload.id, "back")}
+                                >
+                                  Set back
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-white/50">
+                          No unpaired uploads available.
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {analysisComplete ? (
                     <>

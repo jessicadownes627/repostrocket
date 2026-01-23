@@ -1,5 +1,6 @@
 [dev]
   framework = "vite"
+  edge_functions = false
 
 [functions]
   node_bundler = "esbuild"

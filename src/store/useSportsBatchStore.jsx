@@ -6,6 +6,7 @@ export function SportsBatchProvider({ children }) {
   const [batchItems, setBatchItems] = useState([]);
   const [draftPhotos, setDraftPhotos] = useState([]);
   const [preparedPlatforms, setPreparedPlatforms] = useState(["ebay"]);
+  const [batchMeta, setBatchMeta] = useState(null);
 
   const setBatch = (items) => {
     setBatchItems(Array.isArray(items) ? items : []);
@@ -31,13 +32,15 @@ export function SportsBatchProvider({ children }) {
       batchItems,
       draftPhotos,
       preparedPlatforms,
+      batchMeta,
       setPreparedPlatforms,
       setBatch,
       setBatchItems,
       setDraftPhotos: setDraft,
+      setBatchMeta,
       updateBatchItem,
     }),
-    [batchItems, draftPhotos, preparedPlatforms]
+    [batchItems, draftPhotos, preparedPlatforms, batchMeta]
   );
 
   return (

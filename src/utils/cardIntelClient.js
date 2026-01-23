@@ -319,6 +319,15 @@ export async function analyzeCardImages(item = {}, options = {}) {
       requestId: prep.requestId,
     };
   }
+  if (options?.source === "batch") {
+    const nameZoneCrops = prep.payload?.nameZoneCrops || {};
+    const nameZoneCropCount = Object.keys(nameZoneCrops || {}).length;
+    console.log("[BATCH DEBUG]", {
+      frontDataUrlLength: prep.payload?.frontImage?.length,
+      hasNameZoneCrops: Boolean(nameZoneCropCount),
+      nameZoneCropCount,
+    });
+  }
 
   const { payload, imageHash, requestId } = prep;
 
