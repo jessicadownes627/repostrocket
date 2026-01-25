@@ -3,6 +3,18 @@ import { useNavigate } from "react-router-dom";
 import { useSportsBatchStore } from "../store/useSportsBatchStore";
 import { composeCardTitle } from "../utils/composeCardTitle";
 import { buildListingExportLinks } from "../utils/exportListing";
+import { db } from "../db/firebase";
+import {
+  collection,
+  doc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+} from "firebase/firestore";
 import { resolveCardFacts as cardFactsResolver } from "../utils/cardFactsResolver";
 
 const PLATFORM_OPTIONS = [
@@ -45,20 +57,97 @@ const composeSportsDescription = (identity = {}) => {
 
 export default function SportsBatchLaunch() {
   const navigate = useNavigate();
-  const { batchItems, preparedPlatforms, setPreparedPlatforms, updateBatchItem } =
-    useSportsBatchStore();
+  const { batchMeta, preparedPlatforms, setPreparedPlatforms } = useSportsBatchStore();
   const [activeFilter, setActiveFilter] = useState("all");
   const [includeCorners, setIncludeCorners] = useState(true);
   const [saveCorners, setSaveCorners] = useState(false);
   const [analysisCount, setAnalysisCount] = useState(0);
   const [analysisInFlight, setAnalysisInFlight] = useState(false);
+  const [finalizeInFlight, setFinalizeInFlight] = useState(false);
+  const [uploads, setUploads] = useState([]);
+  const [cardStates, setCardStates] = useState({});
 
-  const items = useMemo(() => batchItems || [], [batchItems]);
+  useEffect(() => {
+    setCardStates({});
+  }, [batchMeta?.id]);
+
+  useEffect(() => {
+    const batchId = batchMeta?.id;
+    if (!batchId) {
+      setUploads([]);
+      return undefined;
+    }
+
+    const uploadsQuery = query(
+      collection(db, "batchPhotos"),
+      where("batchId", "==", batchId),
+      orderBy("index")
+    );
+
+    const unsubscribe = onSnapshot(
+      uploadsQuery,
+      (snap) => {
+        const resolved = snap.docs.map((docSnap) => {
+          const data = docSnap.data();
+          console.log("batchPhoto", {
+            id: docSnap.id,
+            index: data.index ?? null,
+            cardIndex: data.cardIndex ?? null,
+            side: data.side || "unknown",
+          });
+          return {
+            id: docSnap.id,
+            url: data.downloadUrl || "",
+            side: data.side || "unknown",
+            index: data.index ?? null,
+            cardIndex: data.cardIndex ?? null,
+          };
+        });
+        setUploads(resolved);
+      },
+      (err) => {
+        console.error("Failed to load batch photos", err);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [batchMeta?.id]);
+
+  const cards = useMemo(() => {
+    const grouped = new Map();
+    uploads.forEach((upload) => {
+      const normalizedIndex = String(upload.index);
+      const normalizedCardIndex = String(upload.cardIndex);
+      const parsedIndex = Number.parseInt(normalizedIndex, 10);
+      const sortIndex = Number.isFinite(parsedIndex) ? parsedIndex : 0;
+      const key = normalizedCardIndex;
+      const entry = grouped.get(key) || {
+        id: key,
+        index: upload.index,
+        cardIndex: upload.cardIndex,
+        batchId: batchMeta?.id || "",
+        front: null,
+        back: null,
+        sortIndex,
+      };
+      if (upload.side === "back") {
+        entry.back = upload;
+      } else {
+        entry.front = upload;
+      }
+      entry.sortIndex = Math.min(entry.sortIndex, sortIndex);
+      grouped.set(key, entry);
+    });
+    return Array.from(grouped.values()).sort(
+      (a, b) => (a.sortIndex ?? 0) - (b.sortIndex ?? 0)
+    );
+  }, [uploads, batchMeta?.id]);
+
   const activePlatforms = useMemo(
     () => (preparedPlatforms?.length ? preparedPlatforms : ["ebay"]),
     [preparedPlatforms]
   );
-  const totalCards = items.length;
+  const totalCards = cards.length;
   const progressFraction =
     totalCards > 0 ? Math.min(analysisCount / totalCards, 1) : 0;
 
@@ -67,6 +156,14 @@ export default function SportsBatchLaunch() {
       setPreparedPlatforms(["ebay"]);
     }
   }, [preparedPlatforms?.length, setPreparedPlatforms]);
+
+  const updateCardState = (cardId, updates) => {
+    if (!cardId) return;
+    setCardStates((prev) => ({
+      ...prev,
+      [cardId]: { ...(prev[cardId] || {}), ...(updates || {}) },
+    }));
+  };
 
   const togglePlatform = (id) => {
     setPreparedPlatforms((prev) => {
@@ -120,23 +217,27 @@ export default function SportsBatchLaunch() {
   };
 
   const handleGenerateListings = async () => {
-    if (analysisInFlight || !items.length) return;
+    if (analysisInFlight || !cards.length) return;
     setAnalysisInFlight(true);
     setAnalysisCount(0);
-    for (const item of items) {
-      if (!item?.id) {
+    for (const card of cards) {
+      if (!card?.id) {
         setAnalysisCount((prev) => prev + 1);
         continue;
       }
-      if (item.cardIntelResolved) {
+      const cardState = cardStates[card.id] || {};
+      if (cardState.cardIntelResolved) {
         setAnalysisCount((prev) => prev + 1);
         continue;
       }
-      const frontImageUrl = item.analysisImages?.frontUrl || "";
-      const backImageUrl = item.analysisImages?.backUrl || null;
+      const frontImageUrl = card.front?.url || "";
+      const backImageUrl = card.back?.url || null;
       console.log("Batch payload", { frontImageUrl, backImageUrl });
       if (!frontImageUrl) {
-        updateBatchItem(item.id, { analysisStatus: "error", cardIntelResolved: true });
+        updateCardState(card.id, {
+          analysisStatus: "error",
+          cardIntelResolved: true,
+        });
         setAnalysisCount((prev) => prev + 1);
         continue;
       }
@@ -151,7 +252,7 @@ export default function SportsBatchLaunch() {
           }),
         });
         if (!response.ok) {
-          updateBatchItem(item.id, {
+          updateCardState(card.id, {
             analysisStatus: "error",
             cardIntelResolved: true,
           });
@@ -160,7 +261,7 @@ export default function SportsBatchLaunch() {
         }
         const data = await response.json();
         if (!data || data.error) {
-          updateBatchItem(item.id, {
+          updateCardState(card.id, {
             analysisStatus: "error",
             cardIntelResolved: true,
           });
@@ -172,7 +273,7 @@ export default function SportsBatchLaunch() {
           backOcrLines: data.backOcrLines || [],
           slabLabelLines: data.slabLabelLines || [],
         });
-        const mergedIdentity = mergeIdentity(item.reviewIdentity, resolved);
+        const mergedIdentity = mergeIdentity(cardState.reviewIdentity, resolved);
         const gradeValue =
           mergedIdentity?.grade && typeof mergedIdentity.grade === "object"
             ? mergedIdentity.grade.value
@@ -180,22 +281,83 @@ export default function SportsBatchLaunch() {
         mergedIdentity.isSlabbed = Boolean(mergedIdentity?.grader && gradeValue);
         const composedTitle = composeCardTitle(mergedIdentity);
         const composedDescription = composeSportsDescription(mergedIdentity);
-        updateBatchItem(item.id, {
+        updateCardState(card.id, {
           reviewIdentity: mergedIdentity,
           analysisStatus: "complete",
           cardIntelResolved: true,
-          title: composedTitle || item.title || "",
-          description: composedDescription || item.description || "",
+          title: composedTitle || "",
+          description: composedDescription || "",
         });
       } catch (err) {
         console.error("Sports batch analysis failed:", err);
-        updateBatchItem(item.id, { analysisStatus: "error", cardIntelResolved: true });
+        updateCardState(card.id, {
+          analysisStatus: "error",
+          cardIntelResolved: true,
+        });
       }
       setAnalysisCount((prev) => prev + 1);
     }
     setAnalysisInFlight(false);
     const anchor = document.getElementById("sports-batch-listings");
     if (anchor) anchor.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const handleFinalizeBatch = async () => {
+    if (finalizeInFlight || !cards.length) return;
+    const batchId = batchMeta?.id;
+    if (!batchId) return;
+    setFinalizeInFlight(true);
+    try {
+      await Promise.all(
+        cards.map(async (card) => {
+          const cardId = card.id;
+          const cardState = cardStates[card.id] || {};
+          const frontUploadId = card.front?.id || null;
+          const backUploadId = card.back?.id || null;
+          await setDoc(
+            doc(db, "batches", batchId, "cards", cardId),
+            {
+              batchId,
+              frontUploadId,
+              backUploadId,
+              reviewIdentity: cardState.reviewIdentity || {},
+              title: cardState.title || "",
+              description: cardState.description || "",
+              status: "ready",
+              createdAt: serverTimestamp(),
+            },
+            { merge: true }
+          );
+          const uploadUpdates = {
+            paired: true,
+            cardId,
+            locked: true,
+          };
+          if (frontUploadId) {
+            await updateDoc(
+              doc(db, "batches", batchId, "uploads", frontUploadId),
+              uploadUpdates
+            );
+          }
+          if (backUploadId) {
+            await updateDoc(
+              doc(db, "batches", batchId, "uploads", backUploadId),
+              uploadUpdates
+            );
+          }
+        })
+      );
+      await updateDoc(doc(db, "batches", batchId), {
+        status: "launched",
+        pairedCards: cards.length,
+        launchedAt: serverTimestamp(),
+      });
+      navigate("/sports-cards");
+    } catch (err) {
+      console.error("Failed to finalize batch", err);
+    } finally {
+      setFinalizeInFlight(false);
+    }
   };
 
   return (
@@ -223,11 +385,11 @@ export default function SportsBatchLaunch() {
           </div>
         </div>
         <div className="text-center text-white/60 text-sm mb-8">
-          {items.length} cards · Platforms: {activePlatforms.join(", ") || "eBay"}
+          {cards.length} cards · Platforms: {activePlatforms.join(", ") || "eBay"}
           {includeCorners ? " · Corners included" : " · Corners off"}
         </div>
 
-        <div className="flex justify-center mb-8">
+        <div className="flex justify-center mb-4">
           <button
             type="button"
             onClick={handleGenerateListings}
@@ -236,8 +398,17 @@ export default function SportsBatchLaunch() {
             Create listings
           </button>
         </div>
+        <div className="flex justify-center mb-8">
+          <button
+            type="button"
+            onClick={handleFinalizeBatch}
+            className="px-6 py-3 rounded-full border border-white/20 text-white/70 text-xs uppercase tracking-[0.25em]"
+          >
+            Finalize batch
+          </button>
+        </div>
 
-        {items.length === 0 ? (
+        {cards.length === 0 ? (
           <div className="min-h-[50vh] flex items-center justify-center text-white/70 text-center">
             No sports batch items found. Start from Sports Card Suite → Batch.
           </div>
@@ -336,29 +507,27 @@ export default function SportsBatchLaunch() {
             </div>
 
             <div id="sports-batch-listings" className="grid gap-6">
-              {items.map((item) => {
-                const identity = item.reviewIdentity || {};
+              {cards.map((card) => {
+                const cardState = cardStates[card.id] || {};
+                const identity = cardState.reviewIdentity || {};
                 const title = composeCardTitle(identity);
                 const description = composeSportsDescription(identity);
                 const summary = identitySummary(identity);
-                const frontSrc =
-                  item.frontImage?.url || item.photos?.[0]?.url || "";
-                const backSrc =
-                  item.backImage?.url || item.secondaryPhotos?.[0]?.url || "";
-                const isSlabbed =
-                  identity.isSlabbed === true || item.cardType === "slabbed";
-                const frontCorners = !isSlabbed ? item.frontCorners || [] : [];
-                const backCorners = !isSlabbed ? item.backCorners || [] : [];
+                const frontSrc = card.front?.url || "";
+                const backSrc = card.back?.url || "";
+                const isSlabbed = identity.isSlabbed === true;
+                const frontCorners = !isSlabbed ? cardState.frontCorners || [] : [];
+                const backCorners = !isSlabbed ? cardState.backCorners || [] : [];
                 const showCorners = includeCorners && !isSlabbed;
 
                 const exportLinks = buildListingExportLinks({
                   title,
                   description,
-                  price: item.price ? Number(item.price) : undefined,
+                  price: cardState.price ? Number(cardState.price) : undefined,
                 });
 
                 return (
-                  <div key={item.id} className="lux-card border border-white/10 p-5">
+                  <div key={card.id} className="lux-card border border-white/10 p-5">
                     <div className="flex flex-col gap-2 mb-4">
                       <div className="text-sm uppercase tracking-[0.25em] text-white/50">
                         Card

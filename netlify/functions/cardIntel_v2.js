@@ -23,6 +23,7 @@ async function fetchImageAsDataUrl(url) {
 }
 
 export async function handler(event) {
+  console.log("🔥 cardIntel_v2 HIT");
   try {
     if (!process.env.OPENAI_API_KEY) {
       return {
@@ -121,7 +122,7 @@ export async function handler(event) {
       ? slabParsed.lines.filter(Boolean)
       : [];
 
-    return {
+    const result = {
       statusCode: 200,
       body: JSON.stringify({
         status: "ok",
@@ -132,6 +133,8 @@ export async function handler(event) {
         backOcrLines,
       }),
     };
+    console.log("✅ cardIntel_v2 DONE", result);
+    return result;
   } catch (err) {
     console.error("cardIntel_v2 OCR error:", err);
     return {

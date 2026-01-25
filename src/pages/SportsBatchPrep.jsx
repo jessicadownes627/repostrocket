@@ -5,18 +5,34 @@ import { convertHeicIfNeeded } from "../utils/imageTools";
 import { deriveAltTextFromFilename } from "../utils/photoHelpers";
 import { db } from "../db/firebase";
 import { auth, storage } from "../lib/firebase";
-import { doc, setDoc, updateDoc, serverTimestamp, increment } from "firebase/firestore";
-import { ref, uploadBytes } from "firebase/storage";
+import {
+  collection,
+  doc,
+  increment,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+} from "firebase/firestore";
 import { v4 as uuidv4 } from "uuid";
+import { uploadBatchFile } from "../utils/batchUpload";
 import { onAuthStateChanged, signInAnonymously } from "firebase/auth";
+
+console.log(
+  "🔥 FIREBASE PROJECT ID:",
+  import.meta.env.VITE_FIREBASE_PROJECT_ID
+);
 
 export default function SportsBatchPrep() {
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
-  const { batchItems, draftPhotos, batchMeta, setDraftPhotos, setBatchMeta } =
-    useSportsBatchStore();
+  const { batchItems, batchMeta, setBatchMeta } = useSportsBatchStore();
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [uploadedPhotos, setUploadedPhotos] = useState([]);
   useEffect(() => {
     if (!auth.currentUser) {
       signInAnonymously(auth).catch(console.error);
@@ -69,7 +85,6 @@ export default function SportsBatchPrep() {
         removable: true,
       }));
 
-      setDraftPhotos([...(draftPhotos || []), ...incoming]);
       setUploadError("");
       setIsUploading(true);
       const user = await waitForAuth();
@@ -91,17 +106,30 @@ export default function SportsBatchPrep() {
       }
 
       try {
-        for (const entry of incoming) {
-          const uploadId = uuidv4();
-          const storagePath = `batch/${currentBatchId}/uploads/${uploadId}.jpg`;
-          const storageRef = ref(storage, storagePath);
-          await uploadBytes(storageRef, entry.photo.file, {
-            contentType: entry.photo.file?.type || "image/jpeg",
+        const baseIndex = uploadedPhotos.length;
+        for (let i = 0; i < incoming.length; i += 1) {
+          const entry = incoming[i];
+          const overallIndex = baseIndex + i;
+          const cardIndex = Math.floor(overallIndex / 2);
+          const side = overallIndex % 2 === 0 ? "front" : "back";
+          if (!(entry.photo.file instanceof File)) {
+            console.error("Upload file is not a File", entry.photo.file);
+          }
+          const { uploadId, downloadUrl } = await uploadBatchFile({
+            db,
+            storage,
+            batchId: currentBatchId,
+            file: entry.photo.file,
+            side,
+            cardId: null,
           });
-          await setDoc(doc(db, "batches", currentBatchId, "uploads", uploadId), {
-            storagePath,
+          await setDoc(doc(db, "batchPhotos", uploadId), {
+            batchId: currentBatchId,
+            downloadUrl,
+            side,
+            index: overallIndex,
+            cardIndex,
             createdAt: serverTimestamp(),
-            status: "pending",
           });
           await updateDoc(batchRef, {
             totalUploads: increment(1),
@@ -117,45 +145,71 @@ export default function SportsBatchPrep() {
     [
       batchMeta?.id,
       db,
-      draftPhotos,
       isUploading,
       prepareEntry,
       setBatchMeta,
-      setDraftPhotos,
       storage,
+      uploadedPhotos.length,
     ]
   );
+
+  useEffect(() => {
+    const batchId = batchMeta?.id;
+    if (!batchId) return;
+    console.log("QUERY batchId =", batchId);
+    const uploadsQuery = query(
+      collection(db, "batchPhotos"),
+      where("batchId", "==", batchId),
+      orderBy("index")
+    );
+    const unsubscribe = onSnapshot(
+      uploadsQuery,
+      (snap) => {
+        const resolved = snap.docs.map((docSnap) => {
+          const data = docSnap.data();
+          return {
+            id: docSnap.id,
+            url: data.downloadUrl || "",
+            side: data.side || "unknown",
+          };
+        });
+        setUploadedPhotos(resolved);
+      },
+      (err) => {
+        console.error("Failed to load batch photos", err);
+      }
+    );
+    return () => unsubscribe();
+  }, [batchMeta?.id, db]);
 
   const handleUploadClick = () => {
     fileInputRef.current?.click();
   };
 
-  const handleContinue = () => {
-    navigate("/sports-batch-review");
+  const handleContinue = async () => {
+    try {
+      const batchId = batchMeta?.id;
+      if (!batchId) {
+        alert("No batch ID available.");
+        return;
+      }
+      navigate("/sports-batch-review");
+    } catch (err) {
+      console.error(err);
+      alert("Analysis failed. Please try again.");
+    }
   };
 
   const renderPhoto = (item) => {
-    const preview = item.photo?.url || "";
+    const preview = item.url || "";
     if (!preview) return null;
     return (
       <div key={item.id} className="relative">
         <img
           src={preview}
-          alt={item.photo?.altText || "Card photo"}
+          alt="Card photo"
           className="w-full aspect-[3/4] object-cover rounded-xl border border-white/10"
         />
-        {item.removable && (
-          <button
-            type="button"
-            className="absolute top-2 right-2 h-6 w-6 rounded-full bg-black/70 border border-white/20 text-white/70 hover:text-white flex items-center justify-center text-xs"
-            aria-label="Remove photo"
-            onClick={() => {
-              setDraftPhotos(draftPhotos.filter((entry) => entry.id !== item.id));
-            }}
-          >
-            ✕
-          </button>
-        )}
       </div>
     );
   };
@@ -174,7 +228,7 @@ export default function SportsBatchPrep() {
           Batch Sports Cards
         </h1>
         <p className="text-center text-white/70 text-sm mb-2">
-          Select multiple photos — we’ll automatically pair fronts and backs.
+          Upload multiple photos — we’ll organize them into cards automatically.
         </p>
         <p className="text-center text-white/55 text-sm mb-8">
           You can review everything before listings are created.
@@ -196,14 +250,11 @@ export default function SportsBatchPrep() {
             className="hidden"
             onChange={(event) => handleFiles(event.target.files)}
           />
-          <div className="text-xs uppercase tracking-[0.3em] text-white/50 text-center">
-            Mobile-first upload
-          </div>
         </div>
 
-        {draftPhotos.length > 0 ? (
+        {uploadedPhotos.length > 0 ? (
           <div className="grid grid-cols-2 gap-4">
-            {draftPhotos.map(renderPhoto)}
+            {uploadedPhotos.map(renderPhoto)}
           </div>
         ) : (
           <div className="lux-card border border-white/10 p-8 text-center text-white/60">
@@ -221,7 +272,7 @@ export default function SportsBatchPrep() {
           </div>
         )}
 
-        {(draftPhotos.length > 0 || batchItems.length > 0) && (
+        {(uploadedPhotos.length > 0 || batchItems.length > 0) && (
           <div className="mt-8">
             <button
               type="button"
