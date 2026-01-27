@@ -5,6 +5,7 @@ import { convertHeicIfNeeded } from "../utils/imageTools";
 import { deriveAltTextFromFilename } from "../utils/photoHelpers";
 import { db } from "../db/firebase";
 import { auth, storage } from "../lib/firebase";
+import { resolveCardFacts as cardFactsResolver } from "../utils/cardFactsResolver";
 import {
   collection,
   doc,
@@ -26,11 +27,29 @@ console.log(
   import.meta.env.VITE_FIREBASE_PROJECT_ID
 );
 
+const mergeIdentity = (base, incoming) => {
+  const next = { ...(base || {}) };
+  Object.entries(incoming || {}).forEach(([key, value]) => {
+    if (key === "_sources") return;
+    if (value === "" || value === null || value === undefined) return;
+    if (next[key] !== undefined && next[key] !== null && next[key] !== "") return;
+    next[key] = value;
+  });
+  next._sources = { ...(next._sources || {}), ...(incoming?._sources || {}) };
+  return next;
+};
+
 export default function SportsBatchPrep() {
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
-  const { batchItems, batchMeta, setBatchMeta, addCard, updateCard } =
-    useSportsBatchStore();
+  const {
+    batchItems,
+    batchMeta,
+    setBatchMeta,
+    addCard,
+    updateCard,
+    cardStates,
+  } = useSportsBatchStore();
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [uploadedPhotos, setUploadedPhotos] = useState([]);
@@ -152,6 +171,8 @@ export default function SportsBatchPrep() {
               frontImage: imagePayload,
               backImage: null,
               identity: {},
+              cardIntelResolved: false,
+              analysisStatus: "pending",
             });
           } else {
             updateCard(cardId, { backImage: imagePayload });
@@ -218,6 +239,69 @@ export default function SportsBatchPrep() {
         alert("No batch ID available.");
         return;
       }
+      const runOcr = async () => {
+        const entries = Object.entries(cardStates || {});
+        for (const [cardId, card] of entries) {
+          if (card?.cardIntelResolved === true) continue;
+          updateCard(cardId, { analysisStatus: "pending", cardIntelResolved: false });
+          const frontImageUrl = card?.frontImage?.url || "";
+          const backImageUrl = card?.backImage?.url || null;
+          if (!frontImageUrl) continue;
+          try {
+            const response = await fetch("/.netlify/functions/cardIntel_v2", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                frontImageUrl,
+                backImageUrl,
+                requestId: `analysis-${Date.now()}-${cardId}`,
+              }),
+            });
+            if (!response.ok) {
+              updateCard(cardId, {
+                cardIntelResolved: true,
+                analysisStatus: "error",
+              });
+              continue;
+            }
+            const data = await response.json();
+            if (!data || data.error || data.status !== "ok") {
+              updateCard(cardId, {
+                cardIntelResolved: true,
+                analysisStatus: "error",
+              });
+              continue;
+            }
+            const resolved = cardFactsResolver({
+              ocrLines: data.ocrLines || [],
+              backOcrLines: data.backOcrLines || [],
+              slabLabelLines: data.slabLabelLines || [],
+            });
+            const mergedIdentity = mergeIdentity(card?.identity, resolved);
+            const gradeValue =
+              mergedIdentity?.grade && typeof mergedIdentity.grade === "object"
+                ? mergedIdentity.grade.value
+                : mergedIdentity?.grade;
+            mergedIdentity.isSlabbed = Boolean(
+              mergedIdentity?.grader && gradeValue
+            );
+            updateCard(cardId, {
+              identity: mergedIdentity,
+              frontCorners: data.frontCorners || data.corners?.front || null,
+              backCorners: data.backCorners || data.corners?.back || null,
+              cardIntelResolved: true,
+              analysisStatus: "complete",
+            });
+          } catch (err) {
+            console.error("Sports batch analysis failed:", err);
+            updateCard(cardId, {
+              cardIntelResolved: true,
+              analysisStatus: "error",
+            });
+          }
+        }
+      };
+      runOcr();
       navigate("/sports-batch-review");
     } catch (err) {
       console.error(err);

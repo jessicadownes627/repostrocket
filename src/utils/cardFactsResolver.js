@@ -662,7 +662,63 @@ export function resolveCardFacts(intel = {}) {
       resolved._sources.grader = "slab";
     }
   }
-  if (slabLineTexts.length) {
+  const normalizeTwoDigitYear = (value) => {
+    const num = Number(value);
+    if (Number.isNaN(num)) return null;
+    if (num >= 50 || num <= 26) {
+      return num >= 50 ? 1900 + num : 2000 + num;
+    }
+    return null;
+  };
+  const frontYearPick = () => {
+    if (!ocrLineTextsFront.length) return null;
+    const frontLines = ocrLineTextsFront.map((line) => line || "");
+    const brandLineIndexes = [];
+    frontLines.forEach((line, idx) => {
+      const normalized = normalizeLine(line);
+      if (!normalized) return;
+      if (brandKeywords.some((brand) => normalized.includes(brand))) {
+        brandLineIndexes.push(idx);
+      }
+    });
+    const candidates = [];
+    const addCandidate = (value, idx, distance) => {
+      const normalized =
+        value.length === 2 ? normalizeTwoDigitYear(value) : Number(value);
+      if (!normalized || normalized < 1900 || normalized > 2099) return;
+      candidates.push({ year: normalized, idx, distance });
+    };
+    frontLines.forEach((line, idx) => {
+      const normalized = normalizeLine(line);
+      if (!normalized) return;
+      if (statTokens.some((token) => normalized.includes(token))) return;
+      if (verbTokens.some((token) => normalized.includes(token))) return;
+      const fourDigitMatches = line.match(/\b(19|20)\d{2}\b/g) || [];
+      const twoDigitMatches = line.match(/\b\d{2}\b/g) || [];
+      fourDigitMatches.forEach((value) => addCandidate(value, idx, null));
+      twoDigitMatches.forEach((value) => addCandidate(value, idx, null));
+    });
+    if (!candidates.length) return null;
+    if (brandLineIndexes.length) {
+      const nearBrand = candidates
+        .map((candidate) => {
+          const nearest = Math.min(
+            ...brandLineIndexes.map((idx) => Math.abs(idx - candidate.idx))
+          );
+          return { ...candidate, distance: nearest };
+        })
+        .sort((a, b) => a.distance - b.distance || a.idx - b.idx);
+      return nearBrand[0]?.year ?? null;
+    }
+    return candidates.sort((a, b) => a.idx - b.idx)[0]?.year ?? null;
+  };
+  const frontYear = frontYearPick();
+  if (frontYear && !resolved.year) {
+    const hadYear = Boolean(resolved.year);
+    setIfEmpty("year", String(frontYear));
+    setSourceIfUnset("year", "front", hadYear);
+  }
+  if (!resolved.year && slabLineTexts.length) {
     const slabYearCandidates = slabLineTexts
       .map((line) => line.match(/\b(19|20)\d{2}\b/))
       .filter(Boolean)
@@ -673,31 +729,9 @@ export function resolveCardFacts(intel = {}) {
       });
     if (slabYearCandidates.length) {
       const latest = Math.max(...slabYearCandidates.map(Number));
-      resolved.year = String(latest);
-      resolved._sources.year = "slab";
-    }
-  }
-  if (!resolved.year && ocrLineTextsFront.length) {
-    const frontYearCandidates = [];
-    ocrLineTextsFront.forEach((line) => {
-      const normalized = normalizeLine(line);
-      if (!normalized) return;
-      if (statTokens.some((token) => normalized.includes(token))) return;
-      if (verbTokens.some((token) => normalized.includes(token))) return;
-      const matches = line.match(/\b(19|20)\d{2}\b/g);
-      if (!matches) return;
-      matches.forEach((value) => {
-        const yearNumber = Number(value);
-        if (yearNumber >= 1900 && yearNumber <= 2099) {
-          frontYearCandidates.push(yearNumber);
-        }
-      });
-    });
-    if (frontYearCandidates.length) {
-      const firstYear = frontYearCandidates[0];
       const hadYear = Boolean(resolved.year);
-      setIfEmpty("year", String(firstYear));
-      setSourceIfUnset("year", "front-ocr", hadYear);
+      setIfEmpty("year", String(latest));
+      setSourceIfUnset("year", "slab", hadYear);
     }
   }
   const brandSourceLines = ocrLineTextsBack.length ? ocrLineTextsBack : ocrLineTextsFront;
@@ -958,8 +992,11 @@ export function resolveCardFacts(intel = {}) {
     return false;
   };
   const backYearCandidates = [];
+  const backRejectTokens = ["yr", "rookie", "draft", "drafted", "debut", "career", "stats"];
   const addBackYear = (line) => {
     if (!line || !isValidYearLine(line)) return;
+    const normalized = normalizeLine(line);
+    if (backRejectTokens.some((token) => normalized.includes(token))) return;
     const matches = line.match(/\b(19|20)\d{2}\b/g);
     if (!matches) return;
     matches.forEach((value) => {
@@ -969,12 +1006,14 @@ export function resolveCardFacts(intel = {}) {
       }
     });
   };
-  ocrLineTextsBack.forEach((line) => addBackYear(line));
-  if (backYearCandidates.length) {
-    const latest = Math.max(...backYearCandidates);
-    const hadYear = Boolean(resolved.year);
-    setIfEmpty("year", String(latest));
-    setSourceIfUnset("year", "back-ocr", hadYear);
+  if (!resolved.year) {
+    ocrLineTextsBack.forEach((line) => addBackYear(line));
+    if (backYearCandidates.length) {
+      const latest = Math.max(...backYearCandidates);
+      const hadYear = Boolean(resolved.year);
+      setIfEmpty("year", String(latest));
+      setSourceIfUnset("year", "back", hadYear);
+    }
   }
 
   const yearCandidates = lineTexts
@@ -997,7 +1036,8 @@ export function resolveCardFacts(intel = {}) {
     const oldest = Math.min(...yearCandidates.map(Number));
     const hadYear = Boolean(resolved.year);
     setIfEmpty("year", String(oldest));
-    setSourceIfUnset("year", pickOcrSourceForValue(String(oldest)), hadYear);
+    const nextSource = pickOcrSourceForValue(String(oldest)) === "back-ocr" ? "back" : "front";
+    setSourceIfUnset("year", nextSource, hadYear);
   }
   if (!resolved.year) {
     const setYearMatch = resolved.setName
@@ -1042,7 +1082,8 @@ export function resolveCardFacts(intel = {}) {
       const oldest = Math.min(...twoDigitCandidates);
       const hadYear = Boolean(resolved.year);
       setIfEmpty("year", String(oldest));
-      setSourceIfUnset("year", pickOcrSourceForValue(String(oldest)), hadYear);
+      const nextSource = pickOcrSourceForValue(String(oldest)) === "back-ocr" ? "back" : "front";
+      setSourceIfUnset("year", nextSource, hadYear);
     }
   }
 

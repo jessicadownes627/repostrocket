@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSportsBatchStore } from "../store/useSportsBatchStore";
 import { composeCardTitle } from "../utils/composeCardTitle";
 import { buildListingExportLinks } from "../utils/exportListing";
 import { db } from "../db/firebase";
 import { doc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
-import { resolveCardFacts as cardFactsResolver } from "../utils/cardFactsResolver";
 
 const PLATFORM_OPTIONS = [
   { id: "ebay", label: "eBay" },
@@ -52,7 +51,6 @@ export default function SportsBatchLaunch() {
     preparedPlatforms,
     setPreparedPlatforms,
     cardStates,
-    updateCardState,
   } = useSportsBatchStore();
   const [activeFilter, setActiveFilter] = useState("all");
   const [includeCorners, setIncludeCorners] = useState(true);
@@ -60,7 +58,6 @@ export default function SportsBatchLaunch() {
   const [analysisCount, setAnalysisCount] = useState(0);
   const [analysisInFlight, setAnalysisInFlight] = useState(false);
   const [finalizeInFlight, setFinalizeInFlight] = useState(false);
-  const autoAnalyzeRef = useRef(false);
 
   const cards = useMemo(
     () =>
@@ -80,26 +77,10 @@ export default function SportsBatchLaunch() {
     totalCards > 0 ? Math.min(analysisCount / totalCards, 1) : 0;
 
   useEffect(() => {
-    if (autoAnalyzeRef.current) return;
-const hasUnanalyzed = cards.some(
-  (card) => !card.identity || Object.keys(card.identity).length === 0
-);
-    if (!hasUnanalyzed) return;
-    if (analysisInFlight) return;
-    autoAnalyzeRef.current = true;
-    handleGenerateListings();
-  }, [analysisInFlight, cards]);
-
-  useEffect(() => {
     if (!preparedPlatforms?.length) {
       setPreparedPlatforms(["ebay"]);
     }
   }, [preparedPlatforms?.length, setPreparedPlatforms]);
-
-  const handleUpdateCardState = (cardId, updates) => {
-    if (!cardId) return;
-    updateCardState(cardId, updates);
-  };
 
   const togglePlatform = (id) => {
     setPreparedPlatforms((prev) => {
@@ -140,102 +121,10 @@ const hasUnanalyzed = cards.some(
     }
   };
 
-  const mergeIdentity = (base, incoming) => {
-    const next = { ...(base || {}) };
-    Object.entries(incoming || {}).forEach(([key, value]) => {
-      if (key === "_sources") return;
-      if (value === "" || value === null || value === undefined) return;
-      if (next[key] !== undefined && next[key] !== null && next[key] !== "") return;
-      next[key] = value;
-    });
-    next._sources = { ...(next._sources || {}), ...(incoming?._sources || {}) };
-    return next;
-  };
-
   const handleGenerateListings = async () => {
     if (analysisInFlight || !cards.length) return;
     setAnalysisInFlight(true);
-    setAnalysisCount(0);
-    for (const card of cards) {
-      if (!card?.id) {
-        setAnalysisCount((prev) => prev + 1);
-        continue;
-      }
-      const cardState = cardStates[card.id] || {};
-      if (cardState.cardIntelResolved) {
-        setAnalysisCount((prev) => prev + 1);
-        continue;
-      }
-      const frontImageUrl = card.frontImage?.url || "";
-      const backImageUrl = card.backImage?.url || null;
-      console.log("Batch payload", { frontImageUrl, backImageUrl });
-      if (!frontImageUrl) {
-        handleUpdateCardState(card.id, {
-          analysisStatus: "error",
-          cardIntelResolved: true,
-        });
-        setAnalysisCount((prev) => prev + 1);
-        continue;
-      }
-      try {
-        const response = await fetch("/.netlify/functions/cardIntel_v2", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            frontImageUrl,
-            backImageUrl,
-            requestId: `analysis-${Date.now()}-${card.id}`,
-          }),
-        });
-        if (!response.ok) {
-          handleUpdateCardState(card.id, {
-            analysisStatus: "error",
-            cardIntelResolved: true,
-          });
-          setAnalysisCount((prev) => prev + 1);
-          continue;
-        }
-        const data = await response.json();
-        console.log("OCR PAYLOAD", data);
-        if (!data || data.error) {
-          handleUpdateCardState(card.id, {
-            analysisStatus: "error",
-            cardIntelResolved: true,
-          });
-          setAnalysisCount((prev) => prev + 1);
-          continue;
-        }
-        const resolved = cardFactsResolver({
-          ocrLines: data.ocrLines || [],
-          backOcrLines: data.backOcrLines || [],
-          slabLabelLines: data.slabLabelLines || [],
-        });
-        const mergedIdentity = mergeIdentity(cardState.identity, resolved);
-        const gradeValue =
-          mergedIdentity?.grade && typeof mergedIdentity.grade === "object"
-            ? mergedIdentity.grade.value
-            : mergedIdentity?.grade;
-        mergedIdentity.isSlabbed = Boolean(mergedIdentity?.grader && gradeValue);
-        const composedTitle = composeCardTitle(mergedIdentity);
-        const composedDescription = composeSportsDescription(mergedIdentity);
-        handleUpdateCardState(card.id, {
-          identity: mergedIdentity,
-          frontCorners: data.frontCorners || data.corners?.front || null,
-          backCorners: data.backCorners || data.corners?.back || null,
-          analysisStatus: "complete",
-          cardIntelResolved: true,
-          title: composedTitle || "",
-          description: composedDescription || "",
-        });
-      } catch (err) {
-        console.error("Sports batch analysis failed:", err);
-        handleUpdateCardState(card.id, {
-          analysisStatus: "error",
-          cardIntelResolved: true,
-        });
-      }
-      setAnalysisCount((prev) => prev + 1);
-    }
+    setAnalysisCount(cards.length);
     setAnalysisInFlight(false);
     const anchor = document.getElementById("sports-batch-listings");
     if (anchor) anchor.scrollIntoView({ behavior: "smooth", block: "start" });
