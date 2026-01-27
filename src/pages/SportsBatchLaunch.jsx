@@ -1,20 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSportsBatchStore } from "../store/useSportsBatchStore";
 import { composeCardTitle } from "../utils/composeCardTitle";
 import { buildListingExportLinks } from "../utils/exportListing";
 import { db } from "../db/firebase";
-import {
-  collection,
-  doc,
-  onSnapshot,
-  orderBy,
-  query,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
-  where,
-} from "firebase/firestore";
+import { doc, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 import { resolveCardFacts as cardFactsResolver } from "../utils/cardFactsResolver";
 
 const PLATFORM_OPTIONS = [
@@ -57,91 +47,29 @@ const composeSportsDescription = (identity = {}) => {
 
 export default function SportsBatchLaunch() {
   const navigate = useNavigate();
-  const { batchMeta, preparedPlatforms, setPreparedPlatforms } = useSportsBatchStore();
+  const {
+    batchMeta,
+    preparedPlatforms,
+    setPreparedPlatforms,
+    cardStates,
+    updateCardState,
+  } = useSportsBatchStore();
   const [activeFilter, setActiveFilter] = useState("all");
   const [includeCorners, setIncludeCorners] = useState(true);
   const [saveCorners, setSaveCorners] = useState(false);
   const [analysisCount, setAnalysisCount] = useState(0);
   const [analysisInFlight, setAnalysisInFlight] = useState(false);
   const [finalizeInFlight, setFinalizeInFlight] = useState(false);
-  const [uploads, setUploads] = useState([]);
-  const [cardStates, setCardStates] = useState({});
+  const autoAnalyzeRef = useRef(false);
 
-  useEffect(() => {
-    setCardStates({});
-  }, [batchMeta?.id]);
-
-  useEffect(() => {
-    const batchId = batchMeta?.id;
-    if (!batchId) {
-      setUploads([]);
-      return undefined;
-    }
-
-    const uploadsQuery = query(
-      collection(db, "batchPhotos"),
-      where("batchId", "==", batchId),
-      orderBy("index")
-    );
-
-    const unsubscribe = onSnapshot(
-      uploadsQuery,
-      (snap) => {
-        const resolved = snap.docs.map((docSnap) => {
-          const data = docSnap.data();
-          console.log("batchPhoto", {
-            id: docSnap.id,
-            index: data.index ?? null,
-            cardIndex: data.cardIndex ?? null,
-            side: data.side || "unknown",
-          });
-          return {
-            id: docSnap.id,
-            url: data.downloadUrl || "",
-            side: data.side || "unknown",
-            index: data.index ?? null,
-            cardIndex: data.cardIndex ?? null,
-          };
-        });
-        setUploads(resolved);
-      },
-      (err) => {
-        console.error("Failed to load batch photos", err);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [batchMeta?.id]);
-
-  const cards = useMemo(() => {
-    const grouped = new Map();
-    uploads.forEach((upload) => {
-      const normalizedIndex = String(upload.index);
-      const normalizedCardIndex = String(upload.cardIndex);
-      const parsedIndex = Number.parseInt(normalizedIndex, 10);
-      const sortIndex = Number.isFinite(parsedIndex) ? parsedIndex : 0;
-      const key = normalizedCardIndex;
-      const entry = grouped.get(key) || {
-        id: key,
-        index: upload.index,
-        cardIndex: upload.cardIndex,
-        batchId: batchMeta?.id || "",
-        front: null,
-        back: null,
-        sortIndex,
-      };
-      if (upload.side === "back") {
-        entry.back = upload;
-      } else {
-        entry.front = upload;
-      }
-      entry.sortIndex = Math.min(entry.sortIndex, sortIndex);
-      grouped.set(key, entry);
-    });
-    return Array.from(grouped.values()).sort(
-      (a, b) => (a.sortIndex ?? 0) - (b.sortIndex ?? 0)
-    );
-  }, [uploads, batchMeta?.id]);
+  const cards = useMemo(
+    () =>
+      Object.entries(cardStates || {}).map(([cardId, state]) => ({
+        id: cardId,
+        ...(state || {}),
+      })),
+    [cardStates]
+  );
 
   const activePlatforms = useMemo(
     () => (preparedPlatforms?.length ? preparedPlatforms : ["ebay"]),
@@ -152,17 +80,25 @@ export default function SportsBatchLaunch() {
     totalCards > 0 ? Math.min(analysisCount / totalCards, 1) : 0;
 
   useEffect(() => {
+    if (autoAnalyzeRef.current) return;
+const hasUnanalyzed = cards.some(
+  (card) => !card.identity || Object.keys(card.identity).length === 0
+);
+    if (!hasUnanalyzed) return;
+    if (analysisInFlight) return;
+    autoAnalyzeRef.current = true;
+    handleGenerateListings();
+  }, [analysisInFlight, cards]);
+
+  useEffect(() => {
     if (!preparedPlatforms?.length) {
       setPreparedPlatforms(["ebay"]);
     }
   }, [preparedPlatforms?.length, setPreparedPlatforms]);
 
-  const updateCardState = (cardId, updates) => {
+  const handleUpdateCardState = (cardId, updates) => {
     if (!cardId) return;
-    setCardStates((prev) => ({
-      ...prev,
-      [cardId]: { ...(prev[cardId] || {}), ...(updates || {}) },
-    }));
+    updateCardState(cardId, updates);
   };
 
   const togglePlatform = (id) => {
@@ -230,11 +166,11 @@ export default function SportsBatchLaunch() {
         setAnalysisCount((prev) => prev + 1);
         continue;
       }
-      const frontImageUrl = card.front?.url || "";
-      const backImageUrl = card.back?.url || null;
+      const frontImageUrl = card.frontImage?.url || "";
+      const backImageUrl = card.backImage?.url || null;
       console.log("Batch payload", { frontImageUrl, backImageUrl });
       if (!frontImageUrl) {
-        updateCardState(card.id, {
+        handleUpdateCardState(card.id, {
           analysisStatus: "error",
           cardIntelResolved: true,
         });
@@ -248,11 +184,11 @@ export default function SportsBatchLaunch() {
           body: JSON.stringify({
             frontImageUrl,
             backImageUrl,
-            requestId: `analysis-${Date.now()}-${item.id}`,
+            requestId: `analysis-${Date.now()}-${card.id}`,
           }),
         });
         if (!response.ok) {
-          updateCardState(card.id, {
+          handleUpdateCardState(card.id, {
             analysisStatus: "error",
             cardIntelResolved: true,
           });
@@ -260,8 +196,9 @@ export default function SportsBatchLaunch() {
           continue;
         }
         const data = await response.json();
+        console.log("OCR PAYLOAD", data);
         if (!data || data.error) {
-          updateCardState(card.id, {
+          handleUpdateCardState(card.id, {
             analysisStatus: "error",
             cardIntelResolved: true,
           });
@@ -273,7 +210,7 @@ export default function SportsBatchLaunch() {
           backOcrLines: data.backOcrLines || [],
           slabLabelLines: data.slabLabelLines || [],
         });
-        const mergedIdentity = mergeIdentity(cardState.reviewIdentity, resolved);
+        const mergedIdentity = mergeIdentity(cardState.identity, resolved);
         const gradeValue =
           mergedIdentity?.grade && typeof mergedIdentity.grade === "object"
             ? mergedIdentity.grade.value
@@ -281,8 +218,10 @@ export default function SportsBatchLaunch() {
         mergedIdentity.isSlabbed = Boolean(mergedIdentity?.grader && gradeValue);
         const composedTitle = composeCardTitle(mergedIdentity);
         const composedDescription = composeSportsDescription(mergedIdentity);
-        updateCardState(card.id, {
-          reviewIdentity: mergedIdentity,
+        handleUpdateCardState(card.id, {
+          identity: mergedIdentity,
+          frontCorners: data.frontCorners || data.corners?.front || null,
+          backCorners: data.backCorners || data.corners?.back || null,
           analysisStatus: "complete",
           cardIntelResolved: true,
           title: composedTitle || "",
@@ -290,7 +229,7 @@ export default function SportsBatchLaunch() {
         });
       } catch (err) {
         console.error("Sports batch analysis failed:", err);
-        updateCardState(card.id, {
+        handleUpdateCardState(card.id, {
           analysisStatus: "error",
           cardIntelResolved: true,
         });
@@ -312,15 +251,15 @@ export default function SportsBatchLaunch() {
         cards.map(async (card) => {
           const cardId = card.id;
           const cardState = cardStates[card.id] || {};
-          const frontUploadId = card.front?.id || null;
-          const backUploadId = card.back?.id || null;
+          const frontUploadId = card.frontImage?.id || null;
+          const backUploadId = card.backImage?.id || null;
           await setDoc(
             doc(db, "batches", batchId, "cards", cardId),
             {
               batchId,
               frontUploadId,
               backUploadId,
-              reviewIdentity: cardState.reviewIdentity || {},
+              reviewIdentity: cardState.identity || {},
               title: cardState.title || "",
               description: cardState.description || "",
               status: "ready",
@@ -509,12 +448,12 @@ export default function SportsBatchLaunch() {
             <div id="sports-batch-listings" className="grid gap-6">
               {cards.map((card) => {
                 const cardState = cardStates[card.id] || {};
-                const identity = cardState.reviewIdentity || {};
+                const identity = cardState.identity || {};
                 const title = composeCardTitle(identity);
                 const description = composeSportsDescription(identity);
                 const summary = identitySummary(identity);
-                const frontSrc = card.front?.url || "";
-                const backSrc = card.back?.url || "";
+                const frontSrc = card.frontImage?.url || "";
+                const backSrc = card.backImage?.url || "";
                 const isSlabbed = identity.isSlabbed === true;
                 const frontCorners = !isSlabbed ? cardState.frontCorners || [] : [];
                 const backCorners = !isSlabbed ? cardState.backCorners || [] : [];

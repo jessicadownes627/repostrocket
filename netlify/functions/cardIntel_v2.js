@@ -28,7 +28,20 @@ export async function handler(event) {
     if (!process.env.OPENAI_API_KEY) {
       return {
         statusCode: 500,
-        body: JSON.stringify({ error: "Missing OPENAI_API_KEY" }),
+        body: JSON.stringify(
+          buildResponse({
+            status: "error",
+            requestId: null,
+            imageHash: null,
+            ocrLines: [],
+            backOcrLines: [],
+            slabLabelLines: [],
+            identity: {},
+            frontCorners: [],
+            backCorners: [],
+            debug: { model: "gpt-4o-mini" },
+          })
+        ),
       };
     }
 
@@ -51,7 +64,20 @@ export async function handler(event) {
     if (!frontImage) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: "Front image is required" }),
+        body: JSON.stringify(
+          buildResponse({
+            status: "error",
+            requestId: requestId || null,
+            imageHash: imageHash || null,
+            ocrLines: [],
+            backOcrLines: [],
+            slabLabelLines: [],
+            identity: {},
+            frontCorners: [],
+            backCorners: [],
+            debug: { model: "gpt-4o-mini" },
+          })
+        ),
       };
     }
 
@@ -124,14 +150,20 @@ export async function handler(event) {
 
     const result = {
       statusCode: 200,
-      body: JSON.stringify({
-        status: "ok",
-        requestId: requestId || null,
-        imageHash: imageHash || null,
-        ocrLines: lines,
-        slabLabelLines,
-        backOcrLines,
-      }),
+      body: JSON.stringify(
+        buildResponse({
+          status: "ok",
+          requestId: requestId || null,
+          imageHash: imageHash || null,
+          ocrLines: lines,
+          backOcrLines,
+          slabLabelLines,
+          identity: {},
+          frontCorners: [],
+          backCorners: [],
+          debug: { model: "gpt-4o-mini" },
+        })
+      ),
     };
     console.log("✅ cardIntel_v2 DONE", result);
     return result;
@@ -139,7 +171,20 @@ export async function handler(event) {
     console.error("cardIntel_v2 OCR error:", err);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: err.message }),
+      body: JSON.stringify(
+        buildResponse({
+          status: "error",
+          requestId: null,
+          imageHash: null,
+          ocrLines: [],
+          backOcrLines: [],
+          slabLabelLines: [],
+          identity: {},
+          frontCorners: [],
+          backCorners: [],
+          debug: { model: "gpt-4o-mini" },
+        })
+      ),
     };
   }
 }
@@ -156,4 +201,19 @@ function parseJsonSafe(text) {
 
 function stripCodeFences(str) {
   return str.replace(/```json/gi, "").replace(/```/g, "").trim();
+}
+
+function buildResponse(payload) {
+  return {
+    status: payload?.status || "ok",
+    requestId: payload?.requestId ?? null,
+    imageHash: payload?.imageHash ?? null,
+    ocrLines: Array.isArray(payload?.ocrLines) ? payload.ocrLines : [],
+    backOcrLines: Array.isArray(payload?.backOcrLines) ? payload.backOcrLines : [],
+    slabLabelLines: Array.isArray(payload?.slabLabelLines) ? payload.slabLabelLines : [],
+    identity: payload?.identity && typeof payload.identity === "object" ? payload.identity : {},
+    frontCorners: Array.isArray(payload?.frontCorners) ? payload.frontCorners : [],
+    backCorners: Array.isArray(payload?.backCorners) ? payload.backCorners : [],
+    debug: payload?.debug && typeof payload.debug === "object" ? payload.debug : {},
+  };
 }

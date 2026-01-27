@@ -29,10 +29,12 @@ console.log(
 export default function SportsBatchPrep() {
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
-  const { batchItems, batchMeta, setBatchMeta } = useSportsBatchStore();
+  const { batchItems, batchMeta, setBatchMeta, addCard, updateCard } =
+    useSportsBatchStore();
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [uploadedPhotos, setUploadedPhotos] = useState([]);
+  const currentCardIdRef = useRef(null);
   useEffect(() => {
     if (!auth.currentUser) {
       signInAnonymously(auth).catch(console.error);
@@ -112,6 +114,13 @@ export default function SportsBatchPrep() {
           const overallIndex = baseIndex + i;
           const cardIndex = Math.floor(overallIndex / 2);
           const side = overallIndex % 2 === 0 ? "front" : "back";
+          if (side === "front") {
+            const generatedId =
+              typeof crypto !== "undefined" && crypto.randomUUID
+                ? crypto.randomUUID()
+                : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+            currentCardIdRef.current = generatedId;
+          }
           if (!(entry.photo.file instanceof File)) {
             console.error("Upload file is not a File", entry.photo.file);
           }
@@ -131,6 +140,22 @@ export default function SportsBatchPrep() {
             cardIndex,
             createdAt: serverTimestamp(),
           });
+          const cardId = currentCardIdRef.current;
+          if (!cardId) {
+            console.error("Missing currentCardIdRef for batch photo", { side });
+            continue;
+          }
+          const imagePayload = { id: uploadId, url: downloadUrl };
+          if (side === "front") {
+            addCard({
+              cardId,
+              frontImage: imagePayload,
+              backImage: null,
+              identity: {},
+            });
+          } else {
+            updateCard(cardId, { backImage: imagePayload });
+          }
           await updateDoc(batchRef, {
             totalUploads: increment(1),
           });

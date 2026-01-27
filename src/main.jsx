@@ -12,9 +12,7 @@ if ("serviceWorker" in navigator) {
 }
 
 createRoot(document.getElementById("root")).render(
-  <StrictMode>
-    <ListingProvider>
-      <App />
-    </ListingProvider>
-  </StrictMode>,
+  <ListingProvider>
+    <App />
+  </ListingProvider>
 );

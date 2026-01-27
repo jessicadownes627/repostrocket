@@ -7,6 +7,7 @@ export function SportsBatchProvider({ children }) {
   const [draftPhotos, setDraftPhotos] = useState([]);
   const [preparedPlatforms, setPreparedPlatforms] = useState(["ebay"]);
   const [batchMeta, setBatchMeta] = useState(null);
+  const [cardStates, setCardStates] = useState({});
 
   const setBatch = (items) => {
     setBatchItems(Array.isArray(items) ? items : []);
@@ -27,20 +28,64 @@ export function SportsBatchProvider({ children }) {
     );
   };
 
+  const updateCardState = (cardId, fields) => {
+    if (!cardId) return;
+    setCardStates((prev) => ({
+      ...prev,
+      [cardId]: { ...(prev[cardId] || {}), ...(fields || {}) },
+    }));
+  };
+
+  const addCard = (card) => {
+    const cardId = card?.cardId || card?.id;
+    if (!cardId) return;
+    setCardStates((prev) => ({
+      ...prev,
+      [cardId]: { ...(prev[cardId] || {}), ...(card || {}) },
+    }));
+  };
+
+  const updateCard = (cardId, partial) => {
+    if (!cardId) return;
+    setCardStates((prev) => ({
+      ...prev,
+      [cardId]: { ...(prev[cardId] || {}), ...(partial || {}) },
+    }));
+  };
+
+  const initializeCards = (cards) => {
+    if (!Array.isArray(cards) || !cards.length) return;
+    setCardStates((prev) => {
+      const next = { ...prev };
+      cards.forEach((card) => {
+        const cardId = card?.cardId || card?.id;
+        if (!cardId) return;
+        next[cardId] = { ...(next[cardId] || {}), ...(card || {}) };
+      });
+      return next;
+    });
+  };
+
   const value = useMemo(
     () => ({
       batchItems,
       draftPhotos,
       preparedPlatforms,
       batchMeta,
+      cardStates,
       setPreparedPlatforms,
       setBatch,
       setBatchItems,
       setDraftPhotos: setDraft,
       setBatchMeta,
+      setCardStates,
       updateBatchItem,
+      updateCardState,
+      addCard,
+      updateCard,
+      initializeCards,
     }),
-    [batchItems, draftPhotos, preparedPlatforms, batchMeta]
+    [batchItems, draftPhotos, preparedPlatforms, batchMeta, cardStates]
   );
 
   return (
