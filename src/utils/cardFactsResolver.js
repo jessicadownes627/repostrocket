@@ -1796,40 +1796,27 @@ export function resolveCardFacts(intel = {}) {
   ) {
     resolved.isSlabbed = true;
   }
-  // Expected Defaults (final pass, estimated only)
-  // Do not infer brand from set; brand must be confirmed from front OCR or manual.
-  if (!resolved.setName) {
-    const hadSet = Boolean(resolved.setName);
-    setIfEmpty("setName", "Base");
-    setSourceIfUnset("setName", "estimated", hadSet);
-  }
-  if (!resolved.sport && resolved.team) {
-    const inferred = matchesLeague(resolved.team);
-    if (inferred?.sport) {
-      const hadSport = Boolean(resolved.sport);
-      setIfEmpty("sport", inferred.sport);
-      setSourceIfUnset("sport", "estimated", hadSport);
+  // Final sanity pass: keep only name-like player values from OCR.
+  {
+    const isNameLikeValue = (value) => {
+      if (!value) return false;
+      const normalized = normalizeLine(value);
+      const words = normalized.split(/\s+/).filter(Boolean);
+      if (words.length < 2 || words.length > 4) return false;
+      if (positionTokens.some((token) => normalized.includes(token))) return false;
+      if (brandKeywords.some((brand) => normalized.includes(brand))) return false;
+      if (teamKeywords.some((team) => normalized.includes(team))) return false;
+      if (!/[a-z]/i.test(value)) return false;
+      return true;
+    };
+    if (
+      resolved.player &&
+      resolved._sources?.player !== "manual" &&
+      !isNameLikeValue(resolved.player)
+    ) {
+      delete resolved.player;
+      delete resolved._sources.player;
     }
-  }
-  if (!resolved.sport) {
-    const hadSport = Boolean(resolved.sport);
-    setIfEmpty("sport", "Baseball");
-    setSourceIfUnset("sport", "estimated", hadSport);
-  }
-  if (!resolved.team) {
-    const hadTeam = Boolean(resolved.team);
-    setIfEmpty("team", "Unknown Team");
-    setSourceIfUnset("team", "estimated", hadTeam);
-  }
-  if (!resolved.player) {
-    const hadPlayer = Boolean(resolved.player);
-    setIfEmpty("player", "Unknown Player");
-    setSourceIfUnset("player", "estimated", hadPlayer);
-  }
-  if (!resolved.year) {
-    const hadYear = Boolean(resolved.year);
-    setIfEmpty("year", "Unknown");
-    setSourceIfUnset("year", "estimated", hadYear);
   }
   {
     const normalizedPlayer = normalizeLine(resolved.player || "");
@@ -1841,9 +1828,8 @@ export function resolveCardFacts(intel = {}) {
         normalizedPlayer === normalizedSet ||
         brandKeywords.some((brand) => normalizedPlayer.includes(brand)));
     if (isBrandToken) {
-      const hadPlayer = Boolean(resolved.player);
-      resolved.player = "Unknown player";
-      setSourceIfUnset("player", "estimated", hadPlayer);
+      delete resolved.player;
+      delete resolved._sources.player;
     }
   }
   const hadCardType = Boolean(resolved.cardType);
