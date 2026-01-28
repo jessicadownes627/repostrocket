@@ -759,9 +759,7 @@ export function resolveCardFacts(intel = {}) {
     if (source === "front-ocr") return "front";
     return source;
   };
-  const brandSourceLines = ocrLineTextsFront.length
-    ? ocrLineTextsFront
-    : ocrLineTextsBack;
+  const brandSourceLines = ocrLineTextsFront;
   const setKeywords = [
     "upper deck",
     "topps",
@@ -775,18 +773,6 @@ export function resolveCardFacts(intel = {}) {
   ];
   const manufacturerTokens = ["panini"];
   const cardSpecificTokens = ["card", "rookie", "rc", "set", "series", "edition"];
-  const productMap = {
-    panini: {
-      football: ["Donruss", "Score", "Prizm"],
-      basketball: ["Prizm", "Donruss"],
-    },
-    topps: {
-      baseball: ["Topps Chrome", "Topps"],
-    },
-    upper_deck: {
-      hockey: ["Upper Deck"],
-    },
-  };
   if (!resolved.brand) {
     const brandTokens = [
       { token: "panini", label: "Panini" },
@@ -798,20 +784,16 @@ export function resolveCardFacts(intel = {}) {
       { token: "score", label: "Score" },
       { token: "leaf", label: "Leaf" },
     ];
-    const brandHit = brandTokens.find(({ token }) =>
+    const brandHits = brandTokens.filter(({ token }) =>
       brandSourceLines.some((line) => normalizeLine(line).includes(token))
     );
-    if (brandHit) {
-      const hadBrand = Boolean(resolved.brand);
-      setIfEmpty("brand", brandHit.label);
-      const source = ocrLineTextsFront.some((line) =>
-        normalizeLine(line).includes(brandHit.token)
-      )
-        ? "front"
-        : slabLineTexts.some((line) => normalizeLine(line).includes(brandHit.token))
-        ? "slab"
-        : "back";
-      setSourceIfUnset("brand", source, hadBrand);
+    const hadBrand = Boolean(resolved.brand);
+    if (brandHits.length === 1) {
+      setIfEmpty("brand", brandHits[0].label);
+      setSourceIfUnset("brand", "front", hadBrand);
+    } else if (brandHits.length > 1) {
+      setIfEmpty("brand", "Unknown");
+      setSourceIfUnset("brand", "estimated", hadBrand);
     }
   }
   if (!resolved.setName) {
@@ -835,19 +817,11 @@ export function resolveCardFacts(intel = {}) {
       return "";
     };
     const frontSet = pickSetFromLines(ocrLineTextsFront);
-    const slabSet = !frontSet ? pickSetFromLines(slabLineTexts) : "";
-    const backSet = !frontSet && !slabSet ? pickSetFromLines(ocrLineTextsBack) : "";
-    const setValue = frontSet || slabSet || backSet;
+    const setValue = frontSet;
     if (setValue) {
       const hadSet = Boolean(resolved.setName);
       setIfEmpty("setName", setValue);
-      const source =
-        frontSet
-          ? "front"
-          : slabSet
-          ? "slab"
-          : normalizeOcrSource(pickOcrSourceForValue(setValue));
-      setSourceIfUnset("setName", source, hadSet);
+      setSourceIfUnset("setName", "front", hadSet);
     }
   }
   const teamKeywords = [...MLB_TEAMS, ...NFL_TEAMS, ...NBA_TEAMS, ...NHL_TEAMS];
@@ -1374,21 +1348,7 @@ export function resolveCardFacts(intel = {}) {
       }
     }
   }
-  if (resolved.year && resolved.brand && resolved.sport && !resolved.setName) {
-    const brandKey = normalizeLine(resolved.brand).replace(/\s+/g, "_");
-    const sportKey = normalizeLine(resolved.sport);
-    const candidates = productMap?.[brandKey]?.[sportKey] || [];
-    if (candidates.length === 1) {
-      const hadSet = Boolean(resolved.setName);
-      setIfEmpty("setName", candidates[0]);
-      setSourceIfUnset("setName", "estimated", hadSet);
-    }
-  }
-  if (!resolved.setName && resolved.year && resolved.brand) {
-    const hadSet = Boolean(resolved.setName);
-    setIfEmpty("setName", `${resolved.year} ${resolved.brand}`);
-    setSourceIfUnset("setName", "estimated", hadSet);
-  }
+  // Do not infer set from brand/year unless it looks like a real set
   if (
     resolved.isSlabbed === false &&
     resolved.player &&
@@ -1837,26 +1797,7 @@ export function resolveCardFacts(intel = {}) {
     resolved.isSlabbed = true;
   }
   // Expected Defaults (final pass, estimated only)
-  if (!resolved.brand && resolved.setName) {
-    const normalizedSet = normalizeLine(resolved.setName);
-    const brandTokenMap = [
-      { token: "upper deck", label: "Upper Deck" },
-      { token: "topps", label: "Topps" },
-      { token: "panini", label: "Panini" },
-      { token: "donruss", label: "Donruss" },
-      { token: "fleer", label: "Fleer" },
-      { token: "bowman", label: "Bowman" },
-      { token: "score", label: "Score" },
-      { token: "leaf", label: "Leaf" },
-      { token: "optic", label: "Optic" },
-    ];
-    const match = brandTokenMap.find((entry) => normalizedSet.includes(entry.token));
-    if (match) {
-      const hadBrand = Boolean(resolved.brand);
-      setIfEmpty("brand", match.label);
-      setSourceIfUnset("brand", "estimated", hadBrand);
-    }
-  }
+  // Do not infer brand from set; brand must be confirmed from front OCR or manual.
   if (!resolved.setName) {
     const hadSet = Boolean(resolved.setName);
     setIfEmpty("setName", "Base");

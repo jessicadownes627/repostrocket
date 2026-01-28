@@ -80,14 +80,15 @@ export default function SportsBatchPrep() {
     [uploadedPhotos, hiddenUploadSet]
   );
 
-  const normalizeMatchToken = (value = "") =>
-    String(value || "")
+  function normalizeMatchToken(value = "") {
+    return String(value || "")
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, " ")
       .replace(/\s+/g, " ")
       .trim();
+  }
 
-  const isNameLike = (value = "") => {
+  function isNameLike(value = "") {
     const normalized = normalizeMatchToken(value);
     if (!normalized) return false;
     if (normalized.includes("unknown player")) return false;
@@ -105,9 +106,9 @@ export default function SportsBatchPrep() {
     ];
     if (brandTokens.some((brand) => normalized.includes(brand))) return false;
     return true;
-  };
+  }
 
-  const scoreIdentityMatch = (front = {}, back = {}) => {
+  function scoreIdentityMatch(front = {}, back = {}) {
     const frontPlayer = normalizeMatchToken(front.player);
     const backPlayer = normalizeMatchToken(back.player);
     const frontTeam = normalizeMatchToken(front.team);
@@ -159,7 +160,7 @@ export default function SportsBatchPrep() {
 
     const hasRequiredSignal = playerMatch > 0 || nonBrandSignals >= 2;
     return { score, hasRequiredSignal };
-  };
+  }
   useEffect(() => {
     if (!auth.currentUser) {
       signInAnonymously(auth).catch(console.error);
@@ -493,6 +494,23 @@ export default function SportsBatchPrep() {
     });
   };
 
+  async function attachUnassignedBack(cardId, card, upload) {
+    if (!upload?.id || !upload?.url || !batchMeta?.id) return;
+    await updateDoc(doc(db, "batchPhotos", upload.id), {
+      cardIndex: card.cardIndex ?? null,
+    });
+    updateCard(cardId, {
+      backImage: { id: upload.id, url: upload.url },
+      analysisStatusBack: "pending",
+    });
+    hideUploadId(upload.id);
+    setUnassignedBacks((prev) => {
+      const next = { ...(prev || {}) };
+      delete next[upload.id];
+      return next;
+    });
+  }
+
   const analyzeBackForMatching = useCallback(
     async (uploadId, url) => {
       if (!uploadId || !url) return;
@@ -722,23 +740,6 @@ export default function SportsBatchPrep() {
         !findCardForUpload(photo.id) &&
         unassignedBacks?.[photo.id]
     );
-
-  const attachUnassignedBack = async (cardId, card, upload) => {
-    if (!upload?.id || !upload?.url || !batchMeta?.id) return;
-    await updateDoc(doc(db, "batchPhotos", upload.id), {
-      cardIndex: card.cardIndex ?? null,
-    });
-    updateCard(cardId, {
-      backImage: { id: upload.id, url: upload.url },
-      analysisStatusBack: "pending",
-    });
-    hideUploadId(upload.id);
-    setUnassignedBacks((prev) => {
-      const next = { ...(prev || {}) };
-      delete next[upload.id];
-      return next;
-    });
-  };
 
   const renderPhoto = (item) => {
     const preview = item.url || "";
