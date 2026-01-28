@@ -58,6 +58,7 @@ export default function SportsBatchPrep() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [uploadedPhotos, setUploadedPhotos] = useState([]);
+  const [unassignedBacks, setUnassignedBacks] = useState({});
   const [hiddenUploadIds, setHiddenUploadIds] = useState([]);
   const currentCardIdRef = useRef(null);
   const inFlightRef = useRef(new Set());
@@ -78,6 +79,87 @@ export default function SportsBatchPrep() {
     () => uploadedPhotos.filter((photo) => !hiddenUploadSet.has(photo.id)),
     [uploadedPhotos, hiddenUploadSet]
   );
+
+  const normalizeMatchToken = (value = "") =>
+    String(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const isNameLike = (value = "") => {
+    const normalized = normalizeMatchToken(value);
+    if (!normalized) return false;
+    if (normalized.includes("unknown player")) return false;
+    const parts = normalized.split(" ").filter(Boolean);
+    if (parts.length < 2) return false;
+    const brandTokens = [
+      "upper deck",
+      "topps",
+      "panini",
+      "donruss",
+      "fleer",
+      "bowman",
+      "score",
+      "leaf",
+    ];
+    if (brandTokens.some((brand) => normalized.includes(brand))) return false;
+    return true;
+  };
+
+  const scoreIdentityMatch = (front = {}, back = {}) => {
+    const frontPlayer = normalizeMatchToken(front.player);
+    const backPlayer = normalizeMatchToken(back.player);
+    const frontTeam = normalizeMatchToken(front.team);
+    const backTeam = normalizeMatchToken(back.team);
+    const frontYear = normalizeMatchToken(front.year);
+    const backYear = normalizeMatchToken(back.year);
+    const frontBrand = normalizeMatchToken(front.brand || front.setName);
+    const backBrand = normalizeMatchToken(back.brand || back.setName);
+
+    let score = 0;
+    let nonBrandSignals = 0;
+    let playerMatch = 0;
+
+    if (frontPlayer && backPlayer && isNameLike(front.player) && isNameLike(back.player)) {
+      if (frontPlayer === backPlayer) playerMatch = 5;
+      else if (frontPlayer.includes(backPlayer) || backPlayer.includes(frontPlayer)) {
+        playerMatch = 3;
+      }
+    }
+    if (playerMatch) {
+      score += playerMatch;
+      nonBrandSignals += 1;
+    }
+
+    if (frontTeam && backTeam) {
+      if (frontTeam === backTeam) {
+        score += 3;
+        nonBrandSignals += 1;
+      } else if (frontTeam.includes(backTeam) || backTeam.includes(frontTeam)) {
+        score += 2;
+        nonBrandSignals += 1;
+      }
+    }
+
+    if (frontYear && backYear && frontYear === backYear) {
+      score += 2;
+      nonBrandSignals += 1;
+    }
+
+    if (frontBrand && backBrand) {
+      if (frontBrand === backBrand) score += 1;
+      else if (
+        frontBrand.includes(backBrand) ||
+        backBrand.includes(frontBrand)
+      ) {
+        score += 1;
+      }
+    }
+
+    const hasRequiredSignal = playerMatch > 0 || nonBrandSignals >= 2;
+    return { score, hasRequiredSignal };
+  };
   useEffect(() => {
     if (!auth.currentUser) {
       signInAnonymously(auth).catch(console.error);
@@ -233,6 +315,16 @@ export default function SportsBatchPrep() {
               cardIndex,
               analysisStatusBack: "pending",
             });
+          } else if (side === "back") {
+            setUnassignedBacks((prev) => ({
+              ...prev,
+              [uploadId]: {
+                id: uploadId,
+                url: downloadUrl,
+                identity: null,
+              },
+            }));
+            analyzeBackForMatching(uploadId, downloadUrl);
           }
           await updateDoc(batchRef, {
             totalUploads: increment(1),
@@ -361,6 +453,11 @@ export default function SportsBatchPrep() {
           analysisStatusBack: "pending",
           cardIntelResolved: false,
         });
+        setUnassignedBacks((prev) => {
+          const next = { ...(prev || {}) };
+          delete next[imagePayload.id];
+          return next;
+        });
       }
       return true;
     } catch (err) {
@@ -395,6 +492,70 @@ export default function SportsBatchPrep() {
       analysisStatusBack: "missing",
     });
   };
+
+  const analyzeBackForMatching = useCallback(
+    async (uploadId, url) => {
+      if (!uploadId || !url) return;
+      try {
+        const response = await fetch("/.netlify/functions/cardIntel_v2", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            frontImageUrl: url,
+            requestId: `back-match-${Date.now()}-${uploadId}`,
+          }),
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!data || data.error || data.status !== "ok") return;
+        const resolved = cardFactsResolver({
+          ocrLines: [],
+          backOcrLines: data.ocrLines || [],
+          slabLabelLines: [],
+        });
+        setUnassignedBacks((prev) => ({
+          ...prev,
+          [uploadId]: {
+            id: uploadId,
+            url,
+            identity: resolved,
+          },
+        }));
+      } catch (err) {
+        console.error("Back OCR match failed", err);
+      }
+    },
+    [setUnassignedBacks]
+  );
+
+  const tryAttachBackForCard = useCallback(
+    async (cardId, frontIdentity) => {
+      const backEntries = Object.values(unassignedBacks || {});
+      if (!backEntries.length) return;
+      const candidates = backEntries
+        .map((back) => {
+          const { score, hasRequiredSignal } = scoreIdentityMatch(
+            frontIdentity,
+            back.identity || {}
+          );
+          return { back, score, hasRequiredSignal };
+        })
+        .filter((entry) => entry.hasRequiredSignal);
+      if (!candidates.length) return;
+      candidates.sort((a, b) => b.score - a.score);
+      const best = candidates[0];
+      const runnerUp = candidates[1];
+      if (best.score < 5) return;
+      if (runnerUp && best.score - runnerUp.score < 2) return;
+      await attachUnassignedBack(cardId, cardStates?.[cardId], best.back);
+      setUnassignedBacks((prev) => {
+        const next = { ...(prev || {}) };
+        delete next[best.back.id];
+        return next;
+      });
+    },
+    [unassignedBacks, cardStates, attachUnassignedBack]
+  );
 
   const runOcr = useCallback(async () => {
     const entries = Object.entries(cardStates || {});
@@ -509,6 +670,7 @@ export default function SportsBatchPrep() {
           analysisStatusFront: "complete",
           analysisStatusBack: backImageUrl ? "complete" : "missing",
         });
+        await tryAttachBackForCard(cardId, resolved);
       } catch (err) {
         if (err?.name !== "AbortError") {
           console.error("Sports batch analysis failed:", err);
@@ -527,7 +689,13 @@ export default function SportsBatchPrep() {
         clearAnalysisController(cardId);
       }
     }
-  }, [cardStates, updateCard, registerAnalysisController, clearAnalysisController]);
+  }, [
+    cardStates,
+    updateCard,
+    registerAnalysisController,
+    clearAnalysisController,
+    tryAttachBackForCard,
+  ]);
 
   useEffect(() => {
     if (!cards.length) return;
@@ -549,7 +717,10 @@ export default function SportsBatchPrep() {
 
   const findUnassignedBack = () =>
     visibleUploadedPhotos.find(
-      (photo) => photo.side === "back" && !findCardForUpload(photo.id)
+      (photo) =>
+        photo.side === "back" &&
+        !findCardForUpload(photo.id) &&
+        unassignedBacks?.[photo.id]
     );
 
   const attachUnassignedBack = async (cardId, card, upload) => {
@@ -562,6 +733,11 @@ export default function SportsBatchPrep() {
       analysisStatusBack: "pending",
     });
     hideUploadId(upload.id);
+    setUnassignedBacks((prev) => {
+      const next = { ...(prev || {}) };
+      delete next[upload.id];
+      return next;
+    });
   };
 
   const renderPhoto = (item) => {
