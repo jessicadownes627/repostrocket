@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSportsBatchStore } from "../store/useSportsBatchStore";
 import { convertHeicIfNeeded } from "../utils/imageTools";
@@ -21,6 +21,8 @@ import {
 import { v4 as uuidv4 } from "uuid";
 import { uploadBatchFile } from "../utils/batchUpload";
 import { onAuthStateChanged, signInAnonymously } from "firebase/auth";
+import { generateCornerEntriesForSide } from "../utils/cardIntelClient";
+import { getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
 
 console.log(
   "🔥 FIREBASE PROJECT ID:",
@@ -49,11 +51,33 @@ export default function SportsBatchPrep() {
     addCard,
     updateCard,
     cardStates,
+    registerAnalysisController,
+    clearAnalysisController,
+    abortAnalysis,
   } = useSportsBatchStore();
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [uploadedPhotos, setUploadedPhotos] = useState([]);
+  const [hiddenUploadIds, setHiddenUploadIds] = useState([]);
   const currentCardIdRef = useRef(null);
+  const inFlightRef = useRef(new Set());
+  const analysisTimeoutsRef = useRef(new Map());
+  const cards = useMemo(
+    () =>
+      Object.entries(cardStates || {}).map(([cardId, state]) => ({
+        id: cardId,
+        ...(state || {}),
+      })),
+    [cardStates]
+  );
+  const hiddenUploadSet = useMemo(
+    () => new Set(hiddenUploadIds),
+    [hiddenUploadIds]
+  );
+  const visibleUploadedPhotos = useMemo(
+    () => uploadedPhotos.filter((photo) => !hiddenUploadSet.has(photo.id)),
+    [uploadedPhotos, hiddenUploadSet]
+  );
   useEffect(() => {
     if (!auth.currentUser) {
       signInAnonymously(auth).catch(console.error);
@@ -128,17 +152,48 @@ export default function SportsBatchPrep() {
 
       try {
         const baseIndex = uploadedPhotos.length;
+        const cardIndexById = new Map();
+        const unmatchedFrontCardIds = new Set();
+        let nextCardIndex = 0;
+        Object.entries(cardStates || {}).forEach(([cardId, state]) => {
+          if (state?.cardIndex !== undefined && state?.cardIndex !== null) {
+            cardIndexById.set(cardId, state.cardIndex);
+            if (state.cardIndex >= nextCardIndex) {
+              nextCardIndex = state.cardIndex + 1;
+            }
+          }
+          if (state?.frontImage?.url && !state?.backImage?.url) {
+            unmatchedFrontCardIds.add(cardId);
+          }
+        });
         for (let i = 0; i < incoming.length; i += 1) {
           const entry = incoming[i];
           const overallIndex = baseIndex + i;
-          const cardIndex = Math.floor(overallIndex / 2);
-          const side = overallIndex % 2 === 0 ? "front" : "back";
-          if (side === "front") {
+          const sideCandidate = overallIndex % 2 === 0 ? "front" : "back";
+          let side = sideCandidate;
+          let cardIndex = null;
+          let cardId = null;
+          if (sideCandidate === "front") {
+            cardIndex = nextCardIndex;
+            nextCardIndex += 1;
             const generatedId =
               typeof crypto !== "undefined" && crypto.randomUUID
                 ? crypto.randomUUID()
                 : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
             currentCardIdRef.current = generatedId;
+            cardId = generatedId;
+            cardIndexById.set(cardId, cardIndex);
+            unmatchedFrontCardIds.add(cardId);
+          } else if (unmatchedFrontCardIds.size === 1) {
+            const [unmatchedId] = unmatchedFrontCardIds;
+            cardId = unmatchedId;
+            cardIndex = cardIndexById.get(cardId) ?? null;
+            if (cardId) {
+              unmatchedFrontCardIds.delete(cardId);
+            }
+          } else {
+            // ambiguous back image — leave unassigned
+            side = "back";
           }
           if (!(entry.photo.file instanceof File)) {
             console.error("Upload file is not a File", entry.photo.file);
@@ -156,26 +211,28 @@ export default function SportsBatchPrep() {
             downloadUrl,
             side,
             index: overallIndex,
-            cardIndex,
+            cardIndex: cardIndex ?? null,
             createdAt: serverTimestamp(),
           });
-          const cardId = currentCardIdRef.current;
-          if (!cardId) {
-            console.error("Missing currentCardIdRef for batch photo", { side });
-            continue;
-          }
           const imagePayload = { id: uploadId, url: downloadUrl };
-          if (side === "front") {
+          if (side === "front" && cardId) {
             addCard({
               cardId,
+              cardIndex,
               frontImage: imagePayload,
               backImage: null,
               identity: {},
               cardIntelResolved: false,
               analysisStatus: "pending",
+              analysisStatusFront: "pending",
+              analysisStatusBack: "missing",
             });
-          } else {
-            updateCard(cardId, { backImage: imagePayload });
+          } else if (side === "back" && cardId) {
+            updateCard(cardId, {
+              backImage: imagePayload,
+              cardIndex,
+              analysisStatusBack: "pending",
+            });
           }
           await updateDoc(batchRef, {
             totalUploads: increment(1),
@@ -239,69 +296,6 @@ export default function SportsBatchPrep() {
         alert("No batch ID available.");
         return;
       }
-      const runOcr = async () => {
-        const entries = Object.entries(cardStates || {});
-        for (const [cardId, card] of entries) {
-          if (card?.cardIntelResolved === true) continue;
-          updateCard(cardId, { analysisStatus: "pending", cardIntelResolved: false });
-          const frontImageUrl = card?.frontImage?.url || "";
-          const backImageUrl = card?.backImage?.url || null;
-          if (!frontImageUrl) continue;
-          try {
-            const response = await fetch("/.netlify/functions/cardIntel_v2", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                frontImageUrl,
-                backImageUrl,
-                requestId: `analysis-${Date.now()}-${cardId}`,
-              }),
-            });
-            if (!response.ok) {
-              updateCard(cardId, {
-                cardIntelResolved: true,
-                analysisStatus: "error",
-              });
-              continue;
-            }
-            const data = await response.json();
-            if (!data || data.error || data.status !== "ok") {
-              updateCard(cardId, {
-                cardIntelResolved: true,
-                analysisStatus: "error",
-              });
-              continue;
-            }
-            const resolved = cardFactsResolver({
-              ocrLines: data.ocrLines || [],
-              backOcrLines: data.backOcrLines || [],
-              slabLabelLines: data.slabLabelLines || [],
-            });
-            const mergedIdentity = mergeIdentity(card?.identity, resolved);
-            const gradeValue =
-              mergedIdentity?.grade && typeof mergedIdentity.grade === "object"
-                ? mergedIdentity.grade.value
-                : mergedIdentity?.grade;
-            mergedIdentity.isSlabbed = Boolean(
-              mergedIdentity?.grader && gradeValue
-            );
-            updateCard(cardId, {
-              identity: mergedIdentity,
-              frontCorners: data.frontCorners || data.corners?.front || null,
-              backCorners: data.backCorners || data.corners?.back || null,
-              cardIntelResolved: true,
-              analysisStatus: "complete",
-            });
-          } catch (err) {
-            console.error("Sports batch analysis failed:", err);
-            updateCard(cardId, {
-              cardIntelResolved: true,
-              analysisStatus: "error",
-            });
-          }
-        }
-      };
-      runOcr();
       navigate("/sports-batch-review");
     } catch (err) {
       console.error(err);
@@ -309,15 +303,371 @@ export default function SportsBatchPrep() {
     }
   };
 
+  const uploadCornerDataUrl = async ({ dataUrl, batchId, cardId, side, index }) => {
+    if (!dataUrl || !batchId || !cardId) return null;
+    const response = await fetch(dataUrl);
+    const blob = await response.blob();
+    const path = `batch/${batchId}/corners/${cardId}/${side}-${index}.jpg`;
+    const ref = storageRef(storage, path);
+    await uploadBytes(ref, blob, { contentType: "image/jpeg" });
+    return getDownloadURL(ref);
+  };
+
+  const handleReplaceImage = async (cardId, card, side, file) => {
+    if (!file) return;
+    const batchId = batchMeta?.id;
+    if (!batchId) {
+      alert("No batch ID available.");
+      return false;
+    }
+    try {
+      abortAnalysis(cardId);
+      const processed = await convertHeicIfNeeded(file);
+      const uploadFile = processed instanceof File ? processed : file;
+      const { uploadId, downloadUrl } = await uploadBatchFile({
+        db,
+        storage,
+        batchId,
+        file: uploadFile,
+        side,
+        cardId,
+      });
+      const index =
+        card.cardIndex !== undefined && card.cardIndex !== null
+          ? card.cardIndex * 2 + (side === "back" ? 1 : 0)
+          : null;
+      await setDoc(doc(db, "batchPhotos", uploadId), {
+        batchId,
+        downloadUrl,
+        side,
+        index,
+        cardIndex: card.cardIndex ?? null,
+        createdAt: serverTimestamp(),
+      });
+      const imagePayload = { id: uploadId, url: downloadUrl };
+      if (side === "front") {
+        updateCard(cardId, {
+          frontImage: imagePayload,
+          frontCorners: null,
+          analysisStatus: "pending",
+          analysisStatusFront: "pending",
+          cardIntelResolved: false,
+        });
+      } else {
+        updateCard(cardId, {
+          backImage: imagePayload,
+          backCorners: null,
+          analysisStatus: "pending",
+          analysisStatusBack: "pending",
+          cardIntelResolved: false,
+        });
+      }
+      return true;
+    } catch (err) {
+      console.error("Failed to replace image", err);
+      alert("We couldn’t replace that photo. Please try again.");
+      return false;
+    }
+  };
+
+  const hideUploadId = (uploadId) => {
+    if (!uploadId) return;
+    setHiddenUploadIds((prev) =>
+      prev.includes(uploadId) ? prev : [...prev, uploadId]
+    );
+  };
+
+  const handleRemoveImage = (cardId, card, side) => {
+    abortAnalysis(cardId);
+    if (side === "front") {
+      updateCard(cardId, {
+        frontImage: null,
+        frontCorners: null,
+        analysisStatus: "pending",
+        analysisStatusFront: "removed",
+        cardIntelResolved: false,
+      });
+      return;
+    }
+    updateCard(cardId, {
+      backImage: null,
+      backCorners: null,
+      analysisStatusBack: "missing",
+    });
+  };
+
+  const runOcr = useCallback(async () => {
+    const entries = Object.entries(cardStates || {});
+    for (const [cardId, card] of entries) {
+      if (inFlightRef.current.has(cardId)) continue;
+      if (card?.cardIntelResolved === true) continue;
+      const frontImageUrl = card?.frontImage?.url || "";
+      const backImageUrl = card?.backImage?.url || null;
+      if (!frontImageUrl) continue;
+      const frontCornerEntries = await generateCornerEntriesForSide(
+        frontImageUrl,
+        "front"
+      );
+      const frontCorners = await Promise.all(
+        frontCornerEntries.slice(0, 4).map(async (entry, idx) => {
+          const url = await uploadCornerDataUrl({
+            dataUrl: entry.url,
+            batchId: batchMeta?.id,
+            cardId,
+            side: "front",
+            index: idx,
+          });
+          return url ? { ...entry, url } : null;
+        })
+      );
+      const backCornerEntries = backImageUrl
+        ? await generateCornerEntriesForSide(backImageUrl, "back")
+        : [];
+      const backCorners = backImageUrl
+        ? await Promise.all(
+            backCornerEntries.slice(0, 4).map(async (entry, idx) => {
+              const url = await uploadCornerDataUrl({
+                dataUrl: entry.url,
+                batchId: batchMeta?.id,
+                cardId,
+                side: "back",
+                index: idx,
+              });
+              return url ? { ...entry, url } : null;
+            })
+          )
+        : [];
+      updateCard(cardId, {
+        frontCorners: frontCorners.filter(Boolean),
+        backCorners: backCorners.filter(Boolean),
+      });
+      inFlightRef.current.add(cardId);
+      const controller = new AbortController();
+      registerAnalysisController(cardId, controller);
+      if (!analysisTimeoutsRef.current.has(cardId)) {
+        const timeoutId = setTimeout(() => {
+          updateCard(cardId, {
+            cardIntelResolved: true,
+            analysisStatus: "needs-info",
+            analysisStatusFront: frontImageUrl ? "needs-info" : "missing",
+            analysisStatusBack: backImageUrl ? "needs-info" : "missing",
+          });
+          analysisTimeoutsRef.current.delete(cardId);
+        }, 25000);
+        analysisTimeoutsRef.current.set(cardId, timeoutId);
+      }
+      updateCard(cardId, {
+        analysisStatus: "pending",
+        cardIntelResolved: false,
+        analysisStatusFront: "pending",
+        analysisStatusBack: backImageUrl ? "pending" : "missing",
+      });
+      try {
+        const response = await fetch("/.netlify/functions/cardIntel_v2", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            frontImageUrl,
+            backImageUrl,
+            requestId: `analysis-${Date.now()}-${cardId}`,
+            frontCorners: frontCorners.filter(Boolean).map((entry) => entry.url),
+            backCorners: backCorners.filter(Boolean).map((entry) => entry.url),
+          }),
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          updateCard(cardId, {
+            cardIntelResolved: true,
+            analysisStatus: "error",
+          });
+          continue;
+        }
+        const data = await response.json();
+        if (!data || data.error || data.status !== "ok") {
+          updateCard(cardId, {
+            cardIntelResolved: true,
+            analysisStatus: "error",
+          });
+          continue;
+        }
+        const resolved = cardFactsResolver({
+          ocrLines: data.ocrLines || [],
+          backOcrLines: data.backOcrLines || [],
+          slabLabelLines: data.slabLabelLines || [],
+        });
+        const gradeValue =
+          resolved?.grade && typeof resolved.grade === "object"
+            ? resolved.grade.value
+            : resolved?.grade;
+        resolved.isSlabbed = Boolean(resolved?.grader && gradeValue);
+        updateCard(cardId, {
+          identity: resolved,
+          frontCorners: data.frontCorners || data.corners?.front || null,
+          backCorners: data.backCorners || data.corners?.back || null,
+          cardIntelResolved: true,
+          analysisStatus: "complete",
+          analysisStatusFront: "complete",
+          analysisStatusBack: backImageUrl ? "complete" : "missing",
+        });
+      } catch (err) {
+        if (err?.name !== "AbortError") {
+          console.error("Sports batch analysis failed:", err);
+          updateCard(cardId, {
+            cardIntelResolved: true,
+            analysisStatus: "error",
+          });
+        }
+      } finally {
+        const timeoutId = analysisTimeoutsRef.current.get(cardId);
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          analysisTimeoutsRef.current.delete(cardId);
+        }
+        inFlightRef.current.delete(cardId);
+        clearAnalysisController(cardId);
+      }
+    }
+  }, [cardStates, updateCard, registerAnalysisController, clearAnalysisController]);
+
+  useEffect(() => {
+    if (!cards.length) return;
+    runOcr();
+  }, [cards, runOcr]);
+
+  const findCardForUpload = (uploadId) => {
+    const entries = Object.entries(cardStates || {});
+    for (const [cardId, card] of entries) {
+      if (card?.frontImage?.id === uploadId) {
+        return { cardId, card, side: "front" };
+      }
+      if (card?.backImage?.id === uploadId) {
+        return { cardId, card, side: "back" };
+      }
+    }
+    return null;
+  };
+
+  const findUnassignedBack = () =>
+    visibleUploadedPhotos.find(
+      (photo) => photo.side === "back" && !findCardForUpload(photo.id)
+    );
+
+  const attachUnassignedBack = async (cardId, card, upload) => {
+    if (!upload?.id || !upload?.url || !batchMeta?.id) return;
+    await updateDoc(doc(db, "batchPhotos", upload.id), {
+      cardIndex: card.cardIndex ?? null,
+    });
+    updateCard(cardId, {
+      backImage: { id: upload.id, url: upload.url },
+      analysisStatusBack: "pending",
+    });
+    hideUploadId(upload.id);
+  };
+
   const renderPhoto = (item) => {
     const preview = item.url || "";
     if (!preview) return null;
+    const match = findCardForUpload(item.id);
+    if (!match) {
+      return (
+        <div key={item.id} className="relative flex flex-col items-center gap-2">
+          <img
+            src={preview}
+            alt="Unassigned card photo"
+            className="w-44 aspect-[3/4] object-cover rounded-lg border border-white/10"
+          />
+          {item.side === "back" && (
+            <div className="text-[10px] text-white/50">
+              Unassigned back — use Add back
+            </div>
+          )}
+          <button
+            type="button"
+            className="inline-flex items-center justify-center min-h-[32px] px-3 text-[10px] font-medium rounded-full border border-white/15 text-white/50 hover:border-white/30 hover:text-white"
+            onClick={() => hideUploadId(item.id)}
+          >
+            Remove
+          </button>
+        </div>
+      );
+    }
+    const inputId = `prep-upload-replace-${item.id}`;
+    const addBackInputId = `prep-add-back-${match.cardId}`;
+    const isFront = match.side === "front";
+    const needsBack = isFront && !match.card.backImage?.url;
+    const unassignedBack = needsBack ? findUnassignedBack() : null;
     return (
-      <div key={item.id} className="relative">
+      <div key={item.id} className="relative flex flex-col items-center gap-2">
         <img
           src={preview}
           alt="Card photo"
-          className="w-full aspect-[3/4] object-cover rounded-xl border border-white/10"
+          className="w-44 aspect-[3/4] object-cover rounded-lg border border-white/10"
+        />
+        <div className="flex items-center gap-2 text-white/60">
+          <label
+            htmlFor={inputId}
+            className="cursor-pointer inline-flex items-center justify-center min-h-[32px] px-3 text-[10px] font-medium rounded-full border border-white/20 hover:border-white/40 hover:text-white"
+          >
+            Edit
+          </label>
+          <button
+            type="button"
+            className="inline-flex items-center justify-center min-h-[32px] px-3 text-[10px] font-medium rounded-full border border-red-400/30 text-white/70 hover:border-red-300/60 hover:text-white"
+            onClick={() => {
+              handleRemoveImage(match.cardId, match.card, match.side);
+              hideUploadId(item.id);
+            }}
+          >
+            Remove
+          </button>
+        </div>
+        {needsBack && (
+          <div className="flex flex-col items-center gap-2 text-[10px] text-white/50">
+            <div>Back photos help improve accuracy (optional)</div>
+            <button
+              type="button"
+              className="inline-flex items-center justify-center min-h-[28px] px-3 text-[10px] font-medium rounded-full border border-white/15 hover:border-white/30 hover:text-white"
+              onClick={async () => {
+                if (unassignedBack) {
+                  await attachUnassignedBack(match.cardId, match.card, unassignedBack);
+                  return;
+                }
+                const input = document.getElementById(addBackInputId);
+                if (input) input.click();
+              }}
+            >
+              Add back
+            </button>
+          </div>
+        )}
+        <input
+          id={inputId}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={async (event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            const ok = await handleReplaceImage(
+              match.cardId,
+              match.card,
+              match.side,
+              file
+            );
+            if (ok) hideUploadId(item.id);
+          }}
+        />
+        <input
+          id={addBackInputId}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={async (event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            if (!file) return;
+            await handleReplaceImage(match.cardId, match.card, "back", file);
+          }}
         />
       </div>
     );
@@ -336,14 +686,32 @@ export default function SportsBatchPrep() {
         <h1 className="sparkly-header text-3xl mb-2 text-center">
           Batch Sports Cards
         </h1>
-        <p className="text-center text-white/70 text-sm mb-2">
-          Upload multiple photos — we’ll organize them into cards automatically.
-        </p>
-        <p className="text-center text-white/55 text-sm mb-8">
-          You can review everything before listings are created.
-        </p>
+        {visibleUploadedPhotos.length > 0 ? (
+          <div className="text-center text-white/70 text-sm mb-8 space-y-1">
+            <div>Analyzing photos as they upload…</div>
+            <div>You can keep adding photos — we’ll update results automatically.</div>
+          </div>
+        ) : (
+          <>
+            <p className="text-center text-white/70 text-sm mb-2">
+              Upload multiple photos — we’ll organize them into cards automatically.
+            </p>
+            <p className="text-center text-white/55 text-sm mb-8">
+              You can review everything before listings are created.
+            </p>
+          </>
+        )}
 
-        <div className="flex flex-col items-center gap-4 mb-10">
+        {visibleUploadedPhotos.length > 0 ? (
+          <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 justify-items-center">
+            {visibleUploadedPhotos.map(renderPhoto)}
+          </div>
+        ) : (
+          <div className="lux-card border border-white/10 p-8 text-center text-white/60">
+            {batchItems.length ? "Cards preserved. Add more photos to continue." : "Add your photos to begin."}
+          </div>
+        )}
+        <div className="flex flex-col items-center gap-4 mt-10">
           <button
             type="button"
             onClick={handleUploadClick}
@@ -360,16 +728,6 @@ export default function SportsBatchPrep() {
             onChange={(event) => handleFiles(event.target.files)}
           />
         </div>
-
-        {uploadedPhotos.length > 0 ? (
-          <div className="grid grid-cols-2 gap-4">
-            {uploadedPhotos.map(renderPhoto)}
-          </div>
-        ) : (
-          <div className="lux-card border border-white/10 p-8 text-center text-white/60">
-            {batchItems.length ? "Cards preserved. Add more photos to continue." : "Add your photos to begin."}
-          </div>
-        )}
         {isUploading && (
           <div className="mt-6 text-center text-sm text-white/70">
             Uploading photos…
@@ -381,14 +739,14 @@ export default function SportsBatchPrep() {
           </div>
         )}
 
-        {(uploadedPhotos.length > 0 || batchItems.length > 0) && (
-          <div className="mt-8">
+        {visibleUploadedPhotos.length > 0 && (
+          <div className="mt-6 flex items-center justify-center">
             <button
               type="button"
-              className="lux-continue-btn w-full"
+              className="text-xs uppercase tracking-[0.25em] text-[#E8DCC0] border border-[#E8DCC0] rounded-full px-6 py-2 hover:text-white hover:border-white"
               onClick={handleContinue}
             >
-              Continue →
+              Review results
             </button>
           </div>
         )}

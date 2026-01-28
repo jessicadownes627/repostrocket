@@ -557,10 +557,11 @@ function pickPlayerFromOcr(lines, teamLine, brandLine) {
 }
 
 export function resolveCardFacts(intel = {}) {
-  const resolved = {};
+  const resolved = intel?.identity ? { ...intel.identity } : {};
   if (!intel) return resolved;
-  resolved._sources = {};
+  resolved._sources = { ...(resolved._sources || {}) };
   const setIfEmpty = (key, value) => {
+    if (resolved._sources?.[key] === "manual") return;
     if (resolved[key]) return;
     if (value === undefined || value === null || value === "") return;
     resolved[key] = value;
@@ -584,6 +585,17 @@ export function resolveCardFacts(intel = {}) {
     "prizm",
     "select",
   ]);
+  const brandKeywords = [
+    "upper deck",
+    "topps",
+    "panini",
+    "donruss",
+    "bowman",
+    "fleer",
+    "score",
+    "optic",
+    "leaf",
+  ];
   const isLineArrayInput = Array.isArray(intel);
   const providedOcrLines =
     !isLineArrayInput && Array.isArray(intel?.ocrLines) ? intel.ocrLines : null;
@@ -638,22 +650,29 @@ export function resolveCardFacts(intel = {}) {
     ocrLineTexts.some((line) => slabTokenRegex.test(line) || slabLabelNumberRegex.test(line));
   const lineTexts = slabSignal && slabLineTexts.length ? slabLineTexts : ocrLineTexts;
   const pickOcrSourceForValue = (value) => {
-    if (!value) return "front-ocr";
+    if (!value) return "front";
     const normalized = normalizeLine(value);
     const inFront = ocrLineTextsFront.some((line) => normalizeLine(line).includes(normalized));
     const inBack = ocrLineTextsBack.some((line) => normalizeLine(line).includes(normalized));
-    if (inBack && !inFront) return "back-ocr";
-    return "front-ocr";
+    if (inBack && !inFront) return "back";
+    return "front";
   };
-  const lineSource = slabSignal && slabLineTexts.length ? "slab" : "front-ocr";
+  const lineSource = slabSignal && slabLineTexts.length ? "slab" : "front";
   const hadSlabbed = Boolean(resolved.isSlabbed);
-  if (slabSignal) {
-    resolved.isSlabbed = true;
+  if (slabSignal && resolved._sources?.isSlabbed !== "manual") {
+    if (!resolved.isSlabbed) {
+      resolved.isSlabbed = true;
+    }
     if (!resolved._sources.isSlabbed) {
       resolved._sources.isSlabbed = lineSource;
     }
   }
-  if (slabLineTexts.length && (!resolved.grade || !resolved.grader)) {
+  if (
+    slabLineTexts.length &&
+    (!resolved.grade || !resolved.grader) &&
+    resolved._sources?.grade !== "manual" &&
+    resolved._sources?.grader !== "manual"
+  ) {
     const slabGrade = extractSlabGrade(slabLineTexts);
     if (slabGrade?.grader && slabGrade?.value && !resolved.grade) {
       resolved.grade = { value: slabGrade.value, scale: "10" };
@@ -734,17 +753,15 @@ export function resolveCardFacts(intel = {}) {
       setSourceIfUnset("year", "slab", hadYear);
     }
   }
-  const brandSourceLines = ocrLineTextsBack.length ? ocrLineTextsBack : ocrLineTextsFront;
-  const brandKeywords = [
-    "upper deck",
-    "topps",
-    "panini",
-    "donruss",
-    "bowman",
-    "fleer",
-    "score",
-    "optic",
-  ];
+  const normalizeOcrSource = (source) => {
+    if (!source) return "front";
+    if (source === "back-ocr") return "back";
+    if (source === "front-ocr") return "front";
+    return source;
+  };
+  const brandSourceLines = ocrLineTextsFront.length
+    ? ocrLineTextsFront
+    : ocrLineTextsBack;
   const setKeywords = [
     "upper deck",
     "topps",
@@ -775,6 +792,11 @@ export function resolveCardFacts(intel = {}) {
       { token: "panini", label: "Panini" },
       { token: "topps", label: "Topps" },
       { token: "upper deck", label: "Upper Deck" },
+      { token: "donruss", label: "Donruss" },
+      { token: "fleer", label: "Fleer" },
+      { token: "bowman", label: "Bowman" },
+      { token: "score", label: "Score" },
+      { token: "leaf", label: "Leaf" },
     ];
     const brandHit = brandTokens.find(({ token }) =>
       brandSourceLines.some((line) => normalizeLine(line).includes(token))
@@ -782,7 +804,50 @@ export function resolveCardFacts(intel = {}) {
     if (brandHit) {
       const hadBrand = Boolean(resolved.brand);
       setIfEmpty("brand", brandHit.label);
-      setSourceIfUnset("brand", "back-ocr", hadBrand);
+      const source = ocrLineTextsFront.some((line) =>
+        normalizeLine(line).includes(brandHit.token)
+      )
+        ? "front"
+        : slabLineTexts.some((line) => normalizeLine(line).includes(brandHit.token))
+        ? "slab"
+        : "back";
+      setSourceIfUnset("brand", source, hadBrand);
+    }
+  }
+  if (!resolved.setName) {
+    const setTokens = ["base set", "series", "set", "insert", "edition", "collection"];
+    const stripBrandTokens = (text) => {
+      let cleaned = normalizeLine(text);
+      brandKeywords.forEach((brand) => {
+        cleaned = cleaned.replace(new RegExp(`\\b${brand}\\b`, "gi"), "");
+      });
+      return cleaned.replace(/\b(19|20)\d{2}\b/g, "").replace(/\s+/g, " ").trim();
+    };
+    const pickSetFromLines = (lines) => {
+      for (const line of lines) {
+        const normalized = normalizeLine(line);
+        if (!normalized) continue;
+        if (!setTokens.some((token) => normalized.includes(token))) continue;
+        const cleaned = stripBrandTokens(line);
+        if (!cleaned || cleaned.length < 3) continue;
+        return titleCase(cleaned);
+      }
+      return "";
+    };
+    const frontSet = pickSetFromLines(ocrLineTextsFront);
+    const slabSet = !frontSet ? pickSetFromLines(slabLineTexts) : "";
+    const backSet = !frontSet && !slabSet ? pickSetFromLines(ocrLineTextsBack) : "";
+    const setValue = frontSet || slabSet || backSet;
+    if (setValue) {
+      const hadSet = Boolean(resolved.setName);
+      setIfEmpty("setName", setValue);
+      const source =
+        frontSet
+          ? "front"
+          : slabSet
+          ? "slab"
+          : normalizeOcrSource(pickOcrSourceForValue(setValue));
+      setSourceIfUnset("setName", source, hadSet);
     }
   }
   const teamKeywords = [...MLB_TEAMS, ...NFL_TEAMS, ...NBA_TEAMS, ...NHL_TEAMS];
@@ -835,6 +900,34 @@ export function resolveCardFacts(intel = {}) {
     setSourceIfUnset("grader", "slab", hadGrader);
   }
 
+  const pickAllCapsPlayer = (lines) => {
+    const candidates = lines
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .filter((line) => {
+        if (/[0-9]/.test(line)) return false;
+        const words = line.split(/\s+/).filter(Boolean);
+        if (words.length < 2) return false;
+        if (words.length > 4) return false;
+        if (line !== line.toUpperCase()) return false;
+        const normalized = normalizeLine(line);
+        if (positionTokens.some((token) => normalized.includes(token))) return false;
+        return true;
+      });
+    if (!candidates.length) return "";
+    candidates.sort((a, b) => b.length - a.length);
+    return titleCase(candidates[0]);
+  };
+
+  if (!resolved.player && ocrLineTextsFront.length) {
+    const frontPlayer = pickAllCapsPlayer(ocrLineTextsFront);
+    if (frontPlayer) {
+      const hadPlayer = Boolean(resolved.player);
+      setIfEmpty("player", frontPlayer);
+      setSourceIfUnset("player", "front", hadPlayer);
+    }
+  }
+
   if (!resolved.player && slabLineTexts.length) {
     const isAllCapsNameLine = (line) =>
       /^[A-Z][A-Z\s.'-]+$/.test(line) &&
@@ -875,31 +968,115 @@ export function resolveCardFacts(intel = {}) {
     }
   }
 
-  const player = ocrLineTexts.find((line) => {
-    if (excludedPlayerLines.has(line)) return false;
-    if (line.length <= 3) return false;
-    if (/^\d+$/.test(line)) return false;
-    const words = line.split(/\s+/).filter(Boolean);
-    if (words.length < 2 || words.length > 4) return false;
-    if (line.length > 30) return false;
-    if (!/[aeiou]/i.test(line)) return false;
-    if (line === line.toUpperCase()) return false;
-    if (isBrandFragmentLine(line)) return false;
-    if (/[•,]/.test(line)) return false;
-    if (/\d/.test(line)) return false;
-    if (statTokens.some((token) => new RegExp(`\\b${token}\\b`, "i").test(line))) return false;
-    if (positionTokens.some((token) => new RegExp(`\\b${token}\\b`, "i").test(line))) return false;
-    if (verbTokens.some((token) => new RegExp(`\\b${token}\\b`, "i").test(line))) return false;
-    const normalizedLine = normalizeLine(line);
-    if (teamKeywords.some((team) => normalizedLine.includes(team))) return false;
-    const normalizedTokens = normalizeLine(line).split(/\s+/).filter(Boolean);
-    if (normalizedTokens.every((token) => excludedPlayerTokens.has(token))) return false;
-    return /[A-Za-z]/.test(line);
-  });
-  {
-    const hadPlayer = Boolean(resolved.player);
-    setIfEmpty("player", player);
-    setSourceIfUnset("player", pickOcrSourceForValue(player), hadPlayer);
+  if (!resolved.team) {
+    const normalizeOcrSource = (source) => {
+      if (!source) return "front";
+    if (source === "back-ocr") return "back";
+    if (source === "front-ocr") return "front";
+      return source;
+    };
+    const nicknameMap = new Map([
+      ["orioles", "Baltimore Orioles"],
+      ["red sox", "Boston Red Sox"],
+      ["chiefs", "Kansas City Chiefs"],
+      ["cowboys", "Dallas Cowboys"],
+      ["packers", "Green Bay Packers"],
+      ["eagles", "Philadelphia Eagles"],
+      ["titans", "Tennessee Titans"],
+      ["cardinals", "Arizona Cardinals"],
+      ["lakers", "Los Angeles Lakers"],
+      ["celtics", "Boston Celtics"],
+      ["warriors", "Golden State Warriors"],
+      ["rangers", "Texas Rangers"],
+      ["yankees", "New York Yankees"],
+      ["dodgers", "Los Angeles Dodgers"],
+      ["giants", "San Francisco Giants"],
+    ]);
+    const findNicknameLine = (lines) =>
+      lines.find((line) => {
+        const normalized = normalizeLine(line);
+        if (!normalized) return false;
+        return Array.from(nicknameMap.keys()).some((nickname) =>
+          normalized.includes(nickname)
+        );
+      });
+    const frontNickLine = findNicknameLine(ocrLineTextsFront);
+    const slabNickLine = !frontNickLine ? findNicknameLine(slabLineTexts) : "";
+    const backNickLine = !frontNickLine && !slabNickLine ? findNicknameLine(ocrLineTextsBack) : "";
+    const nickLine = frontNickLine || slabNickLine || backNickLine;
+    if (nickLine) {
+      const normalized = normalizeLine(nickLine);
+      const nickname = Array.from(nicknameMap.keys()).find((entry) =>
+        normalized.includes(entry)
+      );
+      if (nickname) {
+        const hadTeam = Boolean(resolved.team);
+        setIfEmpty("team", nicknameMap.get(nickname));
+        const source =
+          frontNickLine
+            ? "front"
+            : slabNickLine
+            ? "slab"
+            : normalizeOcrSource(pickOcrSourceForValue(nickLine));
+        setSourceIfUnset("team", source, hadTeam);
+      }
+    }
+    const pickTeamLine = (lines) =>
+      lines.find((line) => {
+        const normalized = normalizeLine(line);
+        if (!normalized) return false;
+        return teamKeywords.some((team) => normalized.includes(team));
+      });
+    const frontTeamLine = pickTeamLine(ocrLineTextsFront);
+    const slabTeamLine = !frontTeamLine ? pickTeamLine(slabLineTexts) : "";
+    const backTeamLine = !frontTeamLine && !slabTeamLine ? pickTeamLine(ocrLineTextsBack) : "";
+    const teamLine = frontTeamLine || slabTeamLine || backTeamLine;
+    if (teamLine) {
+      const hadTeam = Boolean(resolved.team);
+      setIfEmpty("team", titleCase(teamLine));
+      const source =
+        frontTeamLine
+          ? "front"
+          : slabTeamLine
+          ? "slab"
+          : normalizeOcrSource(pickOcrSourceForValue(teamLine));
+      setSourceIfUnset("team", source, hadTeam);
+    }
+  }
+
+  if (!resolved.player) {
+    const pickPlayerLine = (line) => {
+      if (excludedPlayerLines.has(line)) return false;
+      if (line.length <= 3) return false;
+      if (/^\d+$/.test(line)) return false;
+      const words = line.split(/\s+/).filter(Boolean);
+      if (words.length < 2 || words.length > 4) return false;
+      if (line.length > 30) return false;
+      if (!/[aeiou]/i.test(line)) return false;
+      if (line === line.toUpperCase()) return false;
+      if (isBrandFragmentLine(line)) return false;
+      if (/[•,]/.test(line)) return false;
+      if (/\d/.test(line)) return false;
+      if (statTokens.some((token) => new RegExp(`\\b${token}\\b`, "i").test(line))) return false;
+      if (positionTokens.some((token) => new RegExp(`\\b${token}\\b`, "i").test(line))) return false;
+      if (verbTokens.some((token) => new RegExp(`\\b${token}\\b`, "i").test(line))) return false;
+      const normalizedLine = normalizeLine(line);
+      if (teamKeywords.some((team) => normalizedLine.includes(team))) return false;
+      const normalizedTokens = normalizeLine(line).split(/\s+/).filter(Boolean);
+      if (normalizedTokens.every((token) => excludedPlayerTokens.has(token))) return false;
+      return /[A-Za-z]/.test(line);
+    };
+    const frontPlayerLine = ocrLineTextsFront.find((line) => pickPlayerLine(line));
+    const backPlayerLine = !frontPlayerLine
+      ? ocrLineTextsBack.find((line) => pickPlayerLine(line))
+      : "";
+    const playerLine = frontPlayerLine || backPlayerLine;
+    if (playerLine) {
+      const hadPlayer = Boolean(resolved.player);
+      setIfEmpty("player", playerLine);
+      const source = frontPlayerLine ? "front" : "back";
+      setSourceIfUnset("player", source, hadPlayer);
+    }
   }
   if (!resolved.player) {
     const isNameToken = (text) => {
@@ -971,7 +1148,7 @@ export function resolveCardFacts(intel = {}) {
   }
   if (
     resolved.player &&
-    ["slab", "front-ocr", "back-ocr"].includes(resolved._sources?.player)
+    ["slab", "front", "back"].includes(resolved._sources?.player)
   ) {
     resolved.player = normalizePlayerNameFinal(resolved.player);
   }
@@ -1036,7 +1213,7 @@ export function resolveCardFacts(intel = {}) {
     const oldest = Math.min(...yearCandidates.map(Number));
     const hadYear = Boolean(resolved.year);
     setIfEmpty("year", String(oldest));
-    const nextSource = pickOcrSourceForValue(String(oldest)) === "back-ocr" ? "back" : "front";
+    const nextSource = pickOcrSourceForValue(String(oldest));
     setSourceIfUnset("year", nextSource, hadYear);
   }
   if (!resolved.year) {
@@ -1046,7 +1223,7 @@ export function resolveCardFacts(intel = {}) {
     if (setYearMatch) {
       const hadYear = Boolean(resolved.year);
       setIfEmpty("year", setYearMatch[0]);
-      setSourceIfUnset("year", "inferred", hadYear);
+      setSourceIfUnset("year", "estimated", hadYear);
     }
   }
   if (!resolved.year) {
@@ -1082,13 +1259,74 @@ export function resolveCardFacts(intel = {}) {
       const oldest = Math.min(...twoDigitCandidates);
       const hadYear = Boolean(resolved.year);
       setIfEmpty("year", String(oldest));
-      const nextSource = pickOcrSourceForValue(String(oldest)) === "back-ocr" ? "back" : "front";
+      const nextSource = pickOcrSourceForValue(String(oldest));
       setSourceIfUnset("year", nextSource, hadYear);
     }
   }
 
 
   if (!resolved.sport) {
+    const positionToSport = [
+      { tokens: ["qb", "rb", "running back", "wide receiver", "linebacker"], sport: "Football" },
+      { tokens: ["pitcher", "catcher", "shortstop", "outfielder"], sport: "Baseball" },
+      { tokens: ["center", "point guard", "shooting guard", "forward"], sport: "Basketball" },
+      { tokens: ["goalie", "defenseman"], sport: "Hockey" },
+    ];
+    const findPositionSport = (lines) => {
+      for (const line of lines) {
+        const normalized = normalizeLine(line);
+        if (!normalized) continue;
+        for (const entry of positionToSport) {
+          if (entry.tokens.some((token) => normalized.includes(token))) {
+            return entry.sport;
+          }
+        }
+      }
+      return "";
+    };
+    const frontPositionSport = findPositionSport(ocrLineTextsFront);
+    const slabPositionSport = !frontPositionSport ? findPositionSport(slabLineTexts) : "";
+    const backPositionSport = !frontPositionSport && !slabPositionSport ? findPositionSport(ocrLineTextsBack) : "";
+    const positionSport = frontPositionSport || slabPositionSport || backPositionSport;
+    if (positionSport) {
+      const hadSport = Boolean(resolved.sport);
+      setIfEmpty("sport", positionSport);
+      setSourceIfUnset("sport", "estimated", hadSport);
+    }
+    const sportTokens = [
+      { token: "baseball", sport: "Baseball" },
+      { token: "basketball", sport: "Basketball" },
+      { token: "football", sport: "Football" },
+      { token: "hockey", sport: "Hockey" },
+      { token: "mlb", sport: "Baseball" },
+      { token: "nba", sport: "Basketball" },
+      { token: "nfl", sport: "Football" },
+      { token: "nhl", sport: "Hockey" },
+    ];
+    const findSportLine = (lines) =>
+      lines.find((line) =>
+        sportTokens.some((entry) =>
+          new RegExp(`\\b${entry.token}\\b`, "i").test(line)
+        )
+      );
+    const frontSportLine = findSportLine(ocrLineTextsFront);
+    const slabSportLine = !frontSportLine ? findSportLine(slabLineTexts) : "";
+    const backSportLine = !frontSportLine && !slabSportLine ? findSportLine(ocrLineTextsBack) : "";
+    const sportLine = frontSportLine || slabSportLine || backSportLine;
+    const sportMatch = sportTokens.find((entry) =>
+      sportLine ? new RegExp(`\\b${entry.token}\\b`, "i").test(sportLine) : false
+    );
+    if (sportMatch) {
+      const hadSport = Boolean(resolved.sport);
+      setIfEmpty("sport", sportMatch.sport);
+      const source =
+        frontSportLine
+          ? "front"
+          : slabSportLine
+          ? "slab"
+          : normalizeOcrSource(pickOcrSourceForValue(sportLine));
+      setSourceIfUnset("sport", source, hadSport);
+    }
     const normalizedSet = resolved.setName ? normalizeLine(resolved.setName) : "";
     const leagueTokens = [
       { token: "nfl", sport: "Football" },
@@ -1105,7 +1343,7 @@ export function resolveCardFacts(intel = {}) {
     if (normalizedPlayer && playerSportMap.has(normalizedPlayer)) {
       const hadSport = Boolean(resolved.sport);
       setIfEmpty("sport", playerSportMap.get(normalizedPlayer));
-      setSourceIfUnset("sport", "inferred", hadSport);
+      setSourceIfUnset("sport", "estimated", hadSport);
     }
     if (!resolved.sport) {
       const leagueLine = lineTexts.find((line) =>
@@ -1124,7 +1362,7 @@ export function resolveCardFacts(intel = {}) {
       if (normalizedSet.includes("donruss optic") && resolved.year && Number(resolved.year) >= 2020) {
         const hadSport = Boolean(resolved.sport);
         setIfEmpty("sport", "Football");
-        setSourceIfUnset("sport", "inferred", hadSport);
+        setSourceIfUnset("sport", "estimated", hadSport);
       }
     }
     if (!resolved.sport && resolved.team) {
@@ -1132,7 +1370,7 @@ export function resolveCardFacts(intel = {}) {
       if (inferred?.sport) {
         const hadSport = Boolean(resolved.sport);
         setIfEmpty("sport", inferred.sport);
-        setSourceIfUnset("sport", "inferred", hadSport);
+        setSourceIfUnset("sport", "estimated", hadSport);
       }
     }
   }
@@ -1143,8 +1381,13 @@ export function resolveCardFacts(intel = {}) {
     if (candidates.length === 1) {
       const hadSet = Boolean(resolved.setName);
       setIfEmpty("setName", candidates[0]);
-      setSourceIfUnset("setName", "inferred", hadSet);
+      setSourceIfUnset("setName", "estimated", hadSet);
     }
+  }
+  if (!resolved.setName && resolved.year && resolved.brand) {
+    const hadSet = Boolean(resolved.setName);
+    setIfEmpty("setName", `${resolved.year} ${resolved.brand}`);
+    setSourceIfUnset("setName", "estimated", hadSet);
   }
   if (
     resolved.isSlabbed === false &&
@@ -1162,7 +1405,7 @@ export function resolveCardFacts(intel = {}) {
     if (hasMlbPlayer) {
       const hadSport = Boolean(resolved.sport);
       setIfEmpty("sport", "Baseball");
-      setSourceIfUnset("sport", "inferred", hadSport);
+      setSourceIfUnset("sport", "estimated", hadSport);
     }
   }
   if (
@@ -1185,7 +1428,7 @@ export function resolveCardFacts(intel = {}) {
     if (match && hasFootballSignal) {
       const hadYear = Boolean(resolved.year);
       setIfEmpty("year", match.year);
-      setSourceIfUnset("year", "inferred", hadYear);
+      setSourceIfUnset("year", "estimated", hadYear);
     }
   }
   if (resolved.isSlabbed === false && !resolved.team) {
@@ -1221,7 +1464,7 @@ export function resolveCardFacts(intel = {}) {
         setIfEmpty("team", team);
         setIfEmpty("sport", "Football");
         setSourceIfUnset("team", pickOcrSourceForValue(team), hadTeam);
-        setSourceIfUnset("sport", "inferred", hadSport);
+        setSourceIfUnset("sport", "estimated", hadSport);
       }
     }
   }
@@ -1232,7 +1475,7 @@ export function resolveCardFacts(intel = {}) {
     if (!resolved.sport && isFootballSet && resolved.team && matchesLeague(resolved.team)?.league === "NFL") {
       const hadSport = Boolean(resolved.sport);
       setIfEmpty("sport", "Football");
-      setSourceIfUnset("sport", "inferred", hadSport);
+      setSourceIfUnset("sport", "estimated", hadSport);
     }
   }
 
@@ -1354,7 +1597,7 @@ export function resolveCardFacts(intel = {}) {
     if (inferred?.sport) {
       const hadSport = Boolean(resolved.sport);
       setIfEmpty("sport", inferred.sport);
-      setSourceIfUnset("sport", "inferred", hadSport);
+      setSourceIfUnset("sport", "estimated", hadSport);
     }
   }
   if (!resolved.team && resolved.player && resolved.sport) {
@@ -1396,7 +1639,7 @@ export function resolveCardFacts(intel = {}) {
       setIfEmpty("team", team);
       setIfEmpty("sport", "Baseball");
       setSourceIfUnset("team", pickOcrSourceForValue(team), hadTeam);
-      setSourceIfUnset("sport", "inferred", hadSport);
+      setSourceIfUnset("sport", "estimated", hadSport);
     }
   }
 
@@ -1581,13 +1824,96 @@ export function resolveCardFacts(intel = {}) {
   }
   if (
     resolved.player &&
-    ["slab", "front-ocr", "back-ocr"].includes(resolved._sources?.player)
+    ["slab", "front", "back"].includes(resolved._sources?.player)
   ) {
     resolved.player = normalizePlayerNameFinal(resolved.player);
   }
   // FINAL authority: slab presence
-  if (slabLabelLines && slabLabelLines.length > 0) {
+  if (
+    slabLabelLines &&
+    slabLabelLines.length > 0 &&
+    resolved._sources?.isSlabbed !== "manual"
+  ) {
     resolved.isSlabbed = true;
+  }
+  // Expected Defaults (final pass, estimated only)
+  if (!resolved.brand && resolved.setName) {
+    const normalizedSet = normalizeLine(resolved.setName);
+    const brandTokenMap = [
+      { token: "upper deck", label: "Upper Deck" },
+      { token: "topps", label: "Topps" },
+      { token: "panini", label: "Panini" },
+      { token: "donruss", label: "Donruss" },
+      { token: "fleer", label: "Fleer" },
+      { token: "bowman", label: "Bowman" },
+      { token: "score", label: "Score" },
+      { token: "leaf", label: "Leaf" },
+      { token: "optic", label: "Optic" },
+    ];
+    const match = brandTokenMap.find((entry) => normalizedSet.includes(entry.token));
+    if (match) {
+      const hadBrand = Boolean(resolved.brand);
+      setIfEmpty("brand", match.label);
+      setSourceIfUnset("brand", "estimated", hadBrand);
+    }
+  }
+  if (!resolved.setName) {
+    const hadSet = Boolean(resolved.setName);
+    setIfEmpty("setName", "Base");
+    setSourceIfUnset("setName", "estimated", hadSet);
+  }
+  if (!resolved.sport && resolved.team) {
+    const inferred = matchesLeague(resolved.team);
+    if (inferred?.sport) {
+      const hadSport = Boolean(resolved.sport);
+      setIfEmpty("sport", inferred.sport);
+      setSourceIfUnset("sport", "estimated", hadSport);
+    }
+  }
+  if (!resolved.sport) {
+    const hadSport = Boolean(resolved.sport);
+    setIfEmpty("sport", "Baseball");
+    setSourceIfUnset("sport", "estimated", hadSport);
+  }
+  if (!resolved.team) {
+    const hadTeam = Boolean(resolved.team);
+    setIfEmpty("team", "Unknown Team");
+    setSourceIfUnset("team", "estimated", hadTeam);
+  }
+  if (!resolved.player) {
+    const hadPlayer = Boolean(resolved.player);
+    setIfEmpty("player", "Unknown Player");
+    setSourceIfUnset("player", "estimated", hadPlayer);
+  }
+  if (!resolved.year) {
+    const hadYear = Boolean(resolved.year);
+    setIfEmpty("year", "Unknown");
+    setSourceIfUnset("year", "estimated", hadYear);
+  }
+  {
+    const normalizedPlayer = normalizeLine(resolved.player || "");
+    const normalizedBrand = normalizeLine(resolved.brand || "");
+    const normalizedSet = normalizeLine(resolved.setName || "");
+    const isBrandToken =
+      normalizedPlayer &&
+      (normalizedPlayer === normalizedBrand ||
+        normalizedPlayer === normalizedSet ||
+        brandKeywords.some((brand) => normalizedPlayer.includes(brand)));
+    if (isBrandToken) {
+      const hadPlayer = Boolean(resolved.player);
+      resolved.player = "Unknown player";
+      setSourceIfUnset("player", "estimated", hadPlayer);
+    }
+  }
+  const hadCardType = Boolean(resolved.cardType);
+  const cardTypeValue = resolved.isSlabbed ? "slabbed" : "raw";
+  setIfEmpty("cardType", cardTypeValue);
+  if (!resolved._sources.cardType) {
+    const source =
+      resolved.isSlabbed && resolved._sources.isSlabbed
+        ? resolved._sources.isSlabbed
+        : "estimated";
+    setSourceIfUnset("cardType", source, hadCardType);
   }
   return resolved;
 }

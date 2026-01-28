@@ -373,6 +373,17 @@ export async function analyzeCardImages(item = {}, options = {}) {
   }
 }
 
+export async function generateCornerEntriesForSide(sourceImageUrl, side = "front") {
+  if (!sourceImageUrl) return [];
+  const corners = await extractCornersFromImage(sourceImageUrl);
+  const sideKey = side === "back" ? "back" : "front";
+  const entries = corners
+    ? extractCornerPhotoEntries({ corners: { [sideKey]: corners } })
+    : [];
+  if (entries.length >= 4) return entries;
+  return buildPlaceholderCornerEntries(sourceImageUrl, sideKey);
+}
+
 function ensureConfidence(confidence = {}) {
   const next = { ...confidence };
   CONFIDENCE_DEFAULTS.forEach((key) => {
@@ -553,6 +564,67 @@ async function extractCornersFromImage(dataUrl) {
     img.onerror = () => resolve(null);
     img.src = dataUrl;
   });
+}
+
+async function buildPlaceholderCornerEntries(sourceImageUrl, sideKey) {
+  const img = await loadImageElement(sourceImageUrl);
+  if (!img?.width || !img?.height) return [];
+  const size = Math.round(Math.min(img.width, img.height) * 0.2);
+  if (!size || size < 8) return [];
+  const insetX = Math.round(img.width * 0.1);
+  const insetY = Math.round(img.height * 0.1);
+  const sideLabel = sideKey === "back" ? "Back" : "Front";
+  const builds = [
+    { key: "topLeft", x: insetX, y: insetY },
+    { key: "topRight", x: img.width - size - insetX, y: insetY },
+    { key: "bottomLeft", x: insetX, y: img.height - size - insetY },
+    { key: "bottomRight", x: img.width - size - insetX, y: img.height - size - insetY },
+  ];
+  return builds
+    .map((item) => {
+      const url = cropPlaceholder(img, item.x, item.y, size);
+      if (!url) return null;
+      const cornerLabel = CORNER_NAME_MAP[item.key] || item.key;
+      return {
+        url,
+        altText: `${sideLabel} ${cornerLabel} corner detail`,
+        label: `${sideLabel} ${cornerLabel}`,
+        side: sideLabel,
+        cornerKey: item.key,
+        confidence: "low",
+        manualOverride: false,
+        offsetRatioX: 0,
+        offsetRatioY: 0,
+        sourceX: item.x,
+        sourceY: item.y,
+        sourceSize: size,
+        baseImageWidth: img.width,
+        baseImageHeight: img.height,
+        initialCropBounds: {
+          x: item.x,
+          y: item.y,
+          size,
+        },
+      };
+    })
+    .filter(Boolean);
+}
+
+function cropPlaceholder(img, sx, sy, size) {
+  if (!img) return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  const clampedX = Math.max(0, Math.min(img.width - size, sx));
+  const clampedY = Math.max(0, Math.min(img.height - size, sy));
+  ctx.drawImage(img, clampedX, clampedY, size, size, 0, 0, size, size);
+  try {
+    return canvas.toDataURL("image/jpeg", 0.9);
+  } catch {
+    return null;
+  }
 }
 
 function cropCorner(ctx, img, sx, sy, size) {

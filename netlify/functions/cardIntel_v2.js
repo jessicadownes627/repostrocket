@@ -54,6 +54,8 @@ export async function handler(event) {
       requestId,
       imageHash,
       nameZoneCrops,
+      frontCorners,
+      backCorners,
     } = body || {};
     if (!frontImage && frontImageUrl) {
       frontImage = await fetchImageAsDataUrl(frontImageUrl);
@@ -148,6 +150,19 @@ export async function handler(event) {
       ? slabParsed.lines.filter(Boolean)
       : [];
 
+    const isSlabbed = slabLabelLines.length > 0;
+    const finalFrontCorners = isSlabbed
+      ? []
+      : Array.isArray(frontCorners)
+      ? frontCorners
+      : [];
+    const finalBackCorners = isSlabbed
+      ? []
+      : Array.isArray(backCorners)
+      ? backCorners
+      : [];
+    const cornerSource = isSlabbed ? "not-required" : "client";
+
     const result = {
       statusCode: 200,
       body: JSON.stringify(
@@ -158,9 +173,13 @@ export async function handler(event) {
           ocrLines: lines,
           backOcrLines,
           slabLabelLines,
-          identity: {},
-          frontCorners: [],
-          backCorners: [],
+          identity: {
+            _sources: {
+              corners: cornerSource,
+            },
+          },
+          frontCorners: finalFrontCorners,
+          backCorners: finalBackCorners,
           debug: { model: "gpt-4o-mini" },
         })
       ),

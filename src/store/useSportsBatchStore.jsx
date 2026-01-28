@@ -1,6 +1,7 @@
 import { createContext, useContext, useMemo, useState } from "react";
 
 const SportsBatchContext = createContext(null);
+const analysisControllers = new Map();
 
 export function SportsBatchProvider({ children }) {
   const [batchItems, setBatchItems] = useState([]);
@@ -66,6 +67,34 @@ export function SportsBatchProvider({ children }) {
     });
   };
 
+  const removeCard = (cardId) => {
+    if (!cardId) return;
+    setCardStates((prev) => {
+      const next = { ...prev };
+      delete next[cardId];
+      return next;
+    });
+  };
+
+  const registerAnalysisController = (cardId, controller) => {
+    if (!cardId || !controller) return;
+    analysisControllers.set(cardId, controller);
+  };
+
+  const clearAnalysisController = (cardId) => {
+    if (!cardId) return;
+    analysisControllers.delete(cardId);
+  };
+
+  const abortAnalysis = (cardId) => {
+    if (!cardId) return;
+    const controller = analysisControllers.get(cardId);
+    if (controller) {
+      controller.abort();
+      analysisControllers.delete(cardId);
+    }
+  };
+
   const value = useMemo(
     () => ({
       batchItems,
@@ -84,6 +113,10 @@ export function SportsBatchProvider({ children }) {
       addCard,
       updateCard,
       initializeCards,
+      removeCard,
+      registerAnalysisController,
+      clearAnalysisController,
+      abortAnalysis,
     }),
     [batchItems, draftPhotos, preparedPlatforms, batchMeta, cardStates]
   );

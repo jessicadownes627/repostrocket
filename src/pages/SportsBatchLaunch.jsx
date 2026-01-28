@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useSportsBatchStore } from "../store/useSportsBatchStore";
 import { composeCardTitle } from "../utils/composeCardTitle";
 import { buildListingExportLinks } from "../utils/exportListing";
@@ -46,6 +46,7 @@ const composeSportsDescription = (identity = {}) => {
 
 export default function SportsBatchLaunch() {
   const navigate = useNavigate();
+  const location = useLocation();
   const {
     batchMeta,
     preparedPlatforms,
@@ -59,14 +60,17 @@ export default function SportsBatchLaunch() {
   const [analysisInFlight, setAnalysisInFlight] = useState(false);
   const [finalizeInFlight, setFinalizeInFlight] = useState(false);
 
-  const cards = useMemo(
-    () =>
-      Object.entries(cardStates || {}).map(([cardId, state]) => ({
-        id: cardId,
-        ...(state || {}),
-      })),
-    [cardStates]
-  );
+  const cards = useMemo(() => {
+    const allCards = Object.entries(cardStates || {}).map(([cardId, state]) => ({
+      id: cardId,
+      ...(state || {}),
+    }));
+    const includeIds = location?.state?.includeCardIds;
+    if (Array.isArray(includeIds) && includeIds.length > 0) {
+      return allCards.filter((card) => includeIds.includes(card.id));
+    }
+    return allCards;
+  }, [cardStates, location?.state]);
 
   const activePlatforms = useMemo(
     () => (preparedPlatforms?.length ? preparedPlatforms : ["ebay"]),
@@ -199,10 +203,10 @@ export default function SportsBatchLaunch() {
           ← Back
         </button>
         <h1 className="sparkly-header text-3xl mb-2 text-center">
-          Launch — Sports Cards
+          Your listings are ready
         </h1>
         <p className="text-center text-white/70 text-sm">
-          Preparing listings… This usually takes about 20 seconds.
+          Copy details or open them directly on each platform.
         </p>
         <div className="max-w-md mx-auto mt-4 mb-6">
           <div className="h-1 w-full rounded-full bg-white/10 overflow-hidden">
