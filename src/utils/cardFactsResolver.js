@@ -784,16 +784,41 @@ export function resolveCardFacts(intel = {}) {
       { token: "score", label: "Score" },
       { token: "leaf", label: "Leaf" },
     ];
-    const brandHits = brandTokens.filter(({ token }) =>
-      brandSourceLines.some((line) => normalizeLine(line).includes(token))
-    );
-    const hadBrand = Boolean(resolved.brand);
-    if (brandHits.length === 1) {
-      setIfEmpty("brand", brandHits[0].label);
+    const normalizedPlayer = normalizeLine(resolved.player || "");
+    const normalizedTeam = normalizeLine(resolved.team || "");
+    const isNameLikeText = (value) => {
+      const normalized = normalizeLine(value);
+      const words = normalized.split(/\s+/).filter(Boolean);
+      if (words.length < 2 || words.length > 4) return false;
+      if (positionTokens.some((token) => normalized.includes(token))) return false;
+      if (teamKeywords.some((team) => normalized.includes(team))) return false;
+      return /[a-z]/i.test(value);
+    };
+    const brandCounts = new Map();
+    const brandHitLines = brandTokens
+      .map((brand) => {
+        const hits = brandSourceLines.filter((line) =>
+          normalizeLine(line).includes(brand.token)
+        );
+        if (hits.length) brandCounts.set(brand.token, hits.length);
+        return { ...brand, hits };
+      })
+      .filter((entry) => entry.hits.length);
+
+    const brandCandidates = brandHitLines.filter((entry) => {
+      const count = brandCounts.get(entry.token) || 0;
+      if (count > 2) return false;
+      const firstHit = entry.hits[0];
+      if (isNameLikeText(firstHit)) return false;
+      const normalizedHit = normalizeLine(firstHit);
+      if (normalizedHit === normalizedPlayer || normalizedHit === normalizedTeam) return false;
+      return true;
+    });
+
+    if (brandCandidates.length === 1) {
+      const hadBrand = Boolean(resolved.brand);
+      setIfEmpty("brand", brandCandidates[0].label);
       setSourceIfUnset("brand", "front", hadBrand);
-    } else if (brandHits.length > 1) {
-      setIfEmpty("brand", "Unknown");
-      setSourceIfUnset("brand", "estimated", hadBrand);
     }
   }
   if (!resolved.setName) {
@@ -806,10 +831,22 @@ export function resolveCardFacts(intel = {}) {
       return cleaned.replace(/\b(19|20)\d{2}\b/g, "").replace(/\s+/g, " ").trim();
     };
     const pickSetFromLines = (lines) => {
+      const normalizedPlayer = normalizeLine(resolved.player || "");
+      const normalizedTeam = normalizeLine(resolved.team || "");
+      const isNameLikeText = (value) => {
+        const normalized = normalizeLine(value);
+        const words = normalized.split(/\s+/).filter(Boolean);
+        if (words.length < 2 || words.length > 4) return false;
+        if (positionTokens.some((token) => normalized.includes(token))) return false;
+        if (teamKeywords.some((team) => normalized.includes(team))) return false;
+        return /[a-z]/i.test(value);
+      };
       for (const line of lines) {
         const normalized = normalizeLine(line);
         if (!normalized) continue;
         if (!setTokens.some((token) => normalized.includes(token))) continue;
+        if (isNameLikeText(line)) continue;
+        if (normalized === normalizedPlayer || normalized === normalizedTeam) continue;
         const cleaned = stripBrandTokens(line);
         if (!cleaned || cleaned.length < 3) continue;
         return titleCase(cleaned);
@@ -1125,6 +1162,33 @@ export function resolveCardFacts(intel = {}) {
     ["slab", "front", "back"].includes(resolved._sources?.player)
   ) {
     resolved.player = normalizePlayerNameFinal(resolved.player);
+  }
+
+  if (resolved.player && resolved._sources?.player === "front") {
+    const suffixes = ["JR", "SR", "II", "III", "IV", "V"];
+    const normalizedPlayer = normalizeLine(resolved.player);
+    const playerParts = normalizedPlayer.split(/\s+/).filter(Boolean);
+    const lastName = playerParts[playerParts.length - 1] || "";
+    const alreadyHasSuffix = suffixes.some((suffix) =>
+      new RegExp(`\\b${suffix}\\b`, "i").test(resolved.player)
+    );
+    if (!alreadyHasSuffix && lastName) {
+      for (let idx = 0; idx < ocrLineTextsFront.length; idx += 1) {
+        const line = ocrLineTextsFront[idx];
+        const normalizedLine = normalizeLine(line);
+        if (!normalizedLine || !normalizedLine.includes(lastName)) continue;
+        const nearby = [ocrLineTextsFront[idx], ocrLineTextsFront[idx + 1], ocrLineTextsFront[idx - 1]]
+          .filter(Boolean)
+          .join(" ");
+        const suffixMatch = suffixes.find((suffix) =>
+          new RegExp(`\\b${suffix}\\b`, "i").test(nearby)
+        );
+        if (suffixMatch) {
+          resolved.player = normalizePlayerNameFinal(`${resolved.player} ${suffixMatch}`);
+          break;
+        }
+      }
+    }
   }
 
   const isValidYearLine = (line) => {

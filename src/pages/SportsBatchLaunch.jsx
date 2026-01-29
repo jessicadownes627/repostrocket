@@ -13,15 +13,6 @@ const PLATFORM_OPTIONS = [
   { id: "whatnot", label: "Whatnot" },
 ];
 
-const identitySummary = (identity = {}) => {
-  const parts = [];
-  if (identity.year) parts.push(identity.year);
-  if (identity.brand) parts.push(identity.brand);
-  if (identity.setName) parts.push(identity.setName);
-  if (identity.player) parts.push(identity.player);
-  return parts.filter(Boolean).join(" · ");
-};
-
 const composeSportsDescription = (identity = {}) => {
   const parts = [];
   const year = identity.year ? String(identity.year).trim() : "";
@@ -344,7 +335,6 @@ export default function SportsBatchLaunch() {
                 const identity = cardState.identity || {};
                 const title = composeCardTitle(identity);
                 const description = composeSportsDescription(identity);
-                const summary = identitySummary(identity);
                 const frontSrc = card.frontImage?.url || "";
                 const backSrc = card.backImage?.url || "";
                 const isSlabbed = identity.isSlabbed === true;
@@ -365,7 +355,7 @@ export default function SportsBatchLaunch() {
                         Card
                       </div>
                       <div className="text-lg text-white">
-                        {summary || title || identity.player || "Untitled card"}
+                        {title || "Untitled card"}
                       </div>
                     </div>
 
