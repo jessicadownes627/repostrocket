@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSportsBatchStore } from "../store/useSportsBatchStore";
 import { composeCardTitle } from "../utils/composeCardTitle";
+import { resolveCardFacts as cardFactsResolver } from "../utils/cardFactsResolver";
 import { db } from "../db/firebase";
 import { storage } from "../lib/firebase";
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
@@ -24,6 +25,28 @@ export default function SportsBatchReview() {
       })),
     [cardStates]
   );
+  const singlePassRef = useRef(new Set());
+
+  useEffect(() => {
+    cards.forEach((card) => {
+      if (!card?.id) return;
+      if (!card.cardIntelResolved) return;
+      if (singlePassRef.current.has(card.id)) return;
+      const hasLines =
+        (Array.isArray(card.ocrLines) && card.ocrLines.length > 0) ||
+        (Array.isArray(card.backOcrLines) && card.backOcrLines.length > 0) ||
+        (Array.isArray(card.slabLabelLines) && card.slabLabelLines.length > 0);
+      if (!hasLines) return;
+      const resolved = cardFactsResolver({
+        identity: card.identity || {},
+        ocrLines: card.ocrLines || [],
+        backOcrLines: card.backOcrLines || [],
+        slabLabelLines: card.slabLabelLines || [],
+      });
+      singlePassRef.current.add(card.id);
+      updateCard(card.id, { identity: resolved });
+    });
+  }, [cards, updateCard]);
   const readyCards = useMemo(
     () => cards.filter((card) => card.cardIntelResolved === true),
     [cards]
