@@ -13,10 +13,8 @@ export default function SportsBatchReview() {
   const navigate = useNavigate();
   const { cardStates, updateCard, removeCard, batchMeta, abortAnalysis } =
     useSportsBatchStore();
-  const [editing, setEditing] = useState({ cardId: null, field: null });
-  const [editValue, setEditValue] = useState("");
-  const [editSetValue, setEditSetValue] = useState("");
   const [editModeCardId, setEditModeCardId] = useState(null);
+  const [editBuffers, setEditBuffers] = useState({});
   const cards = useMemo(
     () =>
       Object.entries(cardStates || {}).map(([cardId, state]) => ({
@@ -54,52 +52,79 @@ export default function SportsBatchReview() {
   const readyCount = readyCards.length;
   const canContinue = readyCount > 0;
 
-  const startEdit = (cardId, field, value, setValue = "") => {
-    setEditing({ cardId, field });
-    setEditValue(value ?? "");
-    setEditSetValue(setValue ?? "");
+  const normalizeEditValue = (value) => {
+    const raw = String(value ?? "").trim();
+    if (!raw) return "";
+    const normalized = raw.toLowerCase();
+    if (normalized.startsWith("unknown")) return "";
+    if (normalized === "base" || normalized === "base set") return "";
+    if (normalized === "year unknown") return "";
+    return raw;
   };
 
-  const saveField = (cardId, field, value) => {
+  const saveAllDetails = (cardId) => {
     const card = cardStates?.[cardId];
     if (!card) return;
+    const buffer = editBuffers?.[cardId] || {};
     const identity = { ...(card.identity || {}) };
     const sources = { ...(identity._sources || {}) };
-    identity[field] = value;
-    sources[field] = "manual";
+    const commitField = (key, value) => {
+      identity[key] = value;
+      sources[key] = "manual";
+    };
+    const normalize = (value) => String(value ?? "").trim();
+    commitField("title", normalize(buffer.title));
+    commitField("player", normalize(buffer.player));
+    commitField("brand", normalize(buffer.brand));
+    commitField("setName", normalize(buffer.setName));
+    commitField("year", normalize(buffer.year));
+    commitField("sport", normalize(buffer.sport));
+    commitField("team", normalize(buffer.team));
     identity._sources = sources;
     updateCard(cardId, { identity });
-    setEditing({ cardId: null, field: null });
-    setEditValue("");
-    setEditSetValue("");
-  };
-
-  const saveBrandSet = (cardId, brandValue, setValue) => {
-    const card = cardStates?.[cardId];
-    if (!card) return;
-    const identity = { ...(card.identity || {}) };
-    const sources = { ...(identity._sources || {}) };
-    identity.brand = brandValue;
-    identity.setName = setValue;
-    sources.brand = "manual";
-    sources.setName = "manual";
-    identity._sources = sources;
-    updateCard(cardId, { identity });
-    setEditing({ cardId: null, field: null });
-    setEditValue("");
-    setEditSetValue("");
+    setEditModeCardId(null);
   };
 
   const toggleEditMode = (cardId) => {
     setEditModeCardId((prev) => {
       const next = prev === cardId ? null : cardId;
-      if (next === null) {
-        setEditing({ cardId: null, field: null });
-        setEditValue("");
-        setEditSetValue("");
-      }
       return next;
     });
+    setEditBuffers((prev) => {
+      if (editModeCardId === cardId) return prev;
+      const card = cardStates?.[cardId];
+      const identity = card?.identity || {};
+      return {
+        ...prev,
+        [cardId]: {
+          title: normalizeEditValue(identity.title || ""),
+          player: normalizeEditValue(identity.player || ""),
+          brand: normalizeEditValue(identity.brand || ""),
+          setName: normalizeEditValue(identity.setName || ""),
+          year: normalizeEditValue(identity.year || ""),
+          sport: normalizeEditValue(identity.sport || ""),
+          team: normalizeEditValue(identity.team || ""),
+        },
+      };
+    });
+  };
+
+  const cancelEditDetails = (cardId) => {
+    setEditModeCardId(null);
+    const card = cardStates?.[cardId];
+    const identity = card?.identity || {};
+    setEditBuffers((prev) => ({
+      ...prev,
+      [cardId]: {
+        title: normalizeEditValue(identity.title || ""),
+        player: normalizeEditValue(identity.player || ""),
+        brand: normalizeEditValue(identity.brand || ""),
+        setName: normalizeEditValue(identity.setName || ""),
+        year: normalizeEditValue(identity.year || ""),
+        sport: normalizeEditValue(identity.sport || ""),
+        team: normalizeEditValue(identity.team || ""),
+      },
+    }));
   };
 
   const handleReplaceImage = async (card, side, file) => {
@@ -227,6 +252,7 @@ export default function SportsBatchReview() {
               const hasBackImage = Boolean(card.backImage?.url);
               const status = card.cardIntelResolved ? "Ready" : "Editable";
               const isEditMode = editModeCardId === card.id;
+              const buffer = editBuffers?.[card.id] || {};
               const titleValue =
                 identity.title ||
                 composeCardTitle({
@@ -310,11 +336,16 @@ export default function SportsBatchReview() {
                   <div className="mt-4 space-y-4 text-sm">
                     <button
                       type="button"
-                      className="text-xs uppercase tracking-[0.25em] text-white/60 hover:text-white"
+                      className="inline-flex items-center px-4 py-2 rounded-full border border-white/15 text-xs uppercase tracking-[0.25em] text-white/70 hover:text-white"
                       onClick={() => toggleEditMode(card.id)}
                     >
                       {isEditMode ? "Done" : "Edit card details"}
                     </button>
+                    {isEditMode && (
+                      <h3 className="text-sm uppercase tracking-[0.25em] text-white/70">
+                        Edit card details
+                      </h3>
+                    )}
                     <div className="grid gap-3">
                       {[
                         { key: "title", label: "Title", value: titleValue },
@@ -328,9 +359,6 @@ export default function SportsBatchReview() {
                         { key: "sport", label: "Sport", value: identity.sport },
                         { key: "team", label: "Team", value: identity.team },
                       ].map((field) => {
-                        const isEditing =
-                          editing.cardId === card.id &&
-                          editing.field === field.key;
                         const displayValue =
                           field.value === undefined || field.value === null || field.value === ""
                             ? "—"
@@ -345,85 +373,66 @@ export default function SportsBatchReview() {
                               <div className="text-xs uppercase tracking-[0.2em] text-white/50">
                                 {field.label}
                               </div>
-                              {sourceBadge(source) && (
+                              {!isEditMode && sourceBadge(source) && (
                                 <span className="text-[10px] uppercase tracking-[0.2em] text-white/50">
                                   {sourceBadge(source)}
                                 </span>
                               )}
                             </div>
-                            {isEditMode && isEditing ? (
+                            {isEditMode ? (
                               field.key === "brandSet" ? (
                                 <div className="flex gap-2 mt-2">
                                   <input
                                     className="flex-1 bg-black/40 border border-white/15 rounded-lg px-3 py-2 text-sm text-white"
                                     placeholder="Brand"
-                                    value={editValue}
-                                    onChange={(event) => setEditValue(event.target.value)}
+                                    value={buffer.brand || ""}
+                                    onChange={(event) =>
+                                      setEditBuffers((prev) => ({
+                                        ...prev,
+                                        [card.id]: {
+                                          ...(prev?.[card.id] || {}),
+                                          brand: event.target.value,
+                                        },
+                                      }))
+                                    }
                                   />
                                   <input
                                     className="flex-1 bg-black/40 border border-white/15 rounded-lg px-3 py-2 text-sm text-white"
                                     placeholder="Set"
-                                    value={editSetValue}
+                                    value={buffer.setName || ""}
                                     onChange={(event) =>
-                                      setEditSetValue(event.target.value)
+                                      setEditBuffers((prev) => ({
+                                        ...prev,
+                                        [card.id]: {
+                                          ...(prev?.[card.id] || {}),
+                                          setName: event.target.value,
+                                        },
+                                      }))
                                     }
                                   />
-                                  <button
-                                    type="button"
-                                    className="px-3 py-2 rounded-full border border-white/20 text-xs uppercase tracking-[0.2em] text-white/70"
-                                    onClick={() =>
-                                      saveBrandSet(
-                                        card.id,
-                                        editValue.trim(),
-                                        editSetValue.trim()
-                                      )
-                                    }
-                                  >
-                                    Save
-                                  </button>
                                 </div>
                               ) : (
                                 <div className="flex items-center gap-2 mt-2">
                                   <input
                                     className="flex-1 bg-black/40 border border-white/15 rounded-lg px-3 py-2 text-sm text-white"
-                                    value={editValue}
-                                    onChange={(event) => setEditValue(event.target.value)}
+                                    value={buffer[field.key] || ""}
+                                    onChange={(event) =>
+                                      setEditBuffers((prev) => ({
+                                        ...prev,
+                                        [card.id]: {
+                                          ...(prev?.[card.id] || {}),
+                                          [field.key]: event.target.value,
+                                        },
+                                      }))
+                                    }
                                     onKeyDown={(event) => {
                                       if (event.key === "Enter") {
-                                        saveField(card.id, field.key, editValue.trim());
+                                        saveAllDetails(card.id);
                                       }
                                     }}
                                   />
-                                  <button
-                                    type="button"
-                                    className="px-3 py-2 rounded-full border border-white/20 text-xs uppercase tracking-[0.2em] text-white/70"
-                                    onClick={() =>
-                                      saveField(card.id, field.key, editValue.trim())
-                                    }
-                                  >
-                                    Save
-                                  </button>
                                 </div>
                               )
-                            ) : isEditMode ? (
-                              <button
-                                type="button"
-                                className="text-left text-white text-sm hover:text-white/80 mt-2"
-                                onClick={() => {
-                                  if (field.key === "brandSet") {
-                                    startEdit(
-                                      card.id,
-                                      "brandSet",
-                                      identity.brand || "",
-                                      identity.setName || ""
-                                    );
-                                    return;
-                                  }
-                                  startEdit(card.id, field.key, field.value || "");
-                                }}
-                              >
-                                {displayValue}
-                              </button>
                             ) : (
                               <div className="text-white text-sm mt-2">{displayValue}</div>
                             )}
@@ -433,64 +442,24 @@ export default function SportsBatchReview() {
                     </div>
 
                     {isEditMode && (
-                      <div className="flex flex-wrap gap-3 text-xs text-white/60">
-                        <label
-                          htmlFor={`front-replace-${card.id}`}
-                          className="cursor-pointer hover:text-white"
-                        >
-                          Replace front
-                        </label>
+                      <div className="flex justify-end gap-3">
                         <button
                           type="button"
-                          className="hover:text-white"
-                          onClick={() => handleRemoveImage(card, "front")}
+                          className="px-4 py-2 rounded-full border border-white/10 text-xs uppercase tracking-[0.2em] text-white/50 hover:text-white"
+                          onClick={() => cancelEditDetails(card.id)}
                         >
-                          Remove front
-                        </button>
-                        <label
-                          htmlFor={`back-replace-${card.id}`}
-                          className="cursor-pointer hover:text-white"
-                        >
-                          Replace back
-                        </label>
-                        <button
-                          type="button"
-                          className="hover:text-white"
-                          onClick={() => handleRemoveImage(card, "back")}
-                        >
-                          Remove back
+                          Cancel
                         </button>
                         <button
                           type="button"
-                          className="hover:text-white"
-                          onClick={() => handleRemoveCard(card.id)}
+                          className="px-4 py-2 rounded-full border border-white/20 text-xs uppercase tracking-[0.2em] text-white/70 hover:text-white"
+                          onClick={() => saveAllDetails(card.id)}
                         >
-                          Remove card
+                          Save details
                         </button>
-                        <input
-                          id={`front-replace-${card.id}`}
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={async (event) => {
-                            const file = event.target.files?.[0];
-                            event.target.value = "";
-                            await handleReplaceImage(card, "front", file);
-                          }}
-                        />
-                        <input
-                          id={`back-replace-${card.id}`}
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={async (event) => {
-                            const file = event.target.files?.[0];
-                            event.target.value = "";
-                            await handleReplaceImage(card, "back", file);
-                          }}
-                        />
                       </div>
                     )}
+
                   </div>
                 </details>
               );
