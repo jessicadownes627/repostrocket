@@ -684,7 +684,7 @@ export default function SportsBatchPrep() {
             cardIntelResolved: true,
             analysisStatus: "error",
           });
-          continue;
+          return;
         }
         const data = await response.json();
         if (!data || data.error || data.status !== "ok") {
@@ -692,7 +692,7 @@ export default function SportsBatchPrep() {
             cardIntelResolved: true,
             analysisStatus: "error",
           });
-          continue;
+          return;
         }
         const resolved = cardFactsResolver({
           ocrLines: data.ocrLines || [],
