@@ -33,6 +33,7 @@ export default function SingleListing() {
     requestSportsAnalysis,
     setReviewIdentityField,
   } = useListingStore();
+  const analysisComplete = analysisState === "complete" || analysisState === "error";
 
   const mode = location.state?.mode ?? "casual";
   const listingData = storedListingData || location.state?.listingData || null;
@@ -461,7 +462,7 @@ export default function SingleListing() {
                     {displayPlayer || (
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm text-white/35">
-                          Detecting player…
+                          {analysisComplete ? "Unknown player" : "Detecting player…"}
                         </span>
                         <button
                           type="button"
@@ -528,7 +529,7 @@ export default function SingleListing() {
                     {identityYear || (
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm text-white/35">
-                          Detecting year…
+                          {analysisComplete ? "Unknown year" : "Detecting year…"}
                         </span>
                         <button
                           type="button"
@@ -672,7 +673,7 @@ export default function SingleListing() {
                   <div className="text-lg mt-1 text-white/85">
                     {identityBrand || (
                       <span className="text-sm text-white/35">
-                        Identifying brand…
+                        {analysisComplete ? "Unknown brand" : "Identifying brand…"}
                       </span>
                     )}
                   </div>
@@ -685,7 +686,7 @@ export default function SingleListing() {
                     {identityTeam || (
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm text-white/35">
-                          Detecting team…
+                          {analysisComplete ? "Unknown team" : "Detecting team…"}
                         </span>
                         <button
                           type="button"
@@ -733,7 +734,7 @@ export default function SingleListing() {
                   <div className="text-lg mt-1 text-white/85">
                     {identitySport || (
                       <span className="text-sm text-white/35">
-                        Identifying sport…
+                        {analysisComplete ? "Unknown sport" : "Identifying sport…"}
                       </span>
                     )}
                   </div>

@@ -474,6 +474,12 @@ export function ListingProvider({ children }) {
       setAnalysisInFlight(true);
       setSportsAnalysisError("");
       setAnalysisState("analyzing");
+      let resolverTimeoutId = setTimeout(() => {
+        setReviewIdentity((prev) =>
+          cardFactsResolver({ identity: prev || {} })
+        );
+        setAnalysisState("complete");
+      }, 5000);
       console.log("[listingStore] step: preparing listing payload");
       const payload = {
         ...listingData,
@@ -695,6 +701,7 @@ export function ListingProvider({ children }) {
         setSportsAnalysisError(SPORTS_ANALYSIS_ERROR_MESSAGE);
         return { error: SPORTS_ANALYSIS_ERROR_MESSAGE };
       } finally {
+        clearTimeout(resolverTimeoutId);
         setAnalysisInFlight(false);
         setAnalysisSessionId((current) => (current === sessionId ? null : current));
       }

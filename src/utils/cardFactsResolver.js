@@ -560,6 +560,20 @@ export function resolveCardFacts(intel = {}) {
   const resolved = intel?.identity ? { ...intel.identity } : {};
   if (!intel) return resolved;
   resolved._sources = { ...(resolved._sources || {}) };
+  const finalizeIdentity = (identity) => {
+    const status = { ...(identity._status || {}) };
+    const keys = ["player", "year", "brand", "setName", "team", "sport", "cardType"];
+    keys.forEach((key) => {
+      const value = identity[key];
+      if (value === undefined || value === null || value === "") {
+        if (identity._sources?.[key] === "manual") return;
+        identity[key] = null;
+        if (!status[key]) status[key] = "unknown";
+      }
+    });
+    identity._status = status;
+    return identity;
+  };
   const setIfEmpty = (key, value) => {
     if (resolved._sources?.[key] === "manual") return;
     if (resolved[key]) return;
@@ -619,7 +633,7 @@ export function resolveCardFacts(intel = {}) {
     ? normalizeOcrLineInput(providedSlabLabelLines)
     : [];
   if (!ocrLines.length && !backOcrLines.length && !slabLabelLines.length) {
-    return resolved;
+    return finalizeIdentity(resolved);
   }
   const ocrLineTextsFront = ocrLines
     .map((line) => (line?.text ? line.text : ""))
@@ -1906,5 +1920,5 @@ export function resolveCardFacts(intel = {}) {
         : "estimated";
     setSourceIfUnset("cardType", source, hadCardType);
   }
-  return resolved;
+  return finalizeIdentity(resolved);
 }

@@ -652,6 +652,20 @@ export default function SportsBatchPrep() {
         analysisStatusFront: "pending",
         analysisStatusBack: backImageUrl ? "pending" : "missing",
       });
+      let resolverSettled = false;
+      const resolverTimeoutId = setTimeout(() => {
+        if (resolverSettled) return;
+        const fallback = cardFactsResolver({
+          identity: cardStates?.[cardId]?.identity || {},
+        });
+        updateCard(cardId, {
+          identity: fallback,
+          cardIntelResolved: true,
+          analysisStatus: "complete",
+          analysisStatusFront: frontImageUrl ? "complete" : "missing",
+          analysisStatusBack: backImageUrl ? "complete" : "missing",
+        });
+      }, 5000);
       try {
         const response = await fetch("/.netlify/functions/cardIntel_v2", {
           method: "POST",
@@ -703,6 +717,7 @@ export default function SportsBatchPrep() {
           analysisStatusBack: backImageUrl ? "complete" : "missing",
         });
         await tryAttachBackForCard(cardId, resolved);
+        resolverSettled = true;
       } catch (err) {
         if (err?.name !== "AbortError") {
           console.error("Sports batch analysis failed:", err);
@@ -712,6 +727,8 @@ export default function SportsBatchPrep() {
           });
         }
       } finally {
+        resolverSettled = true;
+        clearTimeout(resolverTimeoutId);
         const timeoutId = analysisTimeoutsRef.current.get(cardId);
         if (timeoutId) {
           clearTimeout(timeoutId);
