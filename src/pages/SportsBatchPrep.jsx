@@ -310,6 +310,11 @@ export default function SportsBatchPrep() {
               analysisStatusFront: "pending",
               analysisStatusBack: "missing",
             });
+            await analyzeCard({
+              cardId,
+              frontImageUrl: downloadUrl,
+              backImageUrl: null,
+            });
           } else if (side === "back" && cardId) {
             updateCard(cardId, {
               backImage: imagePayload,
@@ -339,6 +344,7 @@ export default function SportsBatchPrep() {
       }
     },
     [
+      analyzeCard,
       batchMeta?.id,
       db,
       isUploading,
@@ -445,6 +451,11 @@ export default function SportsBatchPrep() {
           analysisStatus: "pending",
           analysisStatusFront: "pending",
           cardIntelResolved: false,
+        });
+        await analyzeCard({
+          cardId,
+          frontImageUrl: downloadUrl,
+          backImageUrl: card?.backImage?.url || null,
         });
       } else {
         updateCard(cardId, {
@@ -575,14 +586,15 @@ export default function SportsBatchPrep() {
     [unassignedBacks, cardStates, attachUnassignedBack]
   );
 
-  const runOcr = useCallback(async () => {
-    const entries = Object.entries(cardStates || {});
-    for (const [cardId, card] of entries) {
-      if (inFlightRef.current.has(cardId)) continue;
-      if (card?.cardIntelResolved === true) continue;
-      const frontImageUrl = card?.frontImage?.url || "";
-      const backImageUrl = card?.backImage?.url || null;
-      if (!frontImageUrl) continue;
+  const analyzeCard = useCallback(
+    async ({ cardId, frontImageUrl, backImageUrl }) => {
+      if (!cardId || !frontImageUrl) {
+        console.warn("Skipping OCR: front image not ready", cardId);
+        return;
+      }
+      if (inFlightRef.current.has(cardId)) return;
+      if (cardStates?.[cardId]?.cardIntelResolved === true) return;
+      inFlightRef.current.add(cardId);
       const frontCornerEntries = await generateCornerEntriesForSide(
         frontImageUrl,
         "front"
@@ -620,7 +632,6 @@ export default function SportsBatchPrep() {
         frontCorners: frontCorners.filter(Boolean),
         backCorners: backCorners.filter(Boolean),
       });
-      inFlightRef.current.add(cardId);
       const controller = new AbortController();
       registerAnalysisController(cardId, controller);
       if (!analysisTimeoutsRef.current.has(cardId)) {
@@ -709,14 +720,28 @@ export default function SportsBatchPrep() {
         inFlightRef.current.delete(cardId);
         clearAnalysisController(cardId);
       }
+    },
+    [
+      batchMeta?.id,
+      cardStates,
+      clearAnalysisController,
+      registerAnalysisController,
+      tryAttachBackForCard,
+      updateCard,
+    ]
+  );
+
+  const runOcr = useCallback(async () => {
+    const entries = Object.entries(cardStates || {});
+    for (const [cardId, card] of entries) {
+      if (inFlightRef.current.has(cardId)) continue;
+      if (card?.cardIntelResolved === true) continue;
+      const frontImageUrl = card?.frontImage?.url || "";
+      const backImageUrl = card?.backImage?.url || null;
+      if (!frontImageUrl) continue;
+      await analyzeCard({ cardId, frontImageUrl, backImageUrl });
     }
-  }, [
-    cardStates,
-    updateCard,
-    registerAnalysisController,
-    clearAnalysisController,
-    tryAttachBackForCard,
-  ]);
+  }, [analyzeCard, cardStates]);
 
   useEffect(() => {
     if (!cards.length) return;

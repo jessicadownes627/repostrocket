@@ -540,6 +540,11 @@ export function ListingProvider({ children }) {
           requestId: prep.payload?.requestId,
           imageHash: prep.payload?.imageHash,
         };
+        if (!minimalPayload.frontImage) {
+          console.warn("Skipping OCR: front image not ready");
+          setAnalysisState("idle");
+          return { cancelled: true };
+        }
         console.log("[listingStore] payload sizes (bytes)", {
           frontImage: minimalPayload.frontImage ? minimalPayload.frontImage.length : 0,
         });
