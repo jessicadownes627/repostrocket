@@ -592,7 +592,7 @@ export function ListingProvider({ children }) {
           const bestGuess = getLikelyPlayerFromOcr({ ocrLines });
           if (bestGuess) {
             resolved.player = bestGuess;
-            resolved._sources = { ...(resolved._sources || {}), player: "likely" };
+            resolved._sources = { ...(resolved._sources || {}), player: "front" };
           }
         }
         console.log("[CLIENT] resolver output", resolved);
@@ -692,7 +692,7 @@ export function ListingProvider({ children }) {
                   resolvedBack.player = bestGuess;
                   resolvedBack._sources = {
                     ...(resolvedBack._sources || {}),
-                    player: "likely",
+                    player: "front",
                   };
                 }
               }

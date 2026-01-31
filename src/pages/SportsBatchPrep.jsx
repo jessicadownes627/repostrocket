@@ -705,7 +705,7 @@ export default function SportsBatchPrep() {
           });
           if (bestGuess) {
             resolved.player = bestGuess;
-            resolved._sources = { ...(resolved._sources || {}), player: "likely" };
+            resolved._sources = { ...(resolved._sources || {}), player: "front" };
           }
         }
         const gradeValue =

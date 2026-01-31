@@ -94,19 +94,12 @@ export default function SingleListing() {
   const isSlabbed = reviewIdentity?.isSlabbed === true || isSlabbedMode;
   const backOcrStatus = reviewIdentity?.backOcrStatus || "";
   const showGraded = isSlabbed || reviewIdentity?.graded === true;
-  const getFieldConfidence = (field, value) => {
-    if (!value) return "";
-    const source = reviewIdentity?._sources?.[field] || "";
-    if (reviewIdentity?.userVerified?.[field] || source === "manual") return "Verified";
-    if (source === "likely") return "Likely";
-    return "Detected";
-  };
-  const playerConfidence = getFieldConfidence("player", identityPlayer);
-  const yearConfidence = getFieldConfidence("year", identityYear);
-  const brandConfidence = getFieldConfidence("brand", identityBrand);
-  const setConfidence = getFieldConfidence("setName", identitySetName);
-  const teamConfidence = getFieldConfidence("team", identityTeam);
-  const sportConfidence = getFieldConfidence("sport", identitySport);
+  const playerConfidence = "";
+  const yearConfidence = "";
+  const brandConfidence = "";
+  const setConfidence = "";
+  const teamConfidence = "";
+  const sportConfidence = "";
   const gradeValue =
     reviewIdentity?.grade && typeof reviewIdentity.grade === "object"
       ? reviewIdentity.grade.value
@@ -547,29 +540,22 @@ export default function SingleListing() {
                     {!displayPlayer && analysisComplete &&
                       renderSuggestionChips("player")}
                     {displayPlayer && (
-                      <>
-                        {playerConfidence && (
-                          <span className="ml-2 inline-flex items-center px-2.5 py-1 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/45">
-                            {playerConfidence}
-                          </span>
-                        )}
-                        <button
-                          type="button"
-                          className="ml-2 inline-flex items-center px-2.5 py-1 rounded-full border border-white/15 text-[11px] uppercase tracking-[0.22em] text-white/60 hover:bg-white/10 transition"
-                          onClick={() => {
-                            const value = window.prompt("Player name", displayPlayer);
-                            if (value) {
-                              setReviewIdentityField("player", value.trim(), {
-                                force: true,
-                                source: "manual",
-                                userVerified: true,
-                              });
-                            }
-                          }}
-                        >
-                          Edit
-                        </button>
-                      </>
+                      <button
+                        type="button"
+                        className="ml-2 inline-flex items-center px-2.5 py-1 rounded-full border border-white/15 text-[11px] uppercase tracking-[0.22em] text-white/60 hover:bg-white/10 transition"
+                        onClick={() => {
+                          const value = window.prompt("Player name", displayPlayer);
+                          if (value) {
+                            setReviewIdentityField("player", value.trim(), {
+                              force: true,
+                              source: "manual",
+                              userVerified: true,
+                            });
+                          }
+                        }}
+                      >
+                        Edit
+                      </button>
                     )}
                   </div>
                   {activeAssistField === "player" && !displayPlayer && (
@@ -605,11 +591,22 @@ export default function SingleListing() {
                     {identityYear ? (
                       <span className="inline-flex items-center gap-2">
                         <span>{identityYear}</span>
-                        {yearConfidence && (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/45">
-                            {yearConfidence}
-                          </span>
-                        )}
+                        <button
+                          type="button"
+                          className="inline-flex items-center px-2.5 py-1 rounded-full border border-white/15 text-[11px] uppercase tracking-[0.22em] text-white/60 hover:bg-white/10 transition"
+                          onClick={() => {
+                            const value = window.prompt("Year", identityYear);
+                            if (value) {
+                              setReviewIdentityField("year", value.trim(), {
+                                force: true,
+                                source: "manual",
+                                userVerified: true,
+                              });
+                            }
+                          }}
+                        >
+                          Edit
+                        </button>
                       </span>
                     ) : (
                       <div className="flex flex-wrap items-center gap-2">
@@ -684,11 +681,22 @@ export default function SingleListing() {
                     {identitySetName ? (
                       <span className="inline-flex items-center gap-2">
                         <span>{identitySetName}</span>
-                        {setConfidence && (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/45">
-                            {setConfidence}
-                          </span>
-                        )}
+                        <button
+                          type="button"
+                          className="inline-flex items-center px-2.5 py-1 rounded-full border border-white/15 text-[11px] uppercase tracking-[0.22em] text-white/60 hover:bg-white/10 transition"
+                          onClick={() => {
+                            const value = window.prompt("Set", identitySetName);
+                            if (value) {
+                              setReviewIdentityField("setName", value.trim(), {
+                                force: true,
+                                source: "manual",
+                                userVerified: true,
+                              });
+                            }
+                          }}
+                        >
+                          Edit
+                        </button>
                       </span>
                     ) : (
                       <div className="flex flex-wrap items-center gap-2">
@@ -789,11 +797,22 @@ export default function SingleListing() {
                     {identityBrand ? (
                       <span className="inline-flex items-center gap-2">
                         <span>{identityBrand}</span>
-                        {brandConfidence && (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/45">
-                            {brandConfidence}
-                          </span>
-                        )}
+                        <button
+                          type="button"
+                          className="inline-flex items-center px-2.5 py-1 rounded-full border border-white/15 text-[11px] uppercase tracking-[0.22em] text-white/60 hover:bg-white/10 transition"
+                          onClick={() => {
+                            const value = window.prompt("Brand", identityBrand);
+                            if (value) {
+                              setReviewIdentityField("brand", value.trim(), {
+                                force: true,
+                                source: "manual",
+                                userVerified: true,
+                              });
+                            }
+                          }}
+                        >
+                          Edit
+                        </button>
                       </span>
                     ) : (
                       analysisComplete ? (
@@ -831,11 +850,22 @@ export default function SingleListing() {
                     {identityTeam ? (
                       <span className="inline-flex items-center gap-2">
                         <span>{identityTeam}</span>
-                        {teamConfidence && (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/45">
-                            {teamConfidence}
-                          </span>
-                        )}
+                        <button
+                          type="button"
+                          className="inline-flex items-center px-2.5 py-1 rounded-full border border-white/15 text-[11px] uppercase tracking-[0.22em] text-white/60 hover:bg-white/10 transition"
+                          onClick={() => {
+                            const value = window.prompt("Team", identityTeam);
+                            if (value) {
+                              setReviewIdentityField("team", value.trim(), {
+                                force: true,
+                                source: "manual",
+                                userVerified: true,
+                              });
+                            }
+                          }}
+                        >
+                          Edit
+                        </button>
                       </span>
                     ) : (
                       <div className="flex flex-wrap items-center gap-2">
@@ -910,11 +940,22 @@ export default function SingleListing() {
                     {identitySport ? (
                       <span className="inline-flex items-center gap-2">
                         <span>{identitySport}</span>
-                        {sportConfidence && (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/45">
-                            {sportConfidence}
-                          </span>
-                        )}
+                        <button
+                          type="button"
+                          className="inline-flex items-center px-2.5 py-1 rounded-full border border-white/15 text-[11px] uppercase tracking-[0.22em] text-white/60 hover:bg-white/10 transition"
+                          onClick={() => {
+                            const value = window.prompt("Sport", identitySport);
+                            if (value) {
+                              setReviewIdentityField("sport", value.trim(), {
+                                force: true,
+                                source: "manual",
+                                userVerified: true,
+                              });
+                            }
+                          }}
+                        >
+                          Edit
+                        </button>
                       </span>
                     ) : (
                       analysisComplete ? (

@@ -69,13 +69,7 @@ export default function SportsBatchReview() {
     </span>
   );
 
-  const getFieldConfidence = (field, value, sources = {}) => {
-    if (!value) return "";
-    const source = sources?.[field] || "";
-    if (source === "manual") return "Verified";
-    if (source === "likely") return "Likely";
-    return "Detected";
-  };
+  const getFieldConfidence = () => "";
 
   const normalizeEditValue = (value) => {
     const raw = String(value ?? "").trim();
@@ -280,31 +274,11 @@ export default function SportsBatchReview() {
               const isEditMode = editModeCardId === card.id;
               const buffer = editBuffers?.[card.id] || {};
               const sources = identity?._sources || {};
-              const playerConfidence = getFieldConfidence(
-                "player",
-                identity.player,
-                sources
-              );
-              const teamConfidence = getFieldConfidence(
-                "team",
-                identity.team,
-                sources
-              );
-              const sportConfidence = getFieldConfidence(
-                "sport",
-                identity.sport,
-                sources
-              );
-              const setConfidence = getFieldConfidence(
-                "setName",
-                identity.setName,
-                sources
-              );
-              const yearConfidence = getFieldConfidence(
-                "year",
-                identity.year,
-                sources
-              );
+              const playerConfidence = "";
+              const teamConfidence = "";
+              const sportConfidence = "";
+              const setConfidence = "";
+              const yearConfidence = "";
               const confidenceContext = {
                 identity,
                 ocrLines: card.ocrLines || [],
