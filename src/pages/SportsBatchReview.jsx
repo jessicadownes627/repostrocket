@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSportsBatchStore } from "../store/useSportsBatchStore";
 import { composeCardTitle } from "../utils/composeCardTitle";
+import { getConfidenceInsight } from "../utils/confidenceInsights";
 import { resolveCardFacts as cardFactsResolver } from "../utils/cardFactsResolver";
 import { db } from "../db/firebase";
 import { storage } from "../lib/firebase";
@@ -67,6 +68,14 @@ export default function SportsBatchReview() {
       </span>
     </span>
   );
+
+  const getFieldConfidence = (field, value, sources = {}) => {
+    if (!value) return "";
+    const source = sources?.[field] || "";
+    if (source === "manual") return "Verified";
+    if (source === "likely") return "Likely";
+    return "Detected";
+  };
 
   const normalizeEditValue = (value) => {
     const raw = String(value ?? "").trim();
@@ -270,6 +279,42 @@ export default function SportsBatchReview() {
               const isResolved = card.cardIntelResolved === true;
               const isEditMode = editModeCardId === card.id;
               const buffer = editBuffers?.[card.id] || {};
+              const sources = identity?._sources || {};
+              const playerConfidence = getFieldConfidence(
+                "player",
+                identity.player,
+                sources
+              );
+              const teamConfidence = getFieldConfidence(
+                "team",
+                identity.team,
+                sources
+              );
+              const sportConfidence = getFieldConfidence(
+                "sport",
+                identity.sport,
+                sources
+              );
+              const setConfidence = getFieldConfidence(
+                "setName",
+                identity.setName,
+                sources
+              );
+              const yearConfidence = getFieldConfidence(
+                "year",
+                identity.year,
+                sources
+              );
+              const confidenceContext = {
+                identity,
+                ocrLines: card.ocrLines || [],
+                backOcrLines: card.backOcrLines || [],
+                slabLabelLines: card.slabLabelLines || [],
+                frontCornersCount: frontCorners.length,
+                backCornersCount: Array.isArray(card.backCorners)
+                  ? card.backCorners.length
+                  : 0,
+              };
               const titleValue =
                 identity.title ||
                 composeCardTitle({
@@ -318,24 +363,109 @@ export default function SportsBatchReview() {
                               (isResolved
                                 ? renderUnknown("Unknown player")
                                 : renderDetecting("Detecting player"))}
+                            {identity.player && playerConfidence && (
+                              <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/45">
+                                {playerConfidence}
+                              </span>
+                            )}
+                            {!identity.player && isResolved && (
+                              (() => {
+                                const hint = getConfidenceInsight(
+                                  "player",
+                                  confidenceContext
+                                );
+                                return hint ? (
+                                  <div className="text-xs text-white/45 mt-1">
+                                    Partial insight: {hint}
+                                  </div>
+                                ) : null;
+                              })()
+                            )}
                           </div>
                           <div className="text-sm text-white/70">
-                            {identity.team || identity.sport
-                              ? [identity.team, identity.sport].filter(Boolean).join(" • ")
-                              : isResolved
-                              ? renderUnknown("Unknown team · sport")
-                              : renderDetecting("Detecting team · sport")}
+                            {identity.team || identity.sport ? (
+                              <div className="flex flex-wrap items-center gap-2">
+                                {identity.team && (
+                                  <span className="inline-flex items-center gap-2">
+                                    <span>{identity.team}</span>
+                                    {teamConfidence && (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/45">
+                                        {teamConfidence}
+                                      </span>
+                                    )}
+                                  </span>
+                                )}
+                                {identity.team && identity.sport && <span>•</span>}
+                                {identity.sport && (
+                                  <span className="inline-flex items-center gap-2">
+                                    <span>{identity.sport}</span>
+                                    {sportConfidence && (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/45">
+                                        {sportConfidence}
+                                      </span>
+                                    )}
+                                  </span>
+                                )}
+                              </div>
+                            ) : isResolved ? (
+                              renderUnknown("Unknown team · sport")
+                            ) : (
+                              renderDetecting("Detecting team · sport")
+                            )}
+                            {!identity.team && !identity.sport && isResolved && (
+                              (() => {
+                                const hint =
+                                  getConfidenceInsight("team", confidenceContext) ||
+                                  getConfidenceInsight("sport", confidenceContext);
+                                return hint ? (
+                                  <div className="text-xs text-white/45 mt-1">
+                                    Partial insight: {hint}
+                                  </div>
+                                ) : null;
+                              })()
+                            )}
                           </div>
                           <div className="text-sm text-white/60">
                             {identity.setName || identity.year ? (
-                              <>
-                                {identity.setName || "Unknown set"} ·{" "}
-                                {identity.year || "Unknown year"}
-                              </>
+                              <div className="flex flex-wrap items-center gap-2">
+                                {(identity.setName || "Unknown set") && (
+                                  <span className="inline-flex items-center gap-2">
+                                    <span>{identity.setName || "Unknown set"}</span>
+                                    {identity.setName && setConfidence && (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/45">
+                                        {setConfidence}
+                                      </span>
+                                    )}
+                                  </span>
+                                )}
+                                <span>·</span>
+                                {(identity.year || "Unknown year") && (
+                                  <span className="inline-flex items-center gap-2">
+                                    <span>{identity.year || "Unknown year"}</span>
+                                    {identity.year && yearConfidence && (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/45">
+                                        {yearConfidence}
+                                      </span>
+                                    )}
+                                  </span>
+                                )}
+                              </div>
                             ) : isResolved ? (
                               renderUnknown("Unknown set · year")
                             ) : (
                               renderDetecting("Detecting set · year")
+                            )}
+                            {(!identity.setName || !identity.year) && isResolved && (
+                              (() => {
+                                const hint =
+                                  getConfidenceInsight("year", confidenceContext) ||
+                                  getConfidenceInsight("setName", confidenceContext);
+                                return hint ? (
+                                  <div className="text-xs text-white/45 mt-1">
+                                    Partial insight: {hint}
+                                  </div>
+                                ) : null;
+                              })()
                             )}
                           </div>
                           {!isSlabbed && frontCorners.length > 0 && (
@@ -383,11 +513,22 @@ export default function SportsBatchReview() {
                         { key: "sport", label: "Sport", value: identity.sport },
                         { key: "team", label: "Team", value: identity.team },
                       ].map((field) => {
-                        const displayValue =
-                          field.value === undefined || field.value === null || field.value === ""
-                            ? "—"
-                            : field.value;
+                        const isEmpty =
+                          field.value === undefined ||
+                          field.value === null ||
+                          field.value === "";
+                        const displayValue = isEmpty ? "—" : field.value;
                         const source = identity?._sources?.[field.key];
+                        const insightField =
+                          field.key === "brandSet" ? "setName" : field.key;
+                        const fieldConfidence =
+                          field.key === "brandSet"
+                            ? ""
+                            : getFieldConfidence(
+                                field.key,
+                                field.value,
+                                sources
+                              );
                         return (
                           <div
                             key={`${card.id}-${field.key}`}
@@ -458,7 +599,48 @@ export default function SportsBatchReview() {
                                 </div>
                               )
                             ) : (
-                              <div className="text-white text-sm mt-2">{displayValue}</div>
+                              <div className="text-white text-sm mt-2">
+                                {displayValue}
+                                {fieldConfidence && !isEmpty && (
+                                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/45">
+                                    {fieldConfidence}
+                                  </span>
+                                )}
+                                {field.key === "brandSet" &&
+                                  (identity.brand || identity.setName) && (
+                                    <div className="flex flex-wrap items-center gap-2 mt-2 text-[10px] uppercase tracking-[0.2em] text-white/45">
+                                      {identity.brand && (
+                                        <span className="inline-flex items-center gap-2">
+                                          Brand
+                                          <span className="px-2 py-0.5 rounded-full border border-white/10 text-white/45">
+                                            {getFieldConfidence("brand", identity.brand, sources)}
+                                          </span>
+                                        </span>
+                                      )}
+                                      {identity.setName && (
+                                        <span className="inline-flex items-center gap-2">
+                                          Set
+                                          <span className="px-2 py-0.5 rounded-full border border-white/10 text-white/45">
+                                            {getFieldConfidence("setName", identity.setName, sources)}
+                                          </span>
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
+                                {isResolved && isEmpty && (
+                                  (() => {
+                                    const hint = getConfidenceInsight(
+                                      insightField,
+                                      confidenceContext
+                                    );
+                                    return hint ? (
+                                      <div className="text-xs text-white/45 mt-1">
+                                        Partial insight: {hint}
+                                      </div>
+                                    ) : null;
+                                  })()
+                                )}
+                              </div>
                             )}
                           </div>
                         );

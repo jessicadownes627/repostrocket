@@ -11,6 +11,7 @@ import {
 } from "../utils/cardIntelClient";
 import { saveListingToLibrary } from "../utils/savedListings";
 import { resolveCardFacts as cardFactsResolver } from "../utils/cardFactsResolver";
+import { getLikelyPlayerFromOcr } from "../utils/confidentGuess";
 
 const ListingContext = createContext(null);
 const STORAGE_KEY = "rr_draft_listing";
@@ -587,6 +588,13 @@ export function ListingProvider({ children }) {
           ? data.slabLabelLines
           : [];
         const resolved = cardFactsResolver({ ocrLines, slabLabelLines });
+        if (!resolved.player) {
+          const bestGuess = getLikelyPlayerFromOcr({ ocrLines });
+          if (bestGuess) {
+            resolved.player = bestGuess;
+            resolved._sources = { ...(resolved._sources || {}), player: "likely" };
+          }
+        }
         console.log("[CLIENT] resolver output", resolved);
         const hasPositionSignal = ocrLines.some((line) => {
           const text = typeof line === "string" ? line : line?.text || "";
@@ -671,11 +679,23 @@ export function ListingProvider({ children }) {
               if (!backOcrLines.length && !slabLabelLines.length) return;
               setReviewIdentity((prev) => {
                 if (!prev) return prev;
-                const resolvedBack = cardFactsResolver({
+              const resolvedBack = cardFactsResolver({
+                ocrLines: prev.frontOcrLines || [],
+                backOcrLines,
+                slabLabelLines,
+              });
+              if (!resolvedBack.player) {
+                const bestGuess = getLikelyPlayerFromOcr({
                   ocrLines: prev.frontOcrLines || [],
-                  backOcrLines,
-                  slabLabelLines,
                 });
+                if (bestGuess) {
+                  resolvedBack.player = bestGuess;
+                  resolvedBack._sources = {
+                    ...(resolvedBack._sources || {}),
+                    player: "likely",
+                  };
+                }
+              }
                 const merged = { ...prev };
                 Object.entries(resolvedBack).forEach(([key, value]) => {
                   if (key === "_sources") return;

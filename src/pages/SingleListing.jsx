@@ -4,6 +4,10 @@ import LuxeChipGroup from "../components/LuxeChipGroup";
 import LuxeInput from "../components/LuxeInput";
 import { useListingStore } from "../store/useListingStore";
 import { getPhotoUrl } from "../utils/photoHelpers";
+import {
+  getConfidenceInsight,
+  getConfidenceSuggestions,
+} from "../utils/confidenceInsights";
 import "../styles/overrides.css";
 
 const CATEGORY_OPTIONS = ["Sports Cards", "Apparel", "Accessories", "Home Goods", "Other"];
@@ -90,6 +94,19 @@ export default function SingleListing() {
   const isSlabbed = reviewIdentity?.isSlabbed === true || isSlabbedMode;
   const backOcrStatus = reviewIdentity?.backOcrStatus || "";
   const showGraded = isSlabbed || reviewIdentity?.graded === true;
+  const getFieldConfidence = (field, value) => {
+    if (!value) return "";
+    const source = reviewIdentity?._sources?.[field] || "";
+    if (reviewIdentity?.userVerified?.[field] || source === "manual") return "Verified";
+    if (source === "likely") return "Likely";
+    return "Detected";
+  };
+  const playerConfidence = getFieldConfidence("player", identityPlayer);
+  const yearConfidence = getFieldConfidence("year", identityYear);
+  const brandConfidence = getFieldConfidence("brand", identityBrand);
+  const setConfidence = getFieldConfidence("setName", identitySetName);
+  const teamConfidence = getFieldConfidence("team", identityTeam);
+  const sportConfidence = getFieldConfidence("sport", identitySport);
   const gradeValue =
     reviewIdentity?.grade && typeof reviewIdentity.grade === "object"
       ? reviewIdentity.grade.value
@@ -180,6 +197,39 @@ export default function SingleListing() {
       : listingData.backCorners;
   const cornersReviewed = frontCorners.length > 0 || backCorners.length > 0;
   const hasIdentityData = reviewIdentity !== null;
+  const confidenceContext = {
+    identity: reviewIdentity || {},
+    ocrLines: reviewIdentity?.frontOcrLines || [],
+    backOcrLines: reviewIdentity?.backOcrLines || [],
+    slabLabelLines: listingData?.cardIntel?.slabLabelLines || [],
+    frontCornersCount: frontCorners.length,
+    backCornersCount: backCorners.length,
+  };
+
+  const renderSuggestionChips = (field) => {
+    const suggestions = getConfidenceSuggestions(field, confidenceContext);
+    if (!suggestions.length) return null;
+    return (
+      <div className="flex flex-wrap gap-2 mt-2">
+        {suggestions.map((value) => (
+          <button
+            key={`${field}-${value}`}
+            type="button"
+            className="px-2.5 py-1 rounded-full border border-white/15 text-[11px] text-white/70 hover:bg-white/10 transition"
+            onClick={() =>
+              setReviewIdentityField(field, value, {
+                force: true,
+                source: "manual",
+                userVerified: true,
+              })
+            }
+          >
+            {value}
+          </button>
+        ))}
+      </div>
+    );
+  };
   const titleSetName =
     identitySetName && identitySetName !== identityPlayer ? identitySetName : "";
   const displayTitle = identityYear && identityBrand && titleSetName
@@ -484,23 +534,42 @@ export default function SingleListing() {
                         </button>
                       </div>
                     )}
+                    {!displayPlayer && analysisComplete && (
+                      (() => {
+                        const hint = getConfidenceInsight("player", confidenceContext);
+                        return hint ? (
+                          <div className="text-xs text-white/45 mt-2">
+                            Partial insight: {hint}
+                          </div>
+                        ) : null;
+                      })()
+                    )}
+                    {!displayPlayer && analysisComplete &&
+                      renderSuggestionChips("player")}
                     {displayPlayer && (
-                      <button
-                        type="button"
-                        className="ml-2 inline-flex items-center px-2.5 py-1 rounded-full border border-white/15 text-[11px] uppercase tracking-[0.22em] text-white/60 hover:bg-white/10 transition"
-                        onClick={() => {
-                          const value = window.prompt("Player name", displayPlayer);
-                          if (value) {
-                            setReviewIdentityField("player", value.trim(), {
-                              force: true,
-                              source: "manual",
-                              userVerified: true,
-                            });
-                          }
-                        }}
-                      >
-                        Edit
-                      </button>
+                      <>
+                        {playerConfidence && (
+                          <span className="ml-2 inline-flex items-center px-2.5 py-1 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/45">
+                            {playerConfidence}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          className="ml-2 inline-flex items-center px-2.5 py-1 rounded-full border border-white/15 text-[11px] uppercase tracking-[0.22em] text-white/60 hover:bg-white/10 transition"
+                          onClick={() => {
+                            const value = window.prompt("Player name", displayPlayer);
+                            if (value) {
+                              setReviewIdentityField("player", value.trim(), {
+                                force: true,
+                                source: "manual",
+                                userVerified: true,
+                              });
+                            }
+                          }}
+                        >
+                          Edit
+                        </button>
+                      </>
                     )}
                   </div>
                   {activeAssistField === "player" && !displayPlayer && (
@@ -533,7 +602,16 @@ export default function SingleListing() {
                     Year
                   </div>
                   <div className="text-lg mt-1 text-white/85">
-                    {identityYear || (
+                    {identityYear ? (
+                      <span className="inline-flex items-center gap-2">
+                        <span>{identityYear}</span>
+                        {yearConfidence && (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/45">
+                            {yearConfidence}
+                          </span>
+                        )}
+                      </span>
+                    ) : (
                       <div className="flex flex-wrap items-center gap-2">
                         {analysisComplete ? (
                           <span className="text-sm text-white/70 flex items-center gap-2">
@@ -560,6 +638,18 @@ export default function SingleListing() {
                         </button>
                       </div>
                     )}
+                    {!identityYear && analysisComplete && (
+                      (() => {
+                        const hint = getConfidenceInsight("year", confidenceContext);
+                        return hint ? (
+                          <div className="text-xs text-white/45 mt-2">
+                            Partial insight: {hint}
+                          </div>
+                        ) : null;
+                      })()
+                    )}
+                    {!identityYear && analysisComplete &&
+                      renderSuggestionChips("year")}
                   </div>
                   {activeAssistField === "year" && !identityYear && (
                     <div className="flex flex-wrap gap-2 mt-2">
@@ -591,7 +681,16 @@ export default function SingleListing() {
                     Set
                   </div>
                   <div className="text-lg mt-1 text-white/85">
-                    {identitySetName || (
+                    {identitySetName ? (
+                      <span className="inline-flex items-center gap-2">
+                        <span>{identitySetName}</span>
+                        {setConfidence && (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/45">
+                            {setConfidence}
+                          </span>
+                        )}
+                      </span>
+                    ) : (
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm text-white/35">
                           Checking card back…
@@ -687,7 +786,16 @@ export default function SingleListing() {
                     Brand
                   </div>
                   <div className="text-lg mt-1 text-white/85">
-                    {identityBrand || (
+                    {identityBrand ? (
+                      <span className="inline-flex items-center gap-2">
+                        <span>{identityBrand}</span>
+                        {brandConfidence && (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/45">
+                            {brandConfidence}
+                          </span>
+                        )}
+                      </span>
+                    ) : (
                       analysisComplete ? (
                         <span className="text-sm text-white/70 flex items-center gap-2">
                           Unknown brand
@@ -701,6 +809,18 @@ export default function SingleListing() {
                         </span>
                       )
                     )}
+                    {!identityBrand && analysisComplete && (
+                      (() => {
+                        const hint = getConfidenceInsight("brand", confidenceContext);
+                        return hint ? (
+                          <div className="text-xs text-white/45 mt-2">
+                            Partial insight: {hint}
+                          </div>
+                        ) : null;
+                      })()
+                    )}
+                    {!identityBrand && analysisComplete &&
+                      renderSuggestionChips("brand")}
                   </div>
                 </div>
                 <div>
@@ -708,7 +828,16 @@ export default function SingleListing() {
                     Team
                   </div>
                   <div className="text-lg mt-1 text-white/85">
-                    {identityTeam || (
+                    {identityTeam ? (
+                      <span className="inline-flex items-center gap-2">
+                        <span>{identityTeam}</span>
+                        {teamConfidence && (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/45">
+                            {teamConfidence}
+                          </span>
+                        )}
+                      </span>
+                    ) : (
                       <div className="flex flex-wrap items-center gap-2">
                         {analysisComplete ? (
                           <span className="text-sm text-white/70 flex items-center gap-2">
@@ -735,6 +864,18 @@ export default function SingleListing() {
                         </button>
                       </div>
                     )}
+                    {!identityTeam && analysisComplete && (
+                      (() => {
+                        const hint = getConfidenceInsight("team", confidenceContext);
+                        return hint ? (
+                          <div className="text-xs text-white/45 mt-2">
+                            Partial insight: {hint}
+                          </div>
+                        ) : null;
+                      })()
+                    )}
+                    {!identityTeam && analysisComplete &&
+                      renderSuggestionChips("team")}
                   </div>
                   {activeAssistField === "team" && !identityTeam && (
                     <div className="flex flex-wrap gap-2 mt-2">
@@ -766,7 +907,16 @@ export default function SingleListing() {
                     Sport
                   </div>
                   <div className="text-lg mt-1 text-white/85">
-                    {identitySport || (
+                    {identitySport ? (
+                      <span className="inline-flex items-center gap-2">
+                        <span>{identitySport}</span>
+                        {sportConfidence && (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/45">
+                            {sportConfidence}
+                          </span>
+                        )}
+                      </span>
+                    ) : (
                       analysisComplete ? (
                         <span className="text-sm text-white/70 flex items-center gap-2">
                           Unknown sport
@@ -780,6 +930,18 @@ export default function SingleListing() {
                         </span>
                       )
                     )}
+                    {!identitySport && analysisComplete && (
+                      (() => {
+                        const hint = getConfidenceInsight("sport", confidenceContext);
+                        return hint ? (
+                          <div className="text-xs text-white/45 mt-2">
+                            Partial insight: {hint}
+                          </div>
+                        ) : null;
+                      })()
+                    )}
+                    {!identitySport && analysisComplete &&
+                      renderSuggestionChips("sport")}
                   </div>
                 </div>
                 <div>

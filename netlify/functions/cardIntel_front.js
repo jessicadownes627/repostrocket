@@ -14,19 +14,21 @@ Rules:
 export async function handler(event) {
   try {
     if (!process.env.OPENAI_API_KEY) {
-      return {
-        statusCode: 500,
-        body: JSON.stringify({ error: "Missing OPENAI_API_KEY" }),
-      };
+      return buildResponse(500, {
+        status: "error",
+        error: "Missing OPENAI_API_KEY",
+      });
     }
 
-    const body = JSON.parse(event.body || "{}");
+    const body = safeJsonParse(event.body || "{}") || {};
     const { frontImage, requestId, imageHash } = body || {};
     if (!frontImage) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ error: "Front image is required" }),
-      };
+      return buildResponse(400, {
+        status: "error",
+        error: "Front image is required",
+        requestId: requestId || null,
+        imageHash: imageHash || null,
+      });
     }
 
     const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -48,21 +50,18 @@ export async function handler(event) {
     const parsed = parseJsonSafe(raw);
     const lines = Array.isArray(parsed?.lines) ? parsed.lines.filter(Boolean) : [];
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify({
-        status: "ok",
-        requestId: requestId || null,
-        imageHash: imageHash || null,
-        ocrLines: lines,
-      }),
-    };
+    return buildResponse(200, {
+      status: "ok",
+      requestId: requestId || null,
+      imageHash: imageHash || null,
+      ocrLines: lines,
+    });
   } catch (err) {
     console.error("cardIntel_front OCR error:", err);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: err.message }),
-    };
+    return buildResponse(500, {
+      status: "error",
+      error: err?.message || "Unknown error",
+    });
   }
 }
 
@@ -76,6 +75,29 @@ function parseJsonSafe(text) {
   }
 }
 
+function safeJsonParse(text) {
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    console.error("cardIntel_front request JSON parse failed:", err);
+    return null;
+  }
+}
+
 function stripCodeFences(str) {
   return str.replace(/```json/gi, "").replace(/```/g, "").trim();
+}
+
+function buildResponse(statusCode, payload) {
+  let body = "";
+  try {
+    body = JSON.stringify(payload || {});
+  } catch (err) {
+    body = JSON.stringify({ status: "error", error: "Response serialization failed" });
+  }
+  return {
+    statusCode,
+    headers: { "Content-Type": "application/json" },
+    body,
+  };
 }

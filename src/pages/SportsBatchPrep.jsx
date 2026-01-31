@@ -699,6 +699,15 @@ export default function SportsBatchPrep() {
           backOcrLines: data.backOcrLines || [],
           slabLabelLines: data.slabLabelLines || [],
         });
+        if (!resolved.player) {
+          const bestGuess = getLikelyPlayerFromOcr({
+            ocrLines: data.ocrLines || [],
+          });
+          if (bestGuess) {
+            resolved.player = bestGuess;
+            resolved._sources = { ...(resolved._sources || {}), player: "likely" };
+          }
+        }
         const gradeValue =
           resolved?.grade && typeof resolved.grade === "object"
             ? resolved.grade.value
