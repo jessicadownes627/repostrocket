@@ -461,9 +461,18 @@ export default function SingleListing() {
                   <div className="text-lg mt-1 text-white">
                     {displayPlayer || (
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm text-white/35">
-                          {analysisComplete ? "Unknown player" : "Detecting player…"}
-                        </span>
+                        {analysisComplete ? (
+                          <span className="text-sm text-white/70 flex items-center gap-2">
+                            Unknown player
+                            <span className="px-2 py-0.5 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/40">
+                              Reviewed
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="text-sm text-white/35">
+                            Detecting player<span className="lux-ellipsis" />
+                          </span>
+                        )}
                         <button
                           type="button"
                           className="inline-flex items-center px-2.5 py-1 rounded-full border border-white/15 text-[11px] uppercase tracking-[0.22em] text-white/70 hover:bg-white/10 transition"
@@ -528,9 +537,18 @@ export default function SingleListing() {
                   <div className="text-lg mt-1 text-white/85">
                     {identityYear || (
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm text-white/35">
-                          {analysisComplete ? "Unknown year" : "Detecting year…"}
-                        </span>
+                        {analysisComplete ? (
+                          <span className="text-sm text-white/70 flex items-center gap-2">
+                            Unknown year
+                            <span className="px-2 py-0.5 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/40">
+                              Reviewed
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="text-sm text-white/35">
+                            Detecting year<span className="lux-ellipsis" />
+                          </span>
+                        )}
                         <button
                           type="button"
                           className="inline-flex items-center px-2.5 py-1 rounded-full border border-white/15 text-[11px] uppercase tracking-[0.22em] text-white/70 hover:bg-white/10 transition"
@@ -672,9 +690,18 @@ export default function SingleListing() {
                   </div>
                   <div className="text-lg mt-1 text-white/85">
                     {identityBrand || (
-                      <span className="text-sm text-white/35">
-                        {analysisComplete ? "Unknown brand" : "Identifying brand…"}
-                      </span>
+                      analysisComplete ? (
+                        <span className="text-sm text-white/70 flex items-center gap-2">
+                          Unknown brand
+                          <span className="px-2 py-0.5 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/40">
+                            Reviewed
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-sm text-white/35">
+                          Identifying brand<span className="lux-ellipsis" />
+                        </span>
+                      )
                     )}
                   </div>
                 </div>
@@ -685,9 +712,18 @@ export default function SingleListing() {
                   <div className="text-lg mt-1 text-white/85">
                     {identityTeam || (
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm text-white/35">
-                          {analysisComplete ? "Unknown team" : "Detecting team…"}
-                        </span>
+                        {analysisComplete ? (
+                          <span className="text-sm text-white/70 flex items-center gap-2">
+                            Unknown team
+                            <span className="px-2 py-0.5 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/40">
+                              Reviewed
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="text-sm text-white/35">
+                            Detecting team<span className="lux-ellipsis" />
+                          </span>
+                        )}
                         <button
                           type="button"
                           className="inline-flex items-center px-2.5 py-1 rounded-full border border-white/15 text-[11px] uppercase tracking-[0.22em] text-white/70 hover:bg-white/10 transition"
@@ -733,9 +769,18 @@ export default function SingleListing() {
                   </div>
                   <div className="text-lg mt-1 text-white/85">
                     {identitySport || (
-                      <span className="text-sm text-white/35">
-                        {analysisComplete ? "Unknown sport" : "Identifying sport…"}
-                      </span>
+                      analysisComplete ? (
+                        <span className="text-sm text-white/70 flex items-center gap-2">
+                          Unknown sport
+                          <span className="px-2 py-0.5 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/40">
+                            Reviewed
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-sm text-white/35">
+                          Identifying sport<span className="lux-ellipsis" />
+                        </span>
+                      )
                     )}
                   </div>
                 </div>

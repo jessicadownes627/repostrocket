@@ -52,6 +52,22 @@ export default function SportsBatchReview() {
   const readyCount = readyCards.length;
   const canContinue = readyCount > 0;
 
+  const renderDetecting = (label) => (
+    <span className="text-white/35">
+      {label}
+      <span className="lux-ellipsis" />
+    </span>
+  );
+
+  const renderUnknown = (label) => (
+    <span className="text-white/70 flex items-center gap-2">
+      {label}
+      <span className="px-2 py-0.5 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/40">
+        Reviewed
+      </span>
+    </span>
+  );
+
   const normalizeEditValue = (value) => {
     const raw = String(value ?? "").trim();
     if (!raw) return "";
@@ -251,6 +267,7 @@ export default function SportsBatchReview() {
               const hasFrontImage = Boolean(card.frontImage?.url);
               const hasBackImage = Boolean(card.backImage?.url);
               const status = card.cardIntelResolved ? "Ready" : "Editable";
+              const isResolved = card.cardIntelResolved === true;
               const isEditMode = editModeCardId === card.id;
               const buffer = editBuffers?.[card.id] || {};
               const titleValue =
@@ -297,21 +314,28 @@ export default function SportsBatchReview() {
                         </div>
                         <div className="flex-1 min-w-0 space-y-2">
                           <div className="text-base text-white">
-                            {identity.player || (
-                              <span className="text-white/50">Unknown player</span>
-                            )}
+                            {identity.player ||
+                              (isResolved
+                                ? renderUnknown("Unknown player")
+                                : renderDetecting("Detecting player"))}
                           </div>
                           <div className="text-sm text-white/70">
-                            {identity.team || identity.sport ? (
-                              [identity.team, identity.sport].filter(Boolean).join(" • ")
-                            ) : (
-                              <span className="text-white/40">Team · Sport unknown</span>
-                            )}
+                            {identity.team || identity.sport
+                              ? [identity.team, identity.sport].filter(Boolean).join(" • ")
+                              : isResolved
+                              ? renderUnknown("Unknown team · sport")
+                              : renderDetecting("Detecting team · sport")}
                           </div>
                           <div className="text-sm text-white/60">
-                            {identity.setName || "Base"} ·{" "}
-                            {identity.year || (
-                              <span className="text-white/40">Year unknown</span>
+                            {identity.setName || identity.year ? (
+                              <>
+                                {identity.setName || "Unknown set"} ·{" "}
+                                {identity.year || "Unknown year"}
+                              </>
+                            ) : isResolved ? (
+                              renderUnknown("Unknown set · year")
+                            ) : (
+                              renderDetecting("Detecting set · year")
                             )}
                           </div>
                           {!isSlabbed && frontCorners.length > 0 && (

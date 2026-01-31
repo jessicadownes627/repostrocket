@@ -89,6 +89,28 @@ textarea {
   opacity: 0.35;
 }
 
+.lux-ellipsis {
+  display: inline-block;
+  width: 0.9em;
+  overflow: hidden;
+  vertical-align: bottom;
+}
+
+.lux-ellipsis::after {
+  content: "...";
+  display: inline-block;
+  animation: ellipsisPulse 1.2s steps(4, end) infinite;
+}
+
+@keyframes ellipsisPulse {
+  0% {
+    width: 0;
+  }
+  100% {
+    width: 0.9em;
+  }
+}
+
 @keyframes glowPulse {
   0% {
     box-shadow: 0 0 6px rgba(249, 233, 205, 0.2);
