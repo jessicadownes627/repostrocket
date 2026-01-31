@@ -180,7 +180,6 @@ export default function SingleListing() {
       : listingData.backCorners;
   const cornersReviewed = frontCorners.length > 0 || backCorners.length > 0;
   const hasIdentityData = reviewIdentity !== null;
-  const analysisComplete = hasIdentityData || !analysisInFlight;
   const titleSetName =
     identitySetName && identitySetName !== identityPlayer ? identitySetName : "";
   const displayTitle = identityYear && identityBrand && titleSetName
@@ -315,7 +314,6 @@ export default function SingleListing() {
      =============== SPORTS REVIEW LAYOUT =====================
      ========================================================= */
   if (isSports) {
-    const analysisComplete = hasIdentityData || !analysisInFlight;
     const showScanOverlay = !hasIdentityData && analysisInFlight;
     return (
       <div className="app-wrapper px-6 py-10 max-w-2xl mx-auto">
