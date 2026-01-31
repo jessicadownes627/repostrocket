@@ -186,174 +186,6 @@ export default function SportsBatchPrep() {
     return { url, altText, file: usable };
   }, []);
 
-  const handleFiles = useCallback(
-    async (fileList) => {
-      if (!fileList?.length || isUploading) return;
-      const selected = Array.from(fileList);
-      if (selected.length > 50) {
-        alert("Please select 50 photos or fewer.");
-        return;
-      }
-      const entries = [];
-      for (const file of selected) {
-        try {
-          const frontPhoto = await prepareEntry(file);
-          entries.push(frontPhoto);
-        } catch (err) {
-          console.error("Failed to prepare card photo", err);
-        }
-      }
-
-      if (!entries.length) return;
-      const incoming = entries.map((photo) => ({
-        id: crypto.randomUUID
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-        photo,
-        removable: true,
-      }));
-
-      setUploadError("");
-      setIsUploading(true);
-      const user = await waitForAuth();
-      console.log("Signed in as:", user.uid);
-
-      const currentBatchId = batchMeta?.id || uuidv4();
-      const batchRef = doc(db, "batches", currentBatchId);
-      if (!batchMeta?.id) {
-        await setDoc(batchRef, {
-          userId: "anonymous",
-          createdAt: serverTimestamp(),
-          maxUploads: 50,
-          totalUploads: 0,
-          processedUploads: 0,
-          pairedCards: 0,
-          status: "uploading",
-        });
-        setBatchMeta({ id: currentBatchId, status: "uploading" });
-      }
-
-      try {
-        const baseIndex = uploadedPhotos.length;
-        const cardIndexById = new Map();
-        const unmatchedFrontCardIds = new Set();
-        let nextCardIndex = 0;
-        Object.entries(cardStates || {}).forEach(([cardId, state]) => {
-          if (state?.cardIndex !== undefined && state?.cardIndex !== null) {
-            cardIndexById.set(cardId, state.cardIndex);
-            if (state.cardIndex >= nextCardIndex) {
-              nextCardIndex = state.cardIndex + 1;
-            }
-          }
-          if (state?.frontImage?.url && !state?.backImage?.url) {
-            unmatchedFrontCardIds.add(cardId);
-          }
-        });
-        for (let i = 0; i < incoming.length; i += 1) {
-          const entry = incoming[i];
-          const overallIndex = baseIndex + i;
-          const sideCandidate = overallIndex % 2 === 0 ? "front" : "back";
-          let side = sideCandidate;
-          let cardIndex = null;
-          let cardId = null;
-          if (sideCandidate === "front") {
-            cardIndex = nextCardIndex;
-            nextCardIndex += 1;
-            const generatedId =
-              typeof crypto !== "undefined" && crypto.randomUUID
-                ? crypto.randomUUID()
-                : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-            currentCardIdRef.current = generatedId;
-            cardId = generatedId;
-            cardIndexById.set(cardId, cardIndex);
-            unmatchedFrontCardIds.add(cardId);
-          } else if (unmatchedFrontCardIds.size === 1) {
-            const [unmatchedId] = unmatchedFrontCardIds;
-            cardId = unmatchedId;
-            cardIndex = cardIndexById.get(cardId) ?? null;
-            if (cardId) {
-              unmatchedFrontCardIds.delete(cardId);
-            }
-          } else {
-            // ambiguous back image — leave unassigned
-            side = "back";
-          }
-          if (!(entry.photo.file instanceof File)) {
-            console.error("Upload file is not a File", entry.photo.file);
-          }
-          const { uploadId, downloadUrl } = await uploadBatchFile({
-            db,
-            storage,
-            batchId: currentBatchId,
-            file: entry.photo.file,
-            side,
-            cardId: null,
-          });
-          await setDoc(doc(db, "batchPhotos", uploadId), {
-            batchId: currentBatchId,
-            downloadUrl,
-            side,
-            index: overallIndex,
-            cardIndex: cardIndex ?? null,
-            createdAt: serverTimestamp(),
-          });
-          const imagePayload = { id: uploadId, url: downloadUrl };
-          if (side === "front" && cardId) {
-            addCard({
-              cardId,
-              cardIndex,
-              frontImage: imagePayload,
-              backImage: null,
-              identity: {},
-              cardIntelResolved: false,
-              analysisStatus: "pending",
-              analysisStatusFront: "pending",
-              analysisStatusBack: "missing",
-            });
-            await analyzeCard({
-              cardId,
-              frontImageUrl: downloadUrl,
-              backImageUrl: null,
-            });
-          } else if (side === "back" && cardId) {
-            updateCard(cardId, {
-              backImage: imagePayload,
-              cardIndex,
-              analysisStatusBack: "pending",
-            });
-          } else if (side === "back") {
-            setUnassignedBacks((prev) => ({
-              ...prev,
-              [uploadId]: {
-                id: uploadId,
-                url: downloadUrl,
-                identity: null,
-              },
-            }));
-            analyzeBackForMatching(uploadId, downloadUrl);
-          }
-          await updateDoc(batchRef, {
-            totalUploads: increment(1),
-          });
-        }
-      } catch (err) {
-        console.error("Batch upload failed:", err);
-        setUploadError("We couldn’t upload your photos. Please try again.");
-      } finally {
-        setIsUploading(false);
-      }
-    },
-    [
-      analyzeCard,
-      batchMeta?.id,
-      db,
-      isUploading,
-      prepareEntry,
-      setBatchMeta,
-      storage,
-      uploadedPhotos.length,
-    ]
-  );
 
   useEffect(() => {
     const batchId = batchMeta?.id;
@@ -402,6 +234,26 @@ export default function SportsBatchPrep() {
     }
   };
 
+  
+  const handleRemoveImage = (cardId, card, side) => {
+    abortAnalysis(cardId);
+    if (side === "front") {
+      updateCard(cardId, {
+        frontImage: null,
+        frontCorners: null,
+        analysisStatus: "pending",
+        analysisStatusFront: "removed",
+        cardIntelResolved: false,
+      });
+      return;
+    }
+    updateCard(cardId, {
+      backImage: null,
+      backCorners: null,
+      analysisStatusBack: "missing",
+    });
+  };
+
   const uploadCornerDataUrl = async ({ dataUrl, batchId, cardId, side, index }) => {
     if (!dataUrl || !batchId || !cardId) return null;
     const response = await fetch(dataUrl);
@@ -412,8 +264,32 @@ export default function SportsBatchPrep() {
     return getDownloadURL(ref);
   };
 
+  const hideUploadId = (uploadId) => {
+    if (!uploadId) return;
+    setHiddenUploadIds((prev) =>
+      prev.includes(uploadId) ? prev : [...prev, uploadId]
+    );
+  };
+
+  const attachUnassignedBack = async (cardId, card, upload) => {
+    if (!upload?.id || !upload?.url || !batchMeta?.id) return;
+    await updateDoc(doc(db, "batchPhotos", upload.id), {
+      cardIndex: card.cardIndex ?? null,
+    });
+    updateCard(cardId, {
+      backImage: { id: upload.id, url: upload.url },
+      analysisStatusBack: "pending",
+    });
+    hideUploadId(upload.id);
+    setUnassignedBacks((prev) => {
+      const next = { ...(prev || {}) };
+      delete next[upload.id];
+      return next;
+    });
+  };
+
   const handleReplaceImage = async (cardId, card, side, file) => {
-    if (!file) return;
+    if (!file) return false;
     const batchId = batchMeta?.id;
     if (!batchId) {
       alert("No batch ID available.");
@@ -478,84 +354,6 @@ export default function SportsBatchPrep() {
       return false;
     }
   };
-
-  const hideUploadId = (uploadId) => {
-    if (!uploadId) return;
-    setHiddenUploadIds((prev) =>
-      prev.includes(uploadId) ? prev : [...prev, uploadId]
-    );
-  };
-
-  const handleRemoveImage = (cardId, card, side) => {
-    abortAnalysis(cardId);
-    if (side === "front") {
-      updateCard(cardId, {
-        frontImage: null,
-        frontCorners: null,
-        analysisStatus: "pending",
-        analysisStatusFront: "removed",
-        cardIntelResolved: false,
-      });
-      return;
-    }
-    updateCard(cardId, {
-      backImage: null,
-      backCorners: null,
-      analysisStatusBack: "missing",
-    });
-  };
-
-  async function attachUnassignedBack(cardId, card, upload) {
-    if (!upload?.id || !upload?.url || !batchMeta?.id) return;
-    await updateDoc(doc(db, "batchPhotos", upload.id), {
-      cardIndex: card.cardIndex ?? null,
-    });
-    updateCard(cardId, {
-      backImage: { id: upload.id, url: upload.url },
-      analysisStatusBack: "pending",
-    });
-    hideUploadId(upload.id);
-    setUnassignedBacks((prev) => {
-      const next = { ...(prev || {}) };
-      delete next[upload.id];
-      return next;
-    });
-  }
-
-  const analyzeBackForMatching = useCallback(
-    async (uploadId, url) => {
-      if (!uploadId || !url) return;
-      try {
-        const response = await fetch("/.netlify/functions/cardIntel_v2", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            frontImageUrl: url,
-            requestId: `back-match-${Date.now()}-${uploadId}`,
-          }),
-        });
-        if (!response.ok) return;
-        const data = await response.json();
-        if (!data || data.error || data.status !== "ok") return;
-        const resolved = cardFactsResolver({
-          ocrLines: [],
-          backOcrLines: data.ocrLines || [],
-          slabLabelLines: [],
-        });
-        setUnassignedBacks((prev) => ({
-          ...prev,
-          [uploadId]: {
-            id: uploadId,
-            url,
-            identity: resolved,
-          },
-        }));
-      } catch (err) {
-        console.error("Back OCR match failed", err);
-      }
-    },
-    [setUnassignedBacks]
-  );
 
   const tryAttachBackForCard = useCallback(
     async (cardId, frontIdentity) => {
@@ -756,6 +554,174 @@ export default function SportsBatchPrep() {
       updateCard,
     ]
   );
+  const handleFiles = useCallback(
+    async (fileList) => {
+      if (!fileList?.length || isUploading) return;
+      const selected = Array.from(fileList);
+      if (selected.length > 50) {
+        alert("Please select 50 photos or fewer.");
+        return;
+      }
+      const entries = [];
+      for (const file of selected) {
+        try {
+          const frontPhoto = await prepareEntry(file);
+          entries.push(frontPhoto);
+        } catch (err) {
+          console.error("Failed to prepare card photo", err);
+        }
+      }
+
+      if (!entries.length) return;
+      const incoming = entries.map((photo) => ({
+        id: crypto.randomUUID
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        photo,
+        removable: true,
+      }));
+
+      setUploadError("");
+      setIsUploading(true);
+      const user = await waitForAuth();
+      console.log("Signed in as:", user.uid);
+
+      const currentBatchId = batchMeta?.id || uuidv4();
+      const batchRef = doc(db, "batches", currentBatchId);
+      if (!batchMeta?.id) {
+        await setDoc(batchRef, {
+          userId: "anonymous",
+          createdAt: serverTimestamp(),
+          maxUploads: 50,
+          totalUploads: 0,
+          processedUploads: 0,
+          pairedCards: 0,
+          status: "uploading",
+        });
+        setBatchMeta({ id: currentBatchId, status: "uploading" });
+      }
+
+      try {
+        const baseIndex = uploadedPhotos.length;
+        const cardIndexById = new Map();
+        const unmatchedFrontCardIds = new Set();
+        let nextCardIndex = 0;
+        Object.entries(cardStates || {}).forEach(([cardId, state]) => {
+          if (state?.cardIndex !== undefined && state?.cardIndex !== null) {
+            cardIndexById.set(cardId, state.cardIndex);
+            if (state.cardIndex >= nextCardIndex) {
+              nextCardIndex = state.cardIndex + 1;
+            }
+          }
+          if (state?.frontImage?.url && !state?.backImage?.url) {
+            unmatchedFrontCardIds.add(cardId);
+          }
+        });
+        for (let i = 0; i < incoming.length; i += 1) {
+          const entry = incoming[i];
+          const overallIndex = baseIndex + i;
+          const sideCandidate = overallIndex % 2 === 0 ? "front" : "back";
+          let side = sideCandidate;
+          let cardIndex = null;
+          let cardId = null;
+          if (sideCandidate === "front") {
+            cardIndex = nextCardIndex;
+            nextCardIndex += 1;
+            const generatedId =
+              typeof crypto !== "undefined" && crypto.randomUUID
+                ? crypto.randomUUID()
+                : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+            currentCardIdRef.current = generatedId;
+            cardId = generatedId;
+            cardIndexById.set(cardId, cardIndex);
+            unmatchedFrontCardIds.add(cardId);
+          } else if (unmatchedFrontCardIds.size === 1) {
+            const [unmatchedId] = unmatchedFrontCardIds;
+            cardId = unmatchedId;
+            cardIndex = cardIndexById.get(cardId) ?? null;
+            if (cardId) {
+              unmatchedFrontCardIds.delete(cardId);
+            }
+          } else {
+            // ambiguous back image — leave unassigned
+            side = "back";
+          }
+          if (!(entry.photo.file instanceof File)) {
+            console.error("Upload file is not a File", entry.photo.file);
+          }
+          const { uploadId, downloadUrl } = await uploadBatchFile({
+            db,
+            storage,
+            batchId: currentBatchId,
+            file: entry.photo.file,
+            side,
+            cardId: null,
+          });
+          await setDoc(doc(db, "batchPhotos", uploadId), {
+            batchId: currentBatchId,
+            downloadUrl,
+            side,
+            index: overallIndex,
+            cardIndex: cardIndex ?? null,
+            createdAt: serverTimestamp(),
+          });
+          const imagePayload = { id: uploadId, url: downloadUrl };
+          if (side === "front" && cardId) {
+            addCard({
+              cardId,
+              cardIndex,
+              frontImage: imagePayload,
+              backImage: null,
+              identity: {},
+              cardIntelResolved: false,
+              analysisStatus: "pending",
+              analysisStatusFront: "pending",
+              analysisStatusBack: "missing",
+            });
+            await analyzeCard({
+              cardId,
+              frontImageUrl: downloadUrl,
+              backImageUrl: null,
+            });
+          } else if (side === "back" && cardId) {
+            updateCard(cardId, {
+              backImage: imagePayload,
+              cardIndex,
+              analysisStatusBack: "pending",
+            });
+          } else if (side === "back") {
+            setUnassignedBacks((prev) => ({
+              ...prev,
+              [uploadId]: {
+                id: uploadId,
+                url: downloadUrl,
+                identity: null,
+              },
+            }));
+            analyzeBackForMatching(uploadId, downloadUrl);
+          }
+          await updateDoc(batchRef, {
+            totalUploads: increment(1),
+          });
+        }
+      } catch (err) {
+        console.error("Batch upload failed:", err);
+        setUploadError("We couldn’t upload your photos. Please try again.");
+      } finally {
+        setIsUploading(false);
+      }
+    },
+    [
+      analyzeCard,
+      batchMeta?.id,
+      db,
+      isUploading,
+      prepareEntry,
+      setBatchMeta,
+      storage,
+      uploadedPhotos.length,
+    ]
+  );
 
   const runOcr = useCallback(async () => {
     const entries = Object.entries(cardStates || {});
@@ -879,13 +845,10 @@ export default function SportsBatchPrep() {
           onChange={async (event) => {
             const file = event.target.files?.[0];
             event.target.value = "";
-            const ok = await handleReplaceImage(
-              match.cardId,
-              match.card,
-              match.side,
-              file
-            );
-            if (ok) hideUploadId(item.id);
+            const match = findCardForUpload(item.id);
+            if (match && file) {
+              await handleReplaceImage(match.cardId, match.card, match.side, file);
+            }
           }}
         />
         <input
