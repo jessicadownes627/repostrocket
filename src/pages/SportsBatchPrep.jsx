@@ -79,6 +79,12 @@ export default function SportsBatchPrep() {
     () => uploadedPhotos.filter((photo) => !hiddenUploadSet.has(photo.id)),
     [uploadedPhotos, hiddenUploadSet]
   );
+  const allCardsResolved = useMemo(
+    () =>
+      cards.length > 0 &&
+      cards.every((card) => card?.cardIntelResolved === true),
+    [cards]
+  );
 
   function normalizeMatchToken(value = "") {
     return String(value || "")
@@ -931,7 +937,7 @@ export default function SportsBatchPrep() {
           </div>
         )}
 
-        {visibleUploadedPhotos.length > 0 && (
+        {visibleUploadedPhotos.length > 0 && allCardsResolved && (
           <div className="mt-6 flex items-center justify-center">
             <button
               type="button"
