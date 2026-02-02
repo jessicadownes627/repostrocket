@@ -42,6 +42,10 @@ const mergeIdentity = (base, incoming) => {
 };
 
 export default function SportsBatchPrep() {
+  const isMobile =
+    typeof window !== "undefined" &&
+    window.matchMedia &&
+    window.matchMedia("(pointer: coarse)").matches;
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
   const {
@@ -62,6 +66,7 @@ export default function SportsBatchPrep() {
   const [hiddenUploadIds, setHiddenUploadIds] = useState([]);
   const [expectedCardCount, setExpectedCardCount] = useState(0);
   const [renderSettled, setRenderSettled] = useState(false);
+  const [uploadClosed, setUploadClosed] = useState(() => !isMobile);
   const currentCardIdRef = useRef(null);
   const inFlightRef = useRef(new Set());
   const analysisTimeoutsRef = useRef(new Map());
@@ -580,6 +585,7 @@ export default function SportsBatchPrep() {
   const handleFiles = useCallback(
     async (fileList) => {
       if (!fileList?.length || isUploading) return;
+      if (isMobile) setUploadClosed(true);
       const selected = Array.from(fileList);
       if (selected.length > 50) {
         alert("Please select 50 photos or fewer.");
@@ -972,7 +978,8 @@ export default function SportsBatchPrep() {
 
         {visibleUploadedPhotos.length > 0 &&
           allExpectedCardsReady &&
-          renderSettled && (
+          renderSettled &&
+          uploadClosed && (
           <div className="mt-6 flex items-center justify-center">
             <button
               type="button"
