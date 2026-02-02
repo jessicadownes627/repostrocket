@@ -60,6 +60,7 @@ export default function SportsBatchPrep() {
   const [uploadedPhotos, setUploadedPhotos] = useState([]);
   const [unassignedBacks, setUnassignedBacks] = useState({});
   const [hiddenUploadIds, setHiddenUploadIds] = useState([]);
+  const [expectedCardCount, setExpectedCardCount] = useState(0);
   const currentCardIdRef = useRef(null);
   const inFlightRef = useRef(new Set());
   const analysisTimeoutsRef = useRef(new Map());
@@ -84,6 +85,13 @@ export default function SportsBatchPrep() {
       cards.length > 0 &&
       cards.every((card) => card?.cardIntelResolved === true),
     [cards]
+  );
+  const allExpectedCardsReady = useMemo(
+    () =>
+      allCardsResolved &&
+      expectedCardCount > 0 &&
+      cards.length === expectedCardCount,
+    [allCardsResolved, cards.length, expectedCardCount]
   );
 
   function normalizeMatchToken(value = "") {
@@ -607,6 +615,18 @@ export default function SportsBatchPrep() {
 
       try {
         const baseIndex = uploadedPhotos.length;
+        const currentCardsCount = Object.keys(cardStates || {}).length;
+        const incomingFrontCount = incoming.reduce((count, _entry, i) => {
+          const overallIndex = baseIndex + i;
+          return overallIndex % 2 === 0 ? count + 1 : count;
+        }, 0);
+        const nextExpectedCount = Math.max(
+          expectedCardCount,
+          currentCardsCount + incomingFrontCount
+        );
+        if (nextExpectedCount !== expectedCardCount) {
+          setExpectedCardCount(nextExpectedCount);
+        }
         const cardIndexById = new Map();
         const unmatchedFrontCardIds = new Set();
         let nextCardIndex = 0;
@@ -718,7 +738,9 @@ export default function SportsBatchPrep() {
     [
       analyzeCard,
       batchMeta?.id,
+      cardStates,
       db,
+      expectedCardCount,
       isUploading,
       prepareEntry,
       setBatchMeta,
@@ -937,7 +959,7 @@ export default function SportsBatchPrep() {
           </div>
         )}
 
-        {visibleUploadedPhotos.length > 0 && allCardsResolved && (
+        {visibleUploadedPhotos.length > 0 && allExpectedCardsReady && (
           <div className="mt-6 flex items-center justify-center">
             <button
               type="button"
