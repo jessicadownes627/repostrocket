@@ -287,8 +287,14 @@ export default function SportsBatchPrep() {
 
   const uploadCornerDataUrl = async ({ dataUrl, batchId, cardId, side, index }) => {
     if (!dataUrl || !batchId || !cardId) return null;
-    const response = await fetch(dataUrl);
-    const blob = await response.blob();
+    let blob = null;
+    try {
+      const response = await fetch(dataUrl);
+      blob = await response.blob();
+    } catch (err) {
+      console.warn("Corner upload fetch failed", err);
+    }
+    if (!blob) return null;
     const path = `batch/${batchId}/corners/${cardId}/${side}-${index}.jpg`;
     const ref = storageRef(storage, path);
     await uploadBytes(ref, blob, { contentType: "image/jpeg" });
@@ -416,7 +422,7 @@ export default function SportsBatchPrep() {
   );
 
   const analyzeCard = useCallback(
-    async ({ cardId, frontImageUrl, backImageUrl }) => {
+    async ({ cardId, frontImageUrl, backImageUrl, batchId }) => {
       if (!cardId || !frontImageUrl) {
         console.warn("Skipping OCR: front image not ready", cardId);
         return;
@@ -426,6 +432,10 @@ export default function SportsBatchPrep() {
         frontImageUrl,
         backImageUrl,
       });
+      const resolvedBatchId = batchId || batchMeta?.id;
+      if (!resolvedBatchId) {
+        console.warn("Skipping corners: batchId not ready", cardId);
+      }
       if (inFlightRef.current.has(cardId)) return;
       if (cardStates?.[cardId]?.cardIntelResolved === true) return;
       inFlightRef.current.add(cardId);
@@ -437,12 +447,12 @@ export default function SportsBatchPrep() {
         frontCornerEntries.slice(0, 4).map(async (entry, idx) => {
           const url = await uploadCornerDataUrl({
             dataUrl: entry.url,
-            batchId: batchMeta?.id,
+            batchId: resolvedBatchId,
             cardId,
             side: "front",
             index: idx,
           });
-          return url ? { ...entry, url } : null;
+          return { ...entry, url: url || entry.url };
         })
       );
       const backCornerEntries = backImageUrl
@@ -453,12 +463,12 @@ export default function SportsBatchPrep() {
             backCornerEntries.slice(0, 4).map(async (entry, idx) => {
               const url = await uploadCornerDataUrl({
                 dataUrl: entry.url,
-                batchId: batchMeta?.id,
+                batchId: resolvedBatchId,
                 cardId,
                 side: "back",
                 index: idx,
               });
-              return url ? { ...entry, url } : null;
+              return { ...entry, url: url || entry.url };
             })
           )
         : [];
@@ -740,6 +750,7 @@ export default function SportsBatchPrep() {
               cardId,
               frontImageUrl: downloadUrl,
               backImageUrl: null,
+              batchId: currentBatchId,
             });
           } else if (side === "back" && cardId) {
             updateCard(cardId, {
@@ -791,7 +802,12 @@ export default function SportsBatchPrep() {
       const frontImageUrl = card?.frontImage?.url || "";
       const backImageUrl = card?.backImage?.url || null;
       if (!frontImageUrl) continue;
-      await analyzeCard({ cardId, frontImageUrl, backImageUrl });
+      await analyzeCard({
+        cardId,
+        frontImageUrl,
+        backImageUrl,
+        batchId: batchMeta?.id,
+      });
     }
   }, [analyzeCard, cardStates]);
 
