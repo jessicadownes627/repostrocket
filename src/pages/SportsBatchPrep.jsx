@@ -516,8 +516,6 @@ export default function SportsBatchPrep() {
           ocrLines: data.ocrLines || [],
           backOcrLines: data.backOcrLines || [],
           slabLabelLines: data.slabLabelLines || [],
-          frontCorners: data.frontCorners || data.corners?.front || null,
-          backCorners: data.backCorners || data.corners?.back || null,
           cardIntelResolved: true,
           analysisStatus: "complete",
           analysisStatusFront: "complete",
