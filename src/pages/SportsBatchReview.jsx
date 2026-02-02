@@ -331,6 +331,27 @@ export default function SportsBatchReview() {
                             </div>
                           )}
                         </div>
+                        {!isSlabbed &&
+                          ((frontCorners && frontCorners.length > 0) ||
+                            (Array.isArray(card.backCorners) &&
+                              card.backCorners.length > 0)) && (
+                            <div className="flex gap-2 pt-1">
+                              {(frontCorners && frontCorners.length > 0
+                                ? frontCorners
+                                : card.backCorners
+                              )
+                                .slice(0, cornerSlots)
+                                .map((corner, idx) => (
+                                  <img
+                                    key={`${card.id}-corner-summary-${idx}`}
+                                    src={corner.url || corner}
+                                    alt={`Corner ${idx + 1}`}
+                                    className="h-10 w-10 rounded-md border border-white/10 object-cover"
+                                  />
+                                ))}
+                            </div>
+                          )}
+                        </div>
                         <div className="flex-1 min-w-0 space-y-2">
                           <div className="text-base text-white">
                             {identity.player ||
@@ -442,18 +463,6 @@ export default function SportsBatchReview() {
                               })()
                             )}
                           </div>
-                          {!isSlabbed && frontCorners.length > 0 && (
-                            <div className="flex gap-2 pt-1">
-                              {frontCorners.slice(0, cornerSlots).map((corner, idx) => (
-                                <img
-                                  key={`${card.id}-corner-summary-${idx}`}
-                                  src={corner.url || corner}
-                                  alt={`Front corner ${idx + 1}`}
-                                  className="h-10 w-10 rounded-md border border-white/10 object-cover"
-                                />
-                              ))}
-                            </div>
-                          )}
                         </div>
                         <div className="text-[10px] uppercase tracking-[0.2em] text-white/50">
                           Details ▸
