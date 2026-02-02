@@ -521,7 +521,7 @@ async function extractCornersFromImage(dataUrl) {
     }
     const img = new Image();
     img.crossOrigin = "anonymous";
-    img.onload = () => {
+    const buildCrops = () => {
       const size = Math.round(Math.min(img.width, img.height) * CORNER_SIZE_RATIO);
       if (!size || size < 8) {
         resolve(null);
@@ -560,6 +560,20 @@ async function extractCornersFromImage(dataUrl) {
         ),
       };
       resolve(crops);
+    };
+    img.onload = () => {
+      if (img.width && img.height) {
+        buildCrops();
+        return;
+      }
+      if (typeof img.decode === "function") {
+        img
+          .decode()
+          .then(() => requestAnimationFrame(buildCrops))
+          .catch(() => resolve(null));
+        return;
+      }
+      requestAnimationFrame(buildCrops);
     };
     img.onerror = () => resolve(null);
     img.src = dataUrl;
@@ -923,7 +937,7 @@ function loadImageElement(dataUrl) {
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
-    img.onerror = (err) => reject(err);
+    img.onerror = () => resolve(null);
     img.src = dataUrl;
   });
 }

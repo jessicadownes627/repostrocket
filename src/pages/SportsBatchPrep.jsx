@@ -22,6 +22,7 @@ import { v4 as uuidv4 } from "uuid";
 import { uploadBatchFile } from "../utils/batchUpload";
 import { onAuthStateChanged, signInAnonymously } from "firebase/auth";
 import { generateCornerEntriesForSide } from "../utils/cardIntelClient";
+import { getLikelyPlayerFromOcr } from "../utils/confidentGuess";
 import { getDownloadURL, ref as storageRef, uploadBytes } from "firebase/storage";
 
 console.log(
@@ -420,6 +421,11 @@ export default function SportsBatchPrep() {
         console.warn("Skipping OCR: front image not ready", cardId);
         return;
       }
+      console.log("BATCH CORNERS: start generation", {
+        cardId,
+        frontImageUrl,
+        backImageUrl,
+      });
       if (inFlightRef.current.has(cardId)) return;
       if (cardStates?.[cardId]?.cardIntelResolved === true) return;
       inFlightRef.current.add(cardId);
@@ -456,6 +462,11 @@ export default function SportsBatchPrep() {
             })
           )
         : [];
+      console.log("BATCH CORNERS: generated", {
+        cardId,
+        frontCorners: frontCorners.filter(Boolean).length,
+        backCorners: backCorners.filter(Boolean).length,
+      });
       updateCard(cardId, {
         frontCorners: frontCorners.filter(Boolean),
         backCorners: backCorners.filter(Boolean),
@@ -550,6 +561,12 @@ export default function SportsBatchPrep() {
           analysisStatus: "complete",
           analysisStatusFront: "complete",
           analysisStatusBack: backImageUrl ? "complete" : "missing",
+        });
+        console.log("BATCH OCR MERGE: complete", {
+          cardId,
+          frontCornersInState: cardStates?.[cardId]?.frontCorners?.length || 0,
+          backCornersInState: cardStates?.[cardId]?.backCorners?.length || 0,
+          hasIdentity: Boolean(resolved && Object.keys(resolved || {}).length),
         });
         await tryAttachBackForCard(cardId, resolved);
         resolverSettled = true;
