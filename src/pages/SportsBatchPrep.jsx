@@ -61,6 +61,7 @@ export default function SportsBatchPrep() {
   const [unassignedBacks, setUnassignedBacks] = useState({});
   const [hiddenUploadIds, setHiddenUploadIds] = useState([]);
   const [expectedCardCount, setExpectedCardCount] = useState(0);
+  const [renderSettled, setRenderSettled] = useState(false);
   const currentCardIdRef = useRef(null);
   const inFlightRef = useRef(new Set());
   const analysisTimeoutsRef = useRef(new Map());
@@ -93,6 +94,16 @@ export default function SportsBatchPrep() {
       cards.length === expectedCardCount,
     [allCardsResolved, cards.length, expectedCardCount]
   );
+  useEffect(() => {
+    if (!allExpectedCardsReady) {
+      setRenderSettled(false);
+      return;
+    }
+    let rafId = requestAnimationFrame(() => {
+      setRenderSettled(true);
+    });
+    return () => cancelAnimationFrame(rafId);
+  }, [allExpectedCardsReady, cards.length]);
 
   function normalizeMatchToken(value = "") {
     return String(value || "")
@@ -959,7 +970,9 @@ export default function SportsBatchPrep() {
           </div>
         )}
 
-        {visibleUploadedPhotos.length > 0 && allExpectedCardsReady && (
+        {visibleUploadedPhotos.length > 0 &&
+          allExpectedCardsReady &&
+          renderSettled && (
           <div className="mt-6 flex items-center justify-center">
             <button
               type="button"

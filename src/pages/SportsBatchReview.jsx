@@ -309,48 +309,49 @@ export default function SportsBatchReview() {
                         Card {index + 1}
                       </div>
                       <div className="flex items-start gap-3">
-                        <div className="flex items-center gap-2 shrink-0">
-                          {hasFrontImage ? (
-                            <img
-                              src={card.frontImage.url}
-                              alt="Card front"
-                              className="w-16 h-auto rounded border border-white/10 object-cover"
-                            />
-                          ) : (
-                            <div className="w-16 aspect-[3/4] rounded border border-dashed border-white/20" />
-                          )}
-                          {hasBackImage ? (
-                            <img
-                              src={card.backImage.url}
-                              alt="Card back"
-                              className="w-16 h-auto rounded border border-white/10 object-cover"
-                            />
-                          ) : (
-                            <div className="w-16 aspect-[3/4] rounded border border-dashed border-white/20 flex items-center justify-center text-[9px] text-white/40">
-                              Back optional
-                            </div>
-                          )}
-                        </div>
-                        {!isSlabbed &&
-                          ((frontCorners && frontCorners.length > 0) ||
-                            (Array.isArray(card.backCorners) &&
-                              card.backCorners.length > 0)) && (
-                            <div className="flex gap-2 pt-1">
-                              {(frontCorners && frontCorners.length > 0
-                                ? frontCorners
-                                : card.backCorners
-                              )
-                                .slice(0, cornerSlots)
-                                .map((corner, idx) => (
-                                  <img
-                                    key={`${card.id}-corner-summary-${idx}`}
-                                    src={corner.url || corner}
-                                    alt={`Corner ${idx + 1}`}
-                                    className="h-10 w-10 rounded-md border border-white/10 object-cover"
-                                  />
-                                ))}
-                            </div>
-                          )}
+                        <div className="flex flex-col gap-2 shrink-0">
+                          <div className="flex items-center gap-2">
+                            {hasFrontImage ? (
+                              <img
+                                src={card.frontImage.url}
+                                alt="Card front"
+                                className="w-16 h-auto rounded border border-white/10 object-cover"
+                              />
+                            ) : (
+                              <div className="w-16 aspect-[3/4] rounded border border-dashed border-white/20" />
+                            )}
+                            {hasBackImage ? (
+                              <img
+                                src={card.backImage.url}
+                                alt="Card back"
+                                className="w-16 h-auto rounded border border-white/10 object-cover"
+                              />
+                            ) : (
+                              <div className="w-16 aspect-[3/4] rounded border border-dashed border-white/20 flex items-center justify-center text-[9px] text-white/40">
+                                Back optional
+                              </div>
+                            )}
+                          </div>
+                          {!isSlabbed &&
+                            ((frontCorners && frontCorners.length > 0) ||
+                              (Array.isArray(card.backCorners) &&
+                                card.backCorners.length > 0)) && (
+                              <div className="flex gap-2">
+                                {(frontCorners && frontCorners.length > 0
+                                  ? frontCorners
+                                  : card.backCorners
+                                )
+                                  .slice(0, cornerSlots)
+                                  .map((corner, idx) => (
+                                    <img
+                                      key={`${card.id}-corner-summary-${idx}`}
+                                      src={corner.url || corner}
+                                      alt={`Corner ${idx + 1}`}
+                                      className="h-10 w-10 rounded-md border border-white/10 object-cover"
+                                    />
+                                  ))}
+                              </div>
+                            )}
                         </div>
                         <div className="flex-1 min-w-0 space-y-2">
                           <div className="text-base text-white">
