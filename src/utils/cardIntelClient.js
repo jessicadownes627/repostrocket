@@ -381,7 +381,12 @@ export async function generateCornerEntriesForSide(sourceImageUrl, side = "front
     ? extractCornerPhotoEntries({ corners: { [sideKey]: corners } })
     : [];
   if (entries.length >= 4) return entries;
-  return buildPlaceholderCornerEntries(sourceImageUrl, sideKey);
+  const placeholders = await buildPlaceholderCornerEntries(
+    sourceImageUrl,
+    sideKey
+  );
+  if (placeholders.length >= 4) return placeholders;
+  return placeholders;
 }
 
 function ensureConfidence(confidence = {}) {
@@ -583,8 +588,8 @@ async function extractCornersFromImage(dataUrl) {
 async function buildPlaceholderCornerEntries(sourceImageUrl, sideKey) {
   const img = await loadImageElement(sourceImageUrl);
   if (!img?.width || !img?.height) return [];
-  const size = Math.round(Math.min(img.width, img.height) * 0.2);
-  if (!size || size < 8) return [];
+  const rawSize = Math.round(Math.min(img.width, img.height) * 0.2);
+  const size = Math.max(rawSize || 0, 8);
   const insetX = Math.round(img.width * 0.1);
   const insetY = Math.round(img.height * 0.1);
   const sideLabel = sideKey === "back" ? "Back" : "Front";
@@ -596,7 +601,9 @@ async function buildPlaceholderCornerEntries(sourceImageUrl, sideKey) {
   ];
   return builds
     .map((item) => {
-      const url = cropPlaceholder(img, item.x, item.y, size);
+      const url =
+        cropPlaceholder(img, item.x, item.y, size) ||
+        createBlankCornerDataUrl(size);
       if (!url) return null;
       const cornerLabel = CORNER_NAME_MAP[item.key] || item.key;
       return {
@@ -605,6 +612,7 @@ async function buildPlaceholderCornerEntries(sourceImageUrl, sideKey) {
         label: `${sideLabel} ${cornerLabel}`,
         side: sideLabel,
         cornerKey: item.key,
+        source: "fallback",
         confidence: "low",
         manualOverride: false,
         offsetRatioX: 0,
@@ -634,6 +642,22 @@ function cropPlaceholder(img, sx, sy, size) {
   const clampedX = Math.max(0, Math.min(img.width - size, sx));
   const clampedY = Math.max(0, Math.min(img.height - size, sy));
   ctx.drawImage(img, clampedX, clampedY, size, size, 0, 0, size, size);
+  try {
+    return canvas.toDataURL("image/jpeg", 0.9);
+  } catch {
+    return null;
+  }
+}
+
+function createBlankCornerDataUrl(size) {
+  if (!size) return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, size, size);
   try {
     return canvas.toDataURL("image/jpeg", 0.9);
   } catch {
