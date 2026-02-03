@@ -44,12 +44,12 @@ export default function SportsBatchLaunch() {
     setPreparedPlatforms,
     cardStates,
   } = useSportsBatchStore();
-  const [activeFilter, setActiveFilter] = useState("all");
   const [includeCorners, setIncludeCorners] = useState(true);
   const [saveCorners, setSaveCorners] = useState(false);
   const [analysisCount, setAnalysisCount] = useState(0);
   const [analysisInFlight, setAnalysisInFlight] = useState(false);
   const [finalizeInFlight, setFinalizeInFlight] = useState(false);
+  const [completedActions, setCompletedActions] = useState({});
 
   const cards = useMemo(() => {
     const allCards = Object.entries(cardStates || {}).map(([cardId, state]) => ({
@@ -81,10 +81,6 @@ export default function SportsBatchLaunch() {
     });
   };
 
-  const visiblePlatforms =
-    activeFilter === "all"
-      ? activePlatforms
-      : activePlatforms.filter((id) => id === activeFilter);
   const hasSelectedPlatforms = activePlatforms.length > 0;
   const platformStatus = hasSelectedPlatforms
     ? `${activePlatforms.length} selected`
@@ -112,6 +108,49 @@ export default function SportsBatchLaunch() {
     } catch (err) {
       console.error("Copy failed", err);
     }
+  };
+
+  const markMarketplaceDone = (cardId, platformId) => {
+    if (!cardId || !platformId) return;
+    setCompletedActions((prev) => ({
+      ...(prev || {}),
+      [cardId]: {
+        ...(prev?.[cardId] || {}),
+        [platformId]: true,
+      },
+    }));
+  };
+
+  const buildMarketplaceContent = (platformId, identity) => {
+    const baseTitle = composeCardTitle(identity);
+    const baseDescription = composeSportsDescription(identity);
+    if (platformId === "whatnot") {
+      const shortTitle = baseTitle ? baseTitle.split(" ").slice(0, 6).join(" ") : "";
+      return {
+        title: shortTitle || baseTitle,
+        note: "Live-sale ready details",
+        description: "",
+      };
+    }
+    if (platformId === "mercari") {
+      const title = baseTitle ? baseTitle.slice(0, 60) : "";
+      return {
+        title,
+        description: baseDescription ? baseDescription.slice(0, 180) : "",
+      };
+    }
+    if (platformId === "poshmark") {
+      const title = baseTitle ? baseTitle.slice(0, 50) : "";
+      return {
+        title,
+        description: baseDescription ? baseDescription.slice(0, 160) : "",
+      };
+    }
+    const ebayTitle = baseTitle ? baseTitle.slice(0, 80) : "";
+    return {
+      title: ebayTitle,
+      description: baseDescription ? baseDescription.slice(0, 220) : "",
+    };
   };
 
   const handleGenerateListings = async () => {
@@ -295,70 +334,27 @@ export default function SportsBatchLaunch() {
               </button>
             </div>
 
-            <div className="lux-card border border-white/10 p-5 mb-8">
-              <div className="text-xs uppercase tracking-[0.3em] text-white/50 mb-3">
-                Show
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  className={`px-4 py-2 rounded-full text-xs uppercase tracking-[0.2em] border ${
-                    activeFilter === "all"
-                      ? "border-[#E8DCC0] text-[#E8DCC0]"
-                      : "border-white/20 text-white/60"
-                  }`}
-                  onClick={() => setActiveFilter("all")}
-                >
-                  All
-                </button>
-                {activePlatforms.map((platformId) => {
-                  const label =
-                    PLATFORM_OPTIONS.find((option) => option.id === platformId)
-                      ?.label || platformId;
-                  return (
-                    <button
-                      key={platformId}
-                      type="button"
-                      className={`px-4 py-2 rounded-full text-xs uppercase tracking-[0.2em] border ${
-                        activeFilter === platformId
-                          ? "border-[#E8DCC0] text-[#E8DCC0]"
-                          : "border-white/20 text-white/60"
-                      }`}
-                      onClick={() => setActiveFilter(platformId)}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
             <div id="sports-batch-listings" className="grid gap-3">
               {cards.map((card) => {
                 const cardState = cardStates[card.id] || {};
                 const identity = cardState.identity || {};
                 const title = composeCardTitle(identity);
-                const description = composeSportsDescription(identity);
                 const frontSrc = card.frontImage?.url || "";
                 const backSrc = card.backImage?.url || "";
                 const isSlabbed = identity.isSlabbed === true;
                 const frontCorners = !isSlabbed ? cardState.frontCorners || [] : [];
                 const backCorners = !isSlabbed ? cardState.backCorners || [] : [];
-                const showCorners = includeCorners && !isSlabbed;
-                const subtitleParts = [identity.player, identity.year, identity.team]
-                  .map((value) => (value ? String(value).trim() : ""))
-                  .filter(Boolean);
-                const exportLinks = buildListingExportLinks({
-                  title,
-                  description,
-                  price: cardState.price ? Number(cardState.price) : undefined,
-                });
-                const ebayUrl = exportLinks?.ebay || "";
+                const setLabel = identity.setName || "Unknown set";
+                const yearLabel = identity.year || "Unknown year";
+                const teamSport =
+                  identity.team || identity.sport
+                    ? [identity.team, identity.sport].filter(Boolean).join(" · ")
+                    : "Unknown team · sport";
 
                 return (
                   <div
                     key={card.id}
-                    className="lux-card border border-white/10 p-3 flex flex-wrap items-center gap-3"
+                    className="lux-card border border-white/10 p-3 flex flex-wrap items-start gap-3"
                   >
                     <div className="relative shrink-0">
                       {frontSrc ? (
@@ -378,50 +374,124 @@ export default function SportsBatchLaunch() {
                         />
                       )}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm text-white truncate">
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <div className="text-xs text-white/70 truncate">
                         {title || "Untitled card"}
                       </div>
-                      <div className="text-xs text-white/60 truncate">
-                        {subtitleParts.length ? subtitleParts.join(" · ") : "—"}
+                      <div className="text-sm text-white truncate">
+                        {identity.player || "Unknown player"}
                       </div>
-                      {showCorners && (frontCorners.length || backCorners.length) ? (
-                        <div className="mt-2 flex gap-1">
+                      <div className="text-xs text-white/60 truncate">
+                        {teamSport}
+                      </div>
+                      <div className="text-xs text-white/50 truncate">
+                        {setLabel} · {yearLabel}
+                      </div>
+                      {(frontCorners.length || backCorners.length) ? (
+                        <div className="mt-1 flex gap-1">
                           {frontCorners.slice(0, 4).map((corner, idx) => (
                             <img
                               key={`front-${card.id}-${idx}`}
                               src={corner.url || corner}
                               alt={`Front corner ${idx + 1}`}
-                              className="h-6 w-6 rounded border border-white/10 object-cover"
+                              className="h-5 w-5 rounded border border-white/10 object-cover"
                             />
                           ))}
                         </div>
                       ) : null}
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        className="px-3 py-2 rounded-full text-[10px] uppercase tracking-[0.2em] border border-white/20 text-white/70 hover:text-white"
-                        onClick={() => handleCopy(title)}
-                      >
-                        Copy title
-                      </button>
-                      <button
-                        type="button"
-                        className="px-3 py-2 rounded-full text-[10px] uppercase tracking-[0.2em] border border-white/20 text-white/70 hover:text-white"
-                        onClick={() => handleCopy(description)}
-                      >
-                        Copy description
-                      </button>
-                      {ebayUrl && (
-                        <button
-                          type="button"
-                          className="px-3 py-2 rounded-full text-[10px] uppercase tracking-[0.2em] border border-[#E8DCC0] text-[#E8DCC0]"
-                          onClick={() => window.open(ebayUrl, "_blank", "noopener")}
-                        >
-                          Open {ebayLabel}
-                        </button>
-                      )}
+                      <div className="mt-2 grid gap-2">
+                        {activePlatforms.map((platformId) => {
+                          const label =
+                            PLATFORM_OPTIONS.find(
+                              (option) => option.id === platformId
+                            )?.label || platformId;
+                          const content = buildMarketplaceContent(
+                            platformId,
+                            identity
+                          );
+                          const exportLinks = buildListingExportLinks({
+                            title: content.title,
+                            description: content.description,
+                            price: cardState.price
+                              ? Number(cardState.price)
+                              : undefined,
+                          });
+                          const openUrl =
+                            platformId === "whatnot"
+                              ? "https://www.whatnot.com/"
+                              : exportLinks?.[platformId] || "";
+                          const isDone =
+                            completedActions?.[card.id]?.[platformId] === true;
+                          return (
+                            <div
+                              key={`${card.id}-${platformId}`}
+                              className="border border-white/10 rounded-md p-2"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="text-[10px] uppercase tracking-[0.25em] text-white/60">
+                                  {label}
+                                </div>
+                                {isDone && (
+                                  <span className="text-[10px] uppercase tracking-[0.2em] text-white/50">
+                                    Copied ✓
+                                  </span>
+                                )}
+                              </div>
+                              <div className="mt-1 text-xs text-white/80 truncate">
+                                {content.title || "—"}
+                              </div>
+                              {platformId === "whatnot" && content.note ? (
+                                <div className="text-[10px] text-white/50 mt-1 truncate">
+                                  {content.note}
+                                </div>
+                              ) : null}
+                              {content.description ? (
+                                <div
+                                  className="text-[10px] text-white/50 mt-1 truncate"
+                                >
+                                  {content.description}
+                                </div>
+                              ) : null}
+                              <div className="flex flex-wrap gap-2 mt-2">
+                                <button
+                                  type="button"
+                                  className="px-3 py-1.5 rounded-full text-[10px] uppercase tracking-[0.2em] border border-white/20 text-white/70 hover:text-white"
+                                  onClick={() => {
+                                    handleCopy(content.title);
+                                    markMarketplaceDone(card.id, platformId);
+                                  }}
+                                >
+                                  Copy {label} Title
+                                </button>
+                                {content.description ? (
+                                  <button
+                                    type="button"
+                                    className="px-3 py-1.5 rounded-full text-[10px] uppercase tracking-[0.2em] border border-white/20 text-white/70 hover:text-white"
+                                    onClick={() => {
+                                      handleCopy(content.description);
+                                      markMarketplaceDone(card.id, platformId);
+                                    }}
+                                  >
+                                    Copy {label} Description
+                                  </button>
+                                ) : null}
+                                {openUrl ? (
+                                  <button
+                                    type="button"
+                                    className="px-3 py-1.5 rounded-full text-[10px] uppercase tracking-[0.2em] border border-[#E8DCC0] text-[#E8DCC0]"
+                                    onClick={() => {
+                                      window.open(openUrl, "_blank", "noopener");
+                                      markMarketplaceDone(card.id, platformId);
+                                    }}
+                                  >
+                                    Open {label}
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 );

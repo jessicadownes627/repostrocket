@@ -50,7 +50,27 @@ export function SportsBatchProvider({ children }) {
     if (!cardId) return;
     setCardStates((prev) => ({
       ...prev,
-      [cardId]: { ...(prev[cardId] || {}), ...(partial || {}) },
+      [cardId]: (() => {
+        const next = { ...(prev[cardId] || {}), ...(partial || {}) };
+        if (
+          process.env.NODE_ENV === "development" &&
+          partial &&
+          Object.prototype.hasOwnProperty.call(partial, "identity")
+        ) {
+          const prevIdentity = prev?.[cardId]?.identity;
+          const nextIdentity = next?.identity;
+          if (
+            prevIdentity &&
+            Object.keys(prevIdentity).length > 0 &&
+            (!nextIdentity || Object.keys(nextIdentity).length === 0)
+          ) {
+            throw new Error(
+              "Invariant violation: card.identity was cleared after being populated"
+            );
+          }
+        }
+        return next;
+      })(),
     }));
   };
 

@@ -763,6 +763,77 @@ export function resolveCardFacts(intel = {}) {
   };
   const brandSourceLines = ocrLineTextsFront;
   const manufacturerTokens = ["panini"];
+  const teamKeywords = [...MLB_TEAMS, ...NFL_TEAMS, ...NBA_TEAMS, ...NHL_TEAMS];
+  let brandSetYearLocked = false;
+  const runBrandSetYearScan = (lines, source) => {
+    for (const line of lines) {
+      const normalized = normalizeLine(line);
+      if (!normalized) continue;
+      if (/copyright|tm|trademark|©/.test(normalized)) continue;
+      if (statTokens.some((token) => normalized.includes(token))) continue;
+      const paniniMatch = line.match(/^(19|20)\d{2}\s+PANINI\s*-\s*(.+)$/i);
+      const toppsMatch = line.match(/^(19|20)\d{2}\s+TOPPS\s+(.+)$/i);
+      const upperDeckMatch = line.match(/^(19|20)\d{2}\s+UPPER\s+DECK\s+(.+)$/i);
+      const match = paniniMatch || toppsMatch || upperDeckMatch;
+      if (!match) continue;
+      const yearCandidate = match[0]?.match(/\b(19|20)\d{2}\b/)?.[0] || "";
+      const setCandidate = match[2] ? match[2].trim() : "";
+      const brandLabel = paniniMatch
+        ? "Panini"
+        : toppsMatch
+        ? "Topps"
+        : "Upper Deck";
+      if (setCandidate) {
+        const hadBrand = Boolean(resolved.brand);
+        const hadSet = Boolean(resolved.setName);
+        setIfEmpty("brand", brandLabel);
+        setSourceIfUnset("brand", source, hadBrand);
+        setIfEmpty("setName", titleCase(setCandidate));
+        setSourceIfUnset("setName", source, hadSet);
+      }
+      if (yearCandidate && !resolved.year) {
+        const hadYear = Boolean(resolved.year);
+        setIfEmpty("year", yearCandidate);
+        setSourceIfUnset("year", "brand_set", hadYear);
+        brandSetYearLocked = true;
+      }
+      if (resolved.brand || resolved.setName || resolved.year) return true;
+    }
+    return false;
+  };
+  if (!resolved.brand || !resolved.setName || !resolved.year) {
+    const resolvedFromFront = runBrandSetYearScan(ocrLineTextsFront, "front");
+    if (!resolvedFromFront) {
+      runBrandSetYearScan(ocrLineTextsBack, "back");
+    }
+  }
+  if (!resolved.brand) {
+    const brandOnlyTokens = [
+      { token: "topps", label: "Topps" },
+      { token: "upper deck", label: "Upper Deck" },
+    ];
+    const scanBrandOnly = (lines, source) => {
+      for (const line of lines) {
+        const normalized = normalizeLine(line);
+        if (!normalized) continue;
+        if (/copyright|tm|trademark|©/.test(normalized)) continue;
+        if (statTokens.some((token) => normalized.includes(token))) continue;
+        const match = brandOnlyTokens.find((brand) =>
+          normalized.includes(brand.token)
+        );
+        if (!match) continue;
+        const hadBrand = Boolean(resolved.brand);
+        setIfEmpty("brand", match.label);
+        setSourceIfUnset("brand", source, hadBrand);
+        return true;
+      }
+      return false;
+    };
+    const fromFront = scanBrandOnly(ocrLineTextsFront, "front");
+    if (!fromFront) {
+      scanBrandOnly(ocrLineTextsBack, "back");
+    }
+  }
   if (!resolved.brand) {
     const brandTokens = [
       { token: "panini", label: "Panini" },
@@ -860,7 +931,6 @@ export function resolveCardFacts(intel = {}) {
       setSourceIfUnset("setName", "front", hadSet);
     }
   }
-  const teamKeywords = [...MLB_TEAMS, ...NFL_TEAMS, ...NBA_TEAMS, ...NHL_TEAMS];
   const excludedPlayerLines = new Set();
   const excludedPlayerTokens = new Set();
   const addExcludedTokens = (line) => {
@@ -1213,12 +1283,12 @@ export function resolveCardFacts(intel = {}) {
       }
     });
   };
-  if (!resolved.year) {
+  if (!resolved.year && !brandSetYearLocked) {
     ocrLineTextsBack.forEach((line) => addBackYear(line));
   }
   const backYear =
     backYearCandidates.length ? Math.max(...backYearCandidates) : null;
-  if (frontYear && backYear && String(frontYear) === String(backYear)) {
+  if (!brandSetYearLocked && frontYear && backYear && String(frontYear) === String(backYear)) {
     const hadYear = Boolean(resolved.year);
     setIfEmpty("year", String(frontYear));
     setSourceIfUnset("year", "front", hadYear);
@@ -1355,6 +1425,7 @@ export function resolveCardFacts(intel = {}) {
     }
   }
   if (
+    !brandSetYearLocked &&
     resolved.isSlabbed === false &&
     !resolved.year &&
     resolved.setName

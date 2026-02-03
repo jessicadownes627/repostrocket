@@ -79,6 +79,20 @@ export default function SportsBatchPrep() {
       })),
     [cardStates]
   );
+
+  const commitIdentity = (card, nextIdentity) => {
+    const hasFields =
+      nextIdentity &&
+      (nextIdentity.player ||
+        nextIdentity.team ||
+        nextIdentity.year ||
+        nextIdentity.setName);
+    if (!hasFields) return card?.identity ?? null;
+    if (card?.identity && Object.keys(card.identity).length > 0) {
+      return card.identity;
+    }
+    return nextIdentity;
+  };
   const hiddenUploadSet = useMemo(
     () => new Set(hiddenUploadIds),
     [hiddenUploadIds]
@@ -505,10 +519,10 @@ export default function SportsBatchPrep() {
       const resolverTimeoutId = setTimeout(() => {
         if (resolverSettled) return;
         const fallback = cardFactsResolver({
-          identity: cardStates?.[cardId]?.identity || {},
+          identity: cardStates?.[cardId]?.identity ?? null,
         });
         updateCard(cardId, {
-          identity: fallback,
+          identity: commitIdentity(cardStates?.[cardId], fallback),
           cardIntelResolved: true,
           analysisStatus: "complete",
           analysisStatusFront: frontImageUrl ? "complete" : "missing",
@@ -548,20 +562,32 @@ export default function SportsBatchPrep() {
           backOcrLines: data.backOcrLines || [],
           slabLabelLines: data.slabLabelLines || [],
         });
+        const committedIdentity = commitIdentity(cardStates?.[cardId], resolved);
         if (!resolved.player) {
           const bestGuess = getLikelyPlayerFromOcr({
             ocrLines: data.ocrLines || [],
           });
           if (bestGuess) {
-            resolved.player = bestGuess;
-            resolved._sources = { ...(resolved._sources || {}), player: "front" };
+            const targetIdentity = commitIdentity(
+              cardStates?.[cardId],
+              committedIdentity
+            );
+            targetIdentity.player = bestGuess;
+            targetIdentity._sources = {
+              ...(targetIdentity._sources || {}),
+              player: "front",
+            };
+            committedIdentity.player = targetIdentity.player;
+            committedIdentity._sources = targetIdentity._sources;
           }
         }
         const gradeValue =
-          resolved?.grade && typeof resolved.grade === "object"
-            ? resolved.grade.value
-            : resolved?.grade;
-        resolved.isSlabbed = Boolean(resolved?.grader && gradeValue);
+          committedIdentity?.grade && typeof committedIdentity.grade === "object"
+            ? committedIdentity.grade.value
+            : committedIdentity?.grade;
+        committedIdentity.isSlabbed = Boolean(
+          committedIdentity?.grader && gradeValue
+        );
         const preservedFrontCorners =
           cardStates?.[cardId]?.frontCorners?.length
             ? cardStates[cardId].frontCorners
@@ -571,7 +597,7 @@ export default function SportsBatchPrep() {
             ? cardStates[cardId].backCorners
             : backCorners.filter(Boolean);
         updateCard(cardId, {
-          identity: resolved,
+          identity: committedIdentity,
           ocrLines: data.ocrLines || [],
           backOcrLines: data.backOcrLines || [],
           slabLabelLines: data.slabLabelLines || [],
@@ -750,7 +776,7 @@ export default function SportsBatchPrep() {
               cardIndex,
               frontImage: imagePayload,
               backImage: null,
-              identity: {},
+              identity: null,
               cardIntelResolved: false,
               analysisStatus: "pending",
               analysisStatusFront: "pending",

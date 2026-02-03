@@ -67,6 +67,22 @@ export function ListingProvider({ children }) {
   const isNetlifyDevRuntime =
     typeof process !== "undefined" && process.env?.NETLIFY_DEV === "true";
 
+  const commitIdentity = (listing, nextIdentity) => {
+    const hasFields =
+      nextIdentity &&
+      (nextIdentity.player ||
+        nextIdentity.team ||
+        nextIdentity.year ||
+        nextIdentity.setName ||
+        nextIdentity.brand ||
+        nextIdentity.sport);
+    if (!hasFields) return listing?.identity ?? null;
+    if (listing?.identity && Object.keys(listing.identity).length > 0) {
+      return listing.identity;
+    }
+    return nextIdentity;
+  };
+
   const resetCardIntelState = () => {
     setListingData((prev) => ({
       ...prev,
@@ -285,7 +301,8 @@ export function ListingProvider({ children }) {
           : "";
         const composedIsGraded = resolvedFacts.graded;
         setListingData((prev) => {
-          const nextIdentity = { ...(prev.identity || {}) };
+          const existingIdentity = prev.identity ?? null;
+          const nextIdentity = existingIdentity ? { ...existingIdentity } : {};
           const assignIdentity = (key, value) => {
             if (value === undefined || value === null || value === "") return;
             if (nextIdentity[key] !== undefined && nextIdentity[key] !== null && nextIdentity[key] !== "") {
@@ -310,13 +327,14 @@ export function ListingProvider({ children }) {
           assignIdentity("gradeStatus", composedGradeStatus);
           assignIdentity("isGraded", composedIsGraded);
 
+          const committedIdentity = commitIdentity(prev, nextIdentity);
           const mergedUpdates = {
             ...prev,
             ...attrs,
             cardIntel: intel,
             cardIntelHash: intel?.imageHash || null,
             cardAttributes: attrs || prev.cardAttributes,
-            identity: nextIdentity,
+            identity: committedIdentity,
           };
           const cornerAssets = extractCornerPhotoEntries(intel);
           if (cornerAssets.length) {
@@ -351,6 +369,16 @@ export function ListingProvider({ children }) {
           }
           if (typeof composedIsGraded === "boolean" && mergedUpdates.isGraded === undefined) {
             mergedUpdates.isGraded = composedIsGraded;
+          }
+          if (
+            process.env.NODE_ENV === "development" &&
+            prev.identity &&
+            Object.keys(prev.identity).length > 0 &&
+            (!mergedUpdates.identity || Object.keys(mergedUpdates.identity).length === 0)
+          ) {
+            throw new Error(
+              "Invariant violation: card.identity was cleared after being populated"
+            );
           }
           persistSportsCardDraft(mergedUpdates);
           return mergedUpdates;
@@ -477,7 +505,7 @@ export function ListingProvider({ children }) {
       setAnalysisState("analyzing");
       let resolverTimeoutId = setTimeout(() => {
         setReviewIdentity((prev) =>
-          cardFactsResolver({ identity: prev || {} })
+          cardFactsResolver({ identity: prev ?? null })
         );
         setAnalysisState("complete");
       }, 5000);
