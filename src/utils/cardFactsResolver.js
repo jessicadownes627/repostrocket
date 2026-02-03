@@ -764,6 +764,83 @@ export function resolveCardFacts(intel = {}) {
   const brandSourceLines = ocrLineTextsFront;
   const manufacturerTokens = ["panini"];
   const teamKeywords = [...MLB_TEAMS, ...NFL_TEAMS, ...NBA_TEAMS, ...NHL_TEAMS];
+  let teamTokenMap;
+  teamTokenMap = new Map([
+    ["mets", "New York Mets"],
+    ["orioles", "Baltimore Orioles"],
+    ["athletics", "Oakland Athletics"],
+    ["yankees", "New York Yankees"],
+    ["red sox", "Boston Red Sox"],
+    ["white sox", "Chicago White Sox"],
+    ["cubs", "Chicago Cubs"],
+    ["dodgers", "Los Angeles Dodgers"],
+    ["giants", "San Francisco Giants"],
+    ["cardinals", "St. Louis Cardinals"],
+    ["padres", "San Diego Padres"],
+    ["brewers", "Milwaukee Brewers"],
+    ["pirates", "Pittsburgh Pirates"],
+    ["phillies", "Philadelphia Phillies"],
+    ["braves", "Atlanta Braves"],
+    ["nationals", "Washington Nationals"],
+    ["marlins", "Miami Marlins"],
+    ["rays", "Tampa Bay Rays"],
+    ["blue jays", "Toronto Blue Jays"],
+    ["guardians", "Cleveland Guardians"],
+    ["twins", "Minnesota Twins"],
+    ["tigers", "Detroit Tigers"],
+    ["royals", "Kansas City Royals"],
+    ["rockies", "Colorado Rockies"],
+    ["diamondbacks", "Arizona Diamondbacks"],
+    ["rangers", "Texas Rangers"],
+    ["astros", "Houston Astros"],
+    ["angels", "Los Angeles Angels"],
+    ["mariners", "Seattle Mariners"],
+    ["reds", "Cincinnati Reds"],
+  ]);
+  if (!resolved.team) {
+    const teamCandidates = new Map();
+    const addTeamCandidate = (line, source) => {
+      const normalized = normalizeLine(line);
+      if (!normalized) return;
+      if (teamTokenMap.has(normalized)) {
+        teamCandidates.set(teamTokenMap.get(normalized), source);
+        return;
+      }
+      const match = teamKeywords.find((team) => normalized.includes(team));
+      if (match) {
+        teamCandidates.set(titleCase(match), source);
+      }
+    };
+    ocrLineTextsFront.forEach((line) => addTeamCandidate(line, "front"));
+    ocrLineTextsBack.forEach((line) => addTeamCandidate(line, "back"));
+    if (teamCandidates.size === 1) {
+      const [[team, source]] = Array.from(teamCandidates.entries());
+      const hadTeam = Boolean(resolved.team);
+      setIfEmpty("team", team);
+      setSourceIfUnset("team", source, hadTeam);
+    }
+  }
+  if (!resolved.sport) {
+    const sportCandidates = new Map();
+    const addSportCandidate = (line, source) => {
+      const normalized = normalizeLine(line);
+      if (!normalized) return;
+      const match = LEAGUE_LOOKUP.find((entry) =>
+        entry.keywords.some((keyword) => normalized.includes(keyword))
+      );
+      if (match) {
+        sportCandidates.set(match.sport, source);
+      }
+    };
+    ocrLineTextsFront.forEach((line) => addSportCandidate(line, "front"));
+    ocrLineTextsBack.forEach((line) => addSportCandidate(line, "back"));
+    if (sportCandidates.size === 1) {
+      const [[sport, source]] = Array.from(sportCandidates.entries());
+      const hadSport = Boolean(resolved.sport);
+      setIfEmpty("sport", sport);
+      setSourceIfUnset("sport", source, hadSport);
+    }
+  }
   let brandSetYearLocked = false;
   const runBrandSetYearScan = (lines, source) => {
     for (const line of lines) {
@@ -998,6 +1075,48 @@ export function resolveCardFacts(intel = {}) {
     candidates.sort((a, b) => b.length - a.length);
     return titleCase(candidates[0]);
   };
+
+  if (!resolved.player) {
+    const nameCandidates = new Map();
+    const isNameLikeLine = (line) => {
+      if (!line) return false;
+      if (excludedPlayerLines.has(line)) return false;
+      if (/\d/.test(line)) return false;
+      const words = line.split(/\s+/).filter(Boolean);
+      if (words.length < 2 || words.length > 4) return false;
+      if (line.length > 40) return false;
+      const normalized = normalizeLine(line);
+      if (!normalized) return false;
+      if (positionTokens.some((token) => normalized.includes(token))) return false;
+      if (brandKeywords.some((brand) => normalized.includes(brand))) return false;
+      if (teamKeywords.some((team) => normalized.includes(team))) return false;
+      if (statTokens.some((token) => normalized.includes(token))) return false;
+      if (verbTokens.some((token) => normalized.includes(token))) return false;
+      if (!/[a-z]/i.test(line)) return false;
+      return true;
+    };
+    const addCandidate = (line, source) => {
+      if (!isNameLikeLine(line)) return;
+      const normalized = normalizeLine(line);
+      if (!normalized) return;
+      if (!nameCandidates.has(normalized)) {
+        nameCandidates.set(normalized, {
+          value: titleCase(line),
+          source,
+        });
+      }
+    };
+    ocrLineTextsFront.forEach((line) => addCandidate(line, "front"));
+    ocrLineTextsBack.forEach((line) => addCandidate(line, "back"));
+    if (nameCandidates.size === 1) {
+      const only = Array.from(nameCandidates.values())[0];
+      const hadPlayer = Boolean(resolved.player);
+      if (!resolved.player) {
+        resolved.player = only.value;
+      }
+      setSourceIfUnset("player", "ocr", hadPlayer);
+    }
+  }
 
   if (!resolved.player && ocrLineTextsFront.length) {
     const frontPlayer = pickAllCapsPlayer(ocrLineTextsFront);
@@ -1309,10 +1428,10 @@ export function resolveCardFacts(intel = {}) {
     const candidates = Array.from(allYearCandidates)
       .map((value) => Number(value))
       .filter((value) => value >= 2000 && value <= 2099);
-    if (candidates.length === 1 && (resolved.brand || resolved.sport)) {
+    if (candidates.length === 1) {
       const hadYear = Boolean(resolved.year);
       setIfEmpty("year", String(candidates[0]));
-      setSourceIfUnset("year", "inferred", hadYear);
+      setSourceIfUnset("year", "auto", hadYear);
     }
   }
 
@@ -1548,38 +1667,6 @@ export function resolveCardFacts(intel = {}) {
     }
   }
 
-  const teamTokenMap = new Map([
-    ["mets", "New York Mets"],
-    ["orioles", "Baltimore Orioles"],
-    ["athletics", "Oakland Athletics"],
-    ["yankees", "New York Yankees"],
-    ["red sox", "Boston Red Sox"],
-    ["white sox", "Chicago White Sox"],
-    ["cubs", "Chicago Cubs"],
-    ["dodgers", "Los Angeles Dodgers"],
-    ["giants", "San Francisco Giants"],
-    ["cardinals", "St. Louis Cardinals"],
-    ["padres", "San Diego Padres"],
-    ["brewers", "Milwaukee Brewers"],
-    ["pirates", "Pittsburgh Pirates"],
-    ["phillies", "Philadelphia Phillies"],
-    ["braves", "Atlanta Braves"],
-    ["nationals", "Washington Nationals"],
-    ["marlins", "Miami Marlins"],
-    ["rays", "Tampa Bay Rays"],
-    ["blue jays", "Toronto Blue Jays"],
-    ["guardians", "Cleveland Guardians"],
-    ["twins", "Minnesota Twins"],
-    ["tigers", "Detroit Tigers"],
-    ["royals", "Kansas City Royals"],
-    ["rockies", "Colorado Rockies"],
-    ["diamondbacks", "Arizona Diamondbacks"],
-    ["rangers", "Texas Rangers"],
-    ["astros", "Houston Astros"],
-    ["angels", "Los Angeles Angels"],
-    ["mariners", "Seattle Mariners"],
-    ["reds", "Cincinnati Reds"],
-  ]);
   const teamSourceTexts = slabLineTexts.length ? slabLineTexts : lineTexts;
   const teamCandidate = teamSourceTexts.find((line) => {
     if (!/^[A-Z0-9\s.'&-]+$/.test(line)) return false;
@@ -1874,6 +1961,14 @@ export function resolveCardFacts(intel = {}) {
     resolved._sources?.isSlabbed !== "manual"
   ) {
     resolved.isSlabbed = true;
+  }
+  if (resolved.player) {
+    if (teamKeywords.some((team) => normalizeLine(resolved.player).includes(team))) {
+      resolved.player = null;
+      delete resolved._sources.player;
+    } else {
+      return finalizeIdentity(resolved);
+    }
   }
   // Final sanity pass: keep only name-like player values from OCR.
   {

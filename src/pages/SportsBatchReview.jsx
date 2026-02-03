@@ -126,10 +126,7 @@ export default function SportsBatchReview() {
   }, [cardsMissingBasics, majorityGroup, updateCard]);
 
   const renderDetecting = (label) => (
-    <span className="text-white/35">
-      {label}
-      <span className="lux-ellipsis" />
-    </span>
+    renderUnknown(label)
   );
 
   const renderUnknown = (label) => (
@@ -387,7 +384,16 @@ export default function SportsBatchReview() {
         {cards.length > 0 && (
           <div className="grid gap-4">
             {cards.map((card, index) => {
+              console.log("REVIEW IDENTITY", card.identity);
               const identity = card.identity || {};
+              const normalizedPlayer =
+                typeof identity.player === "string"
+                  ? identity.player
+                  : identity.player?.name || "";
+              const normalizedTeam =
+                typeof identity.team === "string"
+                  ? identity.team
+                  : identity.team?.name || "";
               const isSlabbed = identity.isSlabbed === true;
               const frontCorners = Array.isArray(card.frontCorners)
                 ? card.frontCorners
@@ -486,16 +492,16 @@ export default function SportsBatchReview() {
                         </div>
                         <div className="flex-1 min-w-0 space-y-2">
                           <div className="text-base text-white">
-                            {identity.player ||
+                            {normalizedPlayer ||
                               (isResolved
                                 ? renderUnknown("Unknown player")
                                 : renderDetecting("Detecting player"))}
-                            {identity.player && playerConfidence && (
+                            {normalizedPlayer && playerConfidence && (
                               <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/45">
                                 {playerConfidence}
                               </span>
                             )}
-                            {!identity.player && isResolved && (
+                            {!normalizedPlayer && isResolved && (
                               (() => {
                                 const hint = getConfidenceInsight(
                                   "player",
@@ -510,11 +516,11 @@ export default function SportsBatchReview() {
                             )}
                           </div>
                           <div className="text-sm text-white/70">
-                            {identity.team || identity.sport ? (
+                            {normalizedTeam || identity.sport ? (
                               <div className="flex flex-wrap items-center gap-2">
-                                {identity.team && (
+                                {normalizedTeam && (
                                   <span className="inline-flex items-center gap-2">
-                                    <span>{identity.team}</span>
+                                    <span>{normalizedTeam}</span>
                                     {teamConfidence && (
                                       <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/45">
                                         {teamConfidence}
@@ -522,7 +528,7 @@ export default function SportsBatchReview() {
                                     )}
                                   </span>
                                 )}
-                                {identity.team && identity.sport && <span>•</span>}
+                                {normalizedTeam && identity.sport && <span>•</span>}
                                 {identity.sport && (
                                   <span className="inline-flex items-center gap-2">
                                     <span>{identity.sport}</span>
@@ -539,7 +545,7 @@ export default function SportsBatchReview() {
                             ) : (
                               renderDetecting("Detecting team · sport")
                             )}
-                            {!identity.team && !identity.sport && isResolved && (
+                            {!normalizedTeam && !identity.sport && isResolved && (
                               (() => {
                                 const hint =
                                   getConfidenceInsight("team", confidenceContext) ||
@@ -632,7 +638,7 @@ export default function SportsBatchReview() {
                     <div className="grid gap-3">
                       {[
                         { key: "title", label: "Title", value: titleValue },
-                        { key: "player", label: "Player", value: identity.player },
+                        { key: "player", label: "Player", value: normalizedPlayer },
                         {
                           key: "brandSet",
                           label: "Brand / Set",
@@ -640,7 +646,7 @@ export default function SportsBatchReview() {
                         },
                         { key: "year", label: "Year", value: identity.year },
                         { key: "sport", label: "Sport", value: identity.sport },
-                        { key: "team", label: "Team", value: identity.team },
+                        { key: "team", label: "Team", value: normalizedTeam },
                       ].map((field) => {
                         const isEmpty =
                           field.value === undefined ||
