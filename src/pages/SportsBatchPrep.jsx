@@ -86,7 +86,9 @@ export default function SportsBatchPrep() {
       (nextIdentity.player ||
         nextIdentity.team ||
         nextIdentity.year ||
-        nextIdentity.setName);
+        nextIdentity.setName ||
+        nextIdentity.brand ||
+        nextIdentity.sport);
     if (!hasFields) return card?.identity ?? null;
     if (card?.identity && Object.keys(card.identity).length > 0) {
       return card.identity;
@@ -270,6 +272,23 @@ export default function SportsBatchPrep() {
       const batchId = batchMeta?.id;
       if (!batchId) {
         alert("No batch ID available.");
+        return;
+      }
+      const allTier1 =
+        cards.length > 0 &&
+        cards.every((card) => {
+          const identity = card?.identity;
+          const yearSource = identity?._sources?.year || "";
+          const isDeterministic =
+            yearSource === "brand_set" || yearSource === "front_back";
+          const hasFields =
+            identity?.brand && identity?.setName && identity?.year;
+          return Boolean(hasFields && isDeterministic);
+        });
+      if (allTier1) {
+        navigate("/sports-batch-launch", {
+          state: { includeCardIds: cards.map((card) => card.id) },
+        });
         return;
       }
       navigate("/sports-batch-review");
@@ -562,6 +581,23 @@ export default function SportsBatchPrep() {
           backOcrLines: data.backOcrLines || [],
           slabLabelLines: data.slabLabelLines || [],
         });
+        if (
+          resolved?.brand &&
+          resolved?.setName &&
+          resolved?.year
+        ) {
+          const yearSource = resolved?._sources?.year || "";
+          const isTier1 =
+            yearSource === "brand_set" || yearSource === "front_back";
+          if (!isTier1) {
+            resolved._sources = {
+              ...(resolved._sources || {}),
+              brand: "inferred",
+              setName: "inferred",
+              year: "inferred",
+            };
+          }
+        }
         const committedIdentity = commitIdentity(cardStates?.[cardId], resolved);
         if (!resolved.player) {
           const bestGuess = getLikelyPlayerFromOcr({

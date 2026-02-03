@@ -16,6 +16,8 @@ export default function SportsBatchReview() {
     useSportsBatchStore();
   const [editModeCardId, setEditModeCardId] = useState(null);
   const [editBuffers, setEditBuffers] = useState({});
+  const [appliedGroups, setAppliedGroups] = useState({});
+  const autoApplyRef = useRef(false);
   const cards = useMemo(
     () =>
       Object.entries(cardStates || {}).map(([cardId, state]) => ({
@@ -46,12 +48,82 @@ export default function SportsBatchReview() {
       updateCard(card.id, { identity: resolved });
     });
   }, [cards, updateCard]);
+  useEffect(() => {
+    if (!cards.length) return;
+    const allTier1 = cards.every((card) => {
+      const identity = card?.identity;
+      const yearSource = identity?._sources?.year || "";
+      const hasFields =
+        identity?.brand && identity?.setName && identity?.year;
+      return (
+        hasFields &&
+        (yearSource === "brand_set" || yearSource === "front_back")
+      );
+    });
+    if (allTier1) {
+      navigate("/sports-batch-launch", {
+        state: { includeCardIds: cards.map((card) => card.id) },
+      });
+    }
+  }, [cards, navigate]);
   const readyCards = useMemo(
     () => cards.filter((card) => card.cardIntelResolved === true),
     [cards]
   );
   const readyCount = readyCards.length;
   const canContinue = readyCount > 0;
+  const cardsMissingBasics = cards.filter((card) => {
+    const identity = card?.identity;
+    return !(identity?.brand && identity?.setName && identity?.year);
+  });
+  const groupedByTriple = useMemo(() => {
+    const groups = new Map();
+    cards.forEach((card) => {
+      const identity = card?.identity;
+      if (!identity?.brand || !identity?.setName || !identity?.year) return;
+      const key = `${identity.brand}|||${identity.setName}|||${identity.year}`;
+      const entry = groups.get(key) || {
+        key,
+        brand: identity.brand,
+        setName: identity.setName,
+        year: identity.year,
+        cards: [],
+      };
+      entry.cards.push(card);
+      groups.set(key, entry);
+    });
+    return Array.from(groups.values()).sort(
+      (a, b) => b.cards.length - a.cards.length
+    );
+  }, [cards]);
+  const totalCards = cards.length;
+  const majorityGroup = groupedByTriple.find(
+    (group) => group.cards.length / totalCards >= 0.7
+  );
+  useEffect(() => {
+    if (!cardsMissingBasics.length) return;
+    if (!majorityGroup) return;
+    if (autoApplyRef.current) return;
+    autoApplyRef.current = true;
+    cardsMissingBasics.forEach((card) => {
+      const identity = { ...(card.identity || {}) };
+      const sources = { ...(identity._sources || {}) };
+      if (!identity.brand) {
+        identity.brand = majorityGroup.brand;
+        sources.brand = "inferred";
+      }
+      if (!identity.setName) {
+        identity.setName = majorityGroup.setName;
+        sources.setName = "inferred";
+      }
+      if (!identity.year) {
+        identity.year = majorityGroup.year;
+        sources.year = "inferred";
+      }
+      identity._sources = sources;
+      updateCard(card.id, { identity });
+    });
+  }, [cardsMissingBasics, majorityGroup, updateCard]);
 
   const renderDetecting = (label) => (
     <span className="text-white/35">
@@ -251,6 +323,61 @@ export default function SportsBatchReview() {
         </button>
 
         <h1 className="text-3xl text-center mb-4">Review your cards</h1>
+        {cardsMissingBasics.length > 0 &&
+          groupedByTriple.length > 0 &&
+          !majorityGroup && (
+            <div className="mb-6 grid gap-3">
+              {groupedByTriple.map((group) => {
+                const alreadyApplied = Boolean(appliedGroups[group.key]);
+                return (
+                  <div
+                    key={group.key}
+                    className="border border-white/10 rounded-lg p-4 text-sm text-white/80 flex flex-wrap items-center justify-between gap-3"
+                  >
+                    <div>
+                      Apply {group.brand} · {group.setName} · {group.year} to{" "}
+                      {cardsMissingBasics.length} cards?
+                    </div>
+                    <button
+                      type="button"
+                      disabled={alreadyApplied}
+                      className={`px-4 py-2 rounded-full text-xs uppercase tracking-[0.25em] ${
+                        alreadyApplied
+                          ? "border border-white/10 text-white/40 cursor-not-allowed"
+                          : "border border-[#E8DCC0] text-[#E8DCC0]"
+                      }`}
+                      onClick={() => {
+                        cardsMissingBasics.forEach((card) => {
+                          const identity = { ...(card.identity || {}) };
+                          const sources = { ...(identity._sources || {}) };
+                          if (!identity.brand) {
+                            identity.brand = group.brand;
+                            sources.brand = "inferred";
+                          }
+                          if (!identity.setName) {
+                            identity.setName = group.setName;
+                            sources.setName = "inferred";
+                          }
+                          if (!identity.year) {
+                            identity.year = group.year;
+                            sources.year = "inferred";
+                          }
+                          identity._sources = sources;
+                          updateCard(card.id, { identity });
+                        });
+                        setAppliedGroups((prev) => ({
+                          ...(prev || {}),
+                          [group.key]: true,
+                        }));
+                      }}
+                    >
+                      Apply to group
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         {cards.length === 0 && (
           <div className="text-center text-white/60">
             No cards found for this batch.
@@ -270,7 +397,11 @@ export default function SportsBatchReview() {
               const hasFrontImage = Boolean(card.frontImage?.url);
               const hasBackImage = Boolean(card.backImage?.url);
               const status = card.cardIntelResolved ? "Ready" : "Editable";
-              const isResolved = card.cardIntelResolved === true;
+              const isResolved =
+                card.cardIntelResolved === true ||
+                ["complete", "error", "needs-info"].includes(
+                  card.analysisStatus
+                );
               const isEditMode = editModeCardId === card.id;
               const buffer = editBuffers?.[card.id] || {};
               const sources = identity?._sources || {};
@@ -451,11 +582,25 @@ export default function SportsBatchReview() {
                             ) : (
                               renderDetecting("Detecting set · year")
                             )}
-                            {(!identity.setName || !identity.year) && isResolved && (
+                            {isResolved && !identity.setName && (
                               (() => {
-                                const hint =
-                                  getConfidenceInsight("year", confidenceContext) ||
-                                  getConfidenceInsight("setName", confidenceContext);
+                                const hint = getConfidenceInsight(
+                                  "setName",
+                                  confidenceContext
+                                );
+                                return hint ? (
+                                  <div className="text-xs text-white/45 mt-1">
+                                    Partial insight: {hint}
+                                  </div>
+                                ) : null;
+                              })()
+                            )}
+                            {isResolved && !identity.year && (
+                              (() => {
+                                const hint = getConfidenceInsight(
+                                  "year",
+                                  confidenceContext
+                                );
                                 return hint ? (
                                   <div className="text-xs text-white/45 mt-1">
                                     Partial insight: {hint}

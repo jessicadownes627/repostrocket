@@ -1291,7 +1291,29 @@ export function resolveCardFacts(intel = {}) {
   if (!brandSetYearLocked && frontYear && backYear && String(frontYear) === String(backYear)) {
     const hadYear = Boolean(resolved.year);
     setIfEmpty("year", String(frontYear));
-    setSourceIfUnset("year", "front", hadYear);
+    setSourceIfUnset("year", "front_back", hadYear);
+  }
+
+  if (!brandSetYearLocked && !resolved.year) {
+    const allYearCandidates = new Set();
+    const collectYears = (lines) => {
+      lines.forEach((line) => {
+        if (!line) return;
+        const matches = line.match(/\b(19|20)\d{2}\b/g);
+        if (!matches) return;
+        matches.forEach((value) => allYearCandidates.add(value));
+      });
+    };
+    collectYears(ocrLineTextsFront);
+    collectYears(ocrLineTextsBack);
+    const candidates = Array.from(allYearCandidates)
+      .map((value) => Number(value))
+      .filter((value) => value >= 2000 && value <= 2099);
+    if (candidates.length === 1 && (resolved.brand || resolved.sport)) {
+      const hadYear = Boolean(resolved.year);
+      setIfEmpty("year", String(candidates[0]));
+      setSourceIfUnset("year", "inferred", hadYear);
+    }
   }
 
 
