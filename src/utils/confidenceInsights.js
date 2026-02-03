@@ -182,7 +182,7 @@ export const getConfidenceInsight = (field, context = {}) => {
   if (field === "year") {
     const years = findYearTokens(allLines);
     if (years.fourDigit.length) {
-      return `Based on what I can see, a year-like number appears (${years.fourDigit[0]}).`;
+      return `Number detected — not confirmed as year (${years.fourDigit[0]}).`;
     }
     if (years.twoDigit.length) {
       return `Based on what I can see, a two-digit year appears (${years.twoDigit[0]}).`;

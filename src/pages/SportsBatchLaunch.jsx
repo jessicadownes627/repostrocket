@@ -64,18 +64,12 @@ export default function SportsBatchLaunch() {
   }, [cardStates, location?.state]);
 
   const activePlatforms = useMemo(
-    () => (preparedPlatforms?.length ? preparedPlatforms : ["ebay"]),
+    () => (preparedPlatforms?.length ? preparedPlatforms : []),
     [preparedPlatforms]
   );
   const totalCards = cards.length;
   const progressFraction =
     totalCards > 0 ? Math.min(analysisCount / totalCards, 1) : 0;
-
-  useEffect(() => {
-    if (!preparedPlatforms?.length) {
-      setPreparedPlatforms(["ebay"]);
-    }
-  }, [preparedPlatforms?.length, setPreparedPlatforms]);
 
   const togglePlatform = (id) => {
     setPreparedPlatforms((prev) => {
@@ -91,6 +85,10 @@ export default function SportsBatchLaunch() {
     activeFilter === "all"
       ? activePlatforms
       : activePlatforms.filter((id) => id === activeFilter);
+  const hasSelectedPlatforms = activePlatforms.length > 0;
+  const platformStatus = hasSelectedPlatforms
+    ? `${activePlatforms.length} selected`
+    : "none selected";
 
   const renderThumbnail = (src, alt) => {
     if (!src) {
@@ -124,6 +122,8 @@ export default function SportsBatchLaunch() {
     const anchor = document.getElementById("sports-batch-listings");
     if (anchor) anchor.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+  const ebayLabel =
+    PLATFORM_OPTIONS.find((option) => option.id === "ebay")?.label || "eBay";
 
   const handleFinalizeBatch = async () => {
     if (finalizeInFlight || !cards.length) return;
@@ -208,27 +208,9 @@ export default function SportsBatchLaunch() {
           </div>
         </div>
         <div className="text-center text-white/60 text-sm mb-8">
-          {cards.length} cards · Platforms: {activePlatforms.join(", ") || "eBay"}
-          {includeCorners ? " · Corners included" : " · Corners off"}
-        </div>
-
-        <div className="flex justify-center mb-4">
-          <button
-            type="button"
-            onClick={handleGenerateListings}
-            className="px-6 py-3 rounded-full border border-[#E8DCC0] text-[#E8DCC0] text-xs uppercase tracking-[0.25em]"
-          >
-            Create listings
-          </button>
-        </div>
-        <div className="flex justify-center mb-8">
-          <button
-            type="button"
-            onClick={handleFinalizeBatch}
-            className="px-6 py-3 rounded-full border border-white/20 text-white/70 text-xs uppercase tracking-[0.25em]"
-          >
-            Finalize batch
-          </button>
+          {cards.length} card{cards.length === 1 ? "" : "s"} ready • Platforms:{" "}
+          {platformStatus} •{" "}
+          {includeCorners ? "Corners available" : "Corners off"}
         </div>
 
         {cards.length === 0 ? (
@@ -239,7 +221,7 @@ export default function SportsBatchLaunch() {
           <>
             <div className="lux-card border border-white/10 p-5 mb-6">
               <div className="text-xs uppercase tracking-[0.3em] text-white/50 mb-3">
-                Prepare platforms
+                Where do you want to list?
               </div>
               <div className="flex flex-wrap gap-3">
                 {PLATFORM_OPTIONS.map((platform) => {
@@ -264,11 +246,11 @@ export default function SportsBatchLaunch() {
 
             <div className="lux-card border border-white/10 p-5 mb-6">
               <div className="text-xs uppercase tracking-[0.3em] text-white/50 mb-3">
-                Listing images
+                Listing image options
               </div>
               <div className="flex flex-col gap-4 text-sm text-white/70">
                 <label className="flex items-center justify-between gap-4">
-                  <span>Use cropped corners in listings?</span>
+                  <span>Use cropped corners in listings</span>
                   <input
                     type="checkbox"
                     checked={includeCorners}
@@ -277,7 +259,7 @@ export default function SportsBatchLaunch() {
                   />
                 </label>
                 <label className="flex items-center justify-between gap-4">
-                  <span>Save corner images?</span>
+                  <span>Save corner images to camera roll</span>
                   <input
                     type="checkbox"
                     checked={saveCorners}
@@ -286,9 +268,31 @@ export default function SportsBatchLaunch() {
                   />
                 </label>
                 <div className="text-xs text-white/50">
-                  You can download them later if needed.
+                  Useful for records or manual uploads.
                 </div>
               </div>
+            </div>
+
+            <div className="flex flex-col items-center gap-4 mb-8">
+              <button
+                type="button"
+                onClick={handleGenerateListings}
+                disabled={!hasSelectedPlatforms}
+                className={`px-6 py-3 rounded-full text-xs uppercase tracking-[0.25em] ${
+                  hasSelectedPlatforms
+                    ? "border border-[#E8DCC0] text-[#E8DCC0]"
+                    : "border border-white/10 text-white/40 cursor-not-allowed"
+                }`}
+              >
+                Create Listings
+              </button>
+              <button
+                type="button"
+                onClick={handleFinalizeBatch}
+                className="px-6 py-3 rounded-full border border-white/20 text-white/70 text-xs uppercase tracking-[0.25em]"
+              >
+                Finalize Batch
+              </button>
             </div>
 
             <div className="lux-card border border-white/10 p-5 mb-8">
@@ -329,7 +333,7 @@ export default function SportsBatchLaunch() {
               </div>
             </div>
 
-            <div id="sports-batch-listings" className="grid gap-6">
+            <div id="sports-batch-listings" className="grid gap-3">
               {cards.map((card) => {
                 const cardState = cardStates[card.id] || {};
                 const identity = cardState.identity || {};
@@ -341,93 +345,83 @@ export default function SportsBatchLaunch() {
                 const frontCorners = !isSlabbed ? cardState.frontCorners || [] : [];
                 const backCorners = !isSlabbed ? cardState.backCorners || [] : [];
                 const showCorners = includeCorners && !isSlabbed;
-
+                const subtitleParts = [identity.player, identity.year, identity.team]
+                  .map((value) => (value ? String(value).trim() : ""))
+                  .filter(Boolean);
                 const exportLinks = buildListingExportLinks({
                   title,
                   description,
                   price: cardState.price ? Number(cardState.price) : undefined,
                 });
+                const ebayUrl = exportLinks?.ebay || "";
 
                 return (
-                  <div key={card.id} className="lux-card border border-white/10 p-5">
-                    <div className="flex flex-col gap-2 mb-4">
-                      <div className="text-sm uppercase tracking-[0.25em] text-white/50">
-                        Card
-                      </div>
-                      <div className="text-lg text-white">
+                  <div
+                    key={card.id}
+                    className="lux-card border border-white/10 p-3 flex flex-wrap items-center gap-3"
+                  >
+                    <div className="relative shrink-0">
+                      {frontSrc ? (
+                        <img
+                          src={frontSrc}
+                          alt="Front"
+                          className="h-24 w-16 rounded-md border border-white/10 object-cover"
+                        />
+                      ) : (
+                        <div className="h-24 w-16 rounded-md border border-dashed border-white/15" />
+                      )}
+                      {backSrc && (
+                        <img
+                          src={backSrc}
+                          alt="Back"
+                          className="absolute -bottom-1 -right-1 h-10 w-10 rounded border border-white/20 object-cover"
+                        />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-white truncate">
                         {title || "Untitled card"}
                       </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-3 mb-5">
-                      {renderThumbnail(frontSrc, "Front")}
-                      {renderThumbnail(backSrc, "Back")}
-                    </div>
-                    {showCorners && (frontCorners.length || backCorners.length) ? (
-                      <div className="grid gap-3 mb-5">
-                        <div className="grid grid-cols-4 gap-3">
+                      <div className="text-xs text-white/60 truncate">
+                        {subtitleParts.length ? subtitleParts.join(" · ") : "—"}
+                      </div>
+                      {showCorners && (frontCorners.length || backCorners.length) ? (
+                        <div className="mt-2 flex gap-1">
                           {frontCorners.slice(0, 4).map((corner, idx) => (
                             <img
-                              key={`front-${item.id}-${idx}`}
+                              key={`front-${card.id}-${idx}`}
                               src={corner.url || corner}
                               alt={`Front corner ${idx + 1}`}
-                              className="h-16 w-16 rounded-lg border border-white/10 object-cover"
-                            />
-                          ))}
-                          {backCorners.slice(0, 4).map((corner, idx) => (
-                            <img
-                              key={`back-${item.id}-${idx}`}
-                              src={corner.url || corner}
-                              alt={`Back corner ${idx + 1}`}
-                              className="h-16 w-16 rounded-lg border border-white/10 object-cover"
+                              className="h-6 w-6 rounded border border-white/10 object-cover"
                             />
                           ))}
                         </div>
-                      </div>
-                    ) : null}
-
-                    <div className="grid gap-4">
-                      {visiblePlatforms.map((platformId) => {
-                        const label =
-                          PLATFORM_OPTIONS.find((option) => option.id === platformId)
-                            ?.label || platformId;
-                        const launchUrl = exportLinks?.[platformId] || "";
-                        return (
-                          <div
-                            key={platformId}
-                            className="border border-white/10 rounded-xl p-4"
-                          >
-                            <div className="text-xs uppercase tracking-[0.3em] text-white/50 mb-3">
-                              {label}
-                            </div>
-                            <div className="flex flex-wrap gap-3">
-                              <button
-                                type="button"
-                                className="px-4 py-2 rounded-full text-xs uppercase tracking-[0.2em] border border-white/20 text-white/70 hover:text-white"
-                                onClick={() => handleCopy(title)}
-                              >
-                                Copy title
-                              </button>
-                              <button
-                                type="button"
-                                className="px-4 py-2 rounded-full text-xs uppercase tracking-[0.2em] border border-white/20 text-white/70 hover:text-white"
-                                onClick={() => handleCopy(description)}
-                              >
-                                Copy description
-                              </button>
-                              {launchUrl && (
-                                <button
-                                  type="button"
-                                  className="px-4 py-2 rounded-full text-xs uppercase tracking-[0.2em] border border-[#E8DCC0] text-[#E8DCC0]"
-                                  onClick={() => window.open(launchUrl, "_blank", "noopener")}
-                                >
-                                  Open {label}
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
+                      ) : null}
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        className="px-3 py-2 rounded-full text-[10px] uppercase tracking-[0.2em] border border-white/20 text-white/70 hover:text-white"
+                        onClick={() => handleCopy(title)}
+                      >
+                        Copy title
+                      </button>
+                      <button
+                        type="button"
+                        className="px-3 py-2 rounded-full text-[10px] uppercase tracking-[0.2em] border border-white/20 text-white/70 hover:text-white"
+                        onClick={() => handleCopy(description)}
+                      >
+                        Copy description
+                      </button>
+                      {ebayUrl && (
+                        <button
+                          type="button"
+                          className="px-3 py-2 rounded-full text-[10px] uppercase tracking-[0.2em] border border-[#E8DCC0] text-[#E8DCC0]"
+                          onClick={() => window.open(ebayUrl, "_blank", "noopener")}
+                        >
+                          Open {ebayLabel}
+                        </button>
+                      )}
                     </div>
                   </div>
                 );

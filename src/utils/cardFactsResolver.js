@@ -714,6 +714,13 @@ export function resolveCardFacts(intel = {}) {
         brandLineIndexes.push(idx);
       }
     });
+    const isStrongYearLine = (line) => {
+      const normalized = normalizeLine(line);
+      if (!normalized) return false;
+      if (brandKeywords.some((brand) => normalized.includes(brand))) return true;
+      if (/copyright|tm|trademark|©/.test(normalized)) return true;
+      return false;
+    };
     const candidates = [];
     const addCandidate = (value, idx, distance) => {
       const normalized =
@@ -726,6 +733,7 @@ export function resolveCardFacts(intel = {}) {
       if (!normalized) return;
       if (statTokens.some((token) => normalized.includes(token))) return;
       if (verbTokens.some((token) => normalized.includes(token))) return;
+      if (!isStrongYearLine(line)) return;
       const fourDigitMatches = line.match(/\b(19|20)\d{2}\b/g) || [];
       const twoDigitMatches = line.match(/\b\d{2}\b/g) || [];
       fourDigitMatches.forEach((value) => addCandidate(value, idx, null));
@@ -746,27 +754,7 @@ export function resolveCardFacts(intel = {}) {
     return candidates.sort((a, b) => a.idx - b.idx)[0]?.year ?? null;
   };
   const frontYear = frontYearPick();
-  if (frontYear && !resolved.year) {
-    const hadYear = Boolean(resolved.year);
-    setIfEmpty("year", String(frontYear));
-    setSourceIfUnset("year", "front", hadYear);
-  }
-  if (!resolved.year && slabLineTexts.length) {
-    const slabYearCandidates = slabLineTexts
-      .map((line) => line.match(/\b(19|20)\d{2}\b/))
-      .filter(Boolean)
-      .map((match) => match[0])
-      .filter((value) => {
-        const yearNumber = Number(value);
-        return yearNumber >= 1900 && yearNumber <= 2099;
-      });
-    if (slabYearCandidates.length) {
-      const latest = Math.max(...slabYearCandidates.map(Number));
-      const hadYear = Boolean(resolved.year);
-      setIfEmpty("year", String(latest));
-      setSourceIfUnset("year", "slab", hadYear);
-    }
-  }
+  // defer year promotion until front/back agreement is evaluated
   const normalizeOcrSource = (source) => {
     if (!source) return "front";
     if (source === "back-ocr") return "back";
@@ -774,19 +762,7 @@ export function resolveCardFacts(intel = {}) {
     return source;
   };
   const brandSourceLines = ocrLineTextsFront;
-  const setKeywords = [
-    "upper deck",
-    "topps",
-    "donruss",
-    "bowman",
-    "fleer",
-    "score",
-    "optic",
-    "prizm",
-    "select",
-  ];
   const manufacturerTokens = ["panini"];
-  const cardSpecificTokens = ["card", "rookie", "rc", "set", "series", "edition"];
   if (!resolved.brand) {
     const brandTokens = [
       { token: "panini", label: "Panini" },
@@ -868,7 +844,16 @@ export function resolveCardFacts(intel = {}) {
       return "";
     };
     const frontSet = pickSetFromLines(ocrLineTextsFront);
-    const setValue = frontSet;
+    let setValue = frontSet;
+    if (setValue) {
+      const normalizedSet = normalizeLine(setValue);
+      const backConfirms = ocrLineTextsBack.some((line) =>
+        normalizeLine(line).includes(normalizedSet)
+      );
+      if (!backConfirms) {
+        setValue = "";
+      }
+    }
     if (setValue) {
       const hadSet = Boolean(resolved.setName);
       setIfEmpty("setName", setValue);
@@ -1208,16 +1193,9 @@ export function resolveCardFacts(intel = {}) {
   const isValidYearLine = (line) => {
     const normalized = normalizeLine(line);
     if (!normalized) return false;
-    const hasSetToken = setKeywords.some((token) => normalized.includes(token));
-    const hasCardSpecific = cardSpecificTokens.some((token) =>
-      normalized.includes(token)
-    );
-    const isLegalLine =
-      /copyright|tm|trademark/.test(normalized) ||
-      normalized.includes("america") ||
-      manufacturerTokens.some((token) => normalized.includes(token));
-    if (hasSetToken) return true;
-    if (hasCardSpecific && !isLegalLine) return true;
+    if (/copyright|tm|trademark|©/.test(normalized)) return true;
+    if (brandKeywords.some((brand) => normalized.includes(brand))) return true;
+    if (manufacturerTokens.some((token) => normalized.includes(token))) return true;
     return false;
   };
   const backYearCandidates = [];
@@ -1237,83 +1215,13 @@ export function resolveCardFacts(intel = {}) {
   };
   if (!resolved.year) {
     ocrLineTextsBack.forEach((line) => addBackYear(line));
-    if (backYearCandidates.length) {
-      const latest = Math.max(...backYearCandidates);
-      const hadYear = Boolean(resolved.year);
-      setIfEmpty("year", String(latest));
-      setSourceIfUnset("year", "back", hadYear);
-    }
   }
-
-  const yearCandidates = lineTexts
-    .filter((line) => {
-      const normalized = normalizeLine(line);
-      if (!normalized) return false;
-      if (statTokens.some((token) => normalized.includes(token))) return false;
-      if (verbTokens.some((token) => normalized.includes(token))) return false;
-      if (!isValidYearLine(line)) return false;
-      return true;
-    })
-    .map((line) => line.match(/\b(19|20)\d{2}\b/))
-    .filter(Boolean)
-    .map((match) => match[0])
-    .filter((value) => {
-      const yearNumber = Number(value);
-      return yearNumber >= 1900 && yearNumber <= 2099;
-    });
-  if (yearCandidates.length) {
-    const oldest = Math.min(...yearCandidates.map(Number));
+  const backYear =
+    backYearCandidates.length ? Math.max(...backYearCandidates) : null;
+  if (frontYear && backYear && String(frontYear) === String(backYear)) {
     const hadYear = Boolean(resolved.year);
-    setIfEmpty("year", String(oldest));
-    const nextSource = pickOcrSourceForValue(String(oldest));
-    setSourceIfUnset("year", nextSource, hadYear);
-  }
-  if (!resolved.year) {
-    const setYearMatch = resolved.setName
-      ? resolved.setName.match(/\b(19|20)\d{2}\b/)
-      : null;
-    if (setYearMatch) {
-      const hadYear = Boolean(resolved.year);
-      setIfEmpty("year", setYearMatch[0]);
-      setSourceIfUnset("year", "estimated", hadYear);
-    }
-  }
-  if (!resolved.year) {
-    const brandLineIndexes = [];
-    lineTexts.forEach((line, idx) => {
-      const normalized = normalizeLine(line);
-      if (brandKeywords.some((brand) => normalized.includes(brand))) {
-        brandLineIndexes.push(idx);
-      }
-    });
-    const isStandaloneTwoDigit = (line) => /^\d{2}$/.test(line.trim());
-    const twoDigitCandidates = [];
-    const addCandidate = (value) => {
-      const num = Number(value);
-      if (Number.isNaN(num)) return;
-      if (num >= 50 || num <= 26) {
-        const normalized = num >= 50 ? 1900 + num : 2000 + num;
-        twoDigitCandidates.push(normalized);
-      }
-    };
-    if (brandLineIndexes.length) {
-      brandLineIndexes.forEach((idx) => {
-        [idx - 1, idx, idx + 1].forEach((nearIdx) => {
-          if (nearIdx < 0 || nearIdx >= lineTexts.length) return;
-          const line = lineTexts[nearIdx];
-          if (isStandaloneTwoDigit(line)) {
-            addCandidate(line);
-          }
-        });
-      });
-    }
-    if (twoDigitCandidates.length) {
-      const oldest = Math.min(...twoDigitCandidates);
-      const hadYear = Boolean(resolved.year);
-      setIfEmpty("year", String(oldest));
-      const nextSource = pickOcrSourceForValue(String(oldest));
-      setSourceIfUnset("year", nextSource, hadYear);
-    }
+    setIfEmpty("year", String(frontYear));
+    setSourceIfUnset("year", "front", hadYear);
   }
 
 

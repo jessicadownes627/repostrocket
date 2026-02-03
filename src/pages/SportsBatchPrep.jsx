@@ -562,11 +562,21 @@ export default function SportsBatchPrep() {
             ? resolved.grade.value
             : resolved?.grade;
         resolved.isSlabbed = Boolean(resolved?.grader && gradeValue);
+        const preservedFrontCorners =
+          cardStates?.[cardId]?.frontCorners?.length
+            ? cardStates[cardId].frontCorners
+            : frontCorners.filter(Boolean);
+        const preservedBackCorners =
+          cardStates?.[cardId]?.backCorners?.length
+            ? cardStates[cardId].backCorners
+            : backCorners.filter(Boolean);
         updateCard(cardId, {
           identity: resolved,
           ocrLines: data.ocrLines || [],
           backOcrLines: data.backOcrLines || [],
           slabLabelLines: data.slabLabelLines || [],
+          frontCorners: preservedFrontCorners,
+          backCorners: preservedBackCorners,
           cardIntelResolved: true,
           analysisStatus: "complete",
           analysisStatusFront: "complete",
