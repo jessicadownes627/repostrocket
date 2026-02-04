@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useListingStore } from "../store/useListingStore";
+import usePaywallGate from "../hooks/usePaywallGate";
+import PremiumModal from "../components/PremiumModal";
 import { v4 as uuidv4 } from "uuid";
 import { convertHeicToJpeg } from "../utils/heicConverter";
 import { deriveAltTextFromFilename } from "../utils/photoHelpers";
@@ -11,6 +13,7 @@ function Batch() {
   const navigate = useNavigate();
   const location = useLocation();
   const { setBatchItems, setBatchMode } = useListingStore();
+  const { gate, paywallState, closePaywall } = usePaywallGate();
 
   const [photos, setPhotos] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -21,7 +24,6 @@ function Batch() {
   useEffect(() => {
     setBatchMode(forcedMode || "general");
   }, [forcedMode, setBatchMode]);
-
   // ---------------------------------------
   // HANDLE FILE UPLOAD (HEIC SAFE + MOBILE SAFE)
   // ---------------------------------------
@@ -85,6 +87,7 @@ function Batch() {
   // ---------------------------------------
   const handleBuildBatch = () => {
     if (photos.length === 0) return;
+    gate("batchMode");
 
     const items = photos.map((p, idx) => ({
       id: p.id,
@@ -262,6 +265,13 @@ function Batch() {
           </button>
         </div>
       )}
+      <PremiumModal
+        open={paywallState.open}
+        reason={paywallState.reason}
+        usage={paywallState.usage}
+        limit={paywallState.limit}
+        onClose={closePaywall}
+      />
     </div>
   );
 }

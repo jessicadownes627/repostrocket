@@ -32,9 +32,7 @@ export default function Dashboard() {
 
   const handleBatchMode = () => {
     setBatchMode("general");
-    gate("batchMode", () =>
-      navigate("/batch", { state: { batchMode: "general" } })
-    );
+    navigate("/batch", { state: { batchMode: "general" } });
   };
 
   return (

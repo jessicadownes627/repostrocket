@@ -14,7 +14,7 @@ export const DAILY_LIMITS = {
   magicFill: 1,         // one Magic listing per day
   autoFill: 0,          // paywalled
   aiReview: 0,          // paywalled
-  batchMode: 0          // batch mode is premium-only
+  batchMode: 1          // limited batch mode for free users
 };
 
 const TRY_ONE_FREE_KEYS = {

@@ -16,15 +16,14 @@ const featureCopy = {
   },
 
   batchMode: {
-    title: "Batch Mode is Premium",
-    subtitle: "Unlimited + pro prep lives here.",
+    title: "Batch Mode",
+    subtitle: "Limited free access available.",
     description:
-      "Free keeps you accurate in single-item mode. Premium unlocks unlimited Batch Mode, bulk edits, and pro-grade time savings.",
-    free: ["Accurate single listing flow"],
+      "Free includes limited Batch Mode. Premium unlocks unlimited Batch Mode and faster batch workflows.",
+    free: ["Limited Batch Mode access"],
     premium: [
       "Unlimited Batch Mode",
-      "Bulk photo + detail extraction",
-      "Designed for pro workflows",
+      "Batch workflow speedups",
     ],
   },
 
