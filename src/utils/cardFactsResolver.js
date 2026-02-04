@@ -648,6 +648,31 @@ export function resolveCardFacts(intel = {}) {
     .map((line) => (line?.text ? line.text : ""))
     .map((line) => line.trim())
     .filter(Boolean);
+  if (!resolved.player) {
+    const teamBlockTokens = [...MLB_TEAMS, ...NFL_TEAMS, ...NBA_TEAMS, ...NHL_TEAMS];
+    const isBlockedLine = (line) => {
+      const normalized = normalizeLine(line);
+      if (!normalized) return true;
+      if (positionTokens.some((token) => normalized.includes(token))) return true;
+      if (teamBlockTokens.some((team) => normalized.includes(team))) return true;
+      if (["mlb", "nfl", "nba", "nhl"].includes(normalized)) return true;
+      return false;
+    };
+    for (let i = 0; i < ocrLineTextsFront.length - 1; i += 1) {
+      const first = ocrLineTextsFront[i];
+      const second = ocrLineTextsFront[i + 1];
+      if (!first || !second) continue;
+      if (!/^[A-Za-z\s.'-]+$/.test(first)) continue;
+      if (!/^[A-Za-z\s.'-]+$/.test(second)) continue;
+      if (first.length < 3 || second.length < 3) continue;
+      if (isBlockedLine(first) || isBlockedLine(second)) continue;
+      const combined = `${first} ${second}`.trim();
+      const hadPlayer = Boolean(resolved.player);
+      resolved.player = titleCase(combined);
+      setSourceIfUnset("player", "front", hadPlayer);
+      break;
+    }
+  }
   const slabTokenRegex = /\b(PSA|BGS|SGC|CGC|MINT|GEM|NM-MT)\b/i;
   const slabLabelNumberRegex = /#\d{2,}/;
   const slabMeta =
@@ -839,6 +864,67 @@ export function resolveCardFacts(intel = {}) {
       const hadSport = Boolean(resolved.sport);
       setIfEmpty("sport", sport);
       setSourceIfUnset("sport", source, hadSport);
+    }
+  }
+  if (!resolved.player) {
+    const isCapitalizedToken = (token) =>
+      /^[A-Z][a-z]+$/.test(token) ||
+      /^[A-Z][a-z]+['.-]?[A-Za-z]+$/.test(token) ||
+      /^[A-Z]{2,}$/.test(token);
+    const isBlockedToken = (token) => {
+      const normalized = normalizeLine(token);
+      if (!normalized) return true;
+      if (positionTokens.some((t) => normalized.includes(t))) return true;
+      if (teamKeywords.some((t) => normalized.includes(t))) return true;
+      if (["mlb", "nfl", "nba", "nhl"].includes(normalized)) return true;
+      return false;
+    };
+    const pairCandidates = new Map();
+    const scanPairs = (lines) => {
+      lines.forEach((line) => {
+        const words = line.split(/\s+/).filter(Boolean);
+        if (words.length < 2) return;
+        for (let i = 0; i < words.length - 1; i += 1) {
+          const first = words[i];
+          const second = words[i + 1];
+          if (!isCapitalizedToken(first) || !isCapitalizedToken(second)) continue;
+          if (isBlockedToken(first) || isBlockedToken(second)) continue;
+          const candidate = `${first} ${second}`;
+          const key = normalizeLine(candidate);
+          if (!pairCandidates.has(key)) {
+            pairCandidates.set(key, titleCase(candidate));
+          }
+        }
+      });
+    };
+    scanPairs(ocrLineTextsFront);
+    scanPairs(ocrLineTextsBack);
+    const scanAdjacentSingleTokens = (lines) => {
+      for (let i = 0; i < lines.length - 1; i += 1) {
+        const firstLine = lines[i];
+        const secondLine = lines[i + 1];
+        if (!firstLine || !secondLine) continue;
+        const firstTokens = firstLine.split(/\s+/).filter(Boolean);
+        const secondTokens = secondLine.split(/\s+/).filter(Boolean);
+        if (firstTokens.length !== 1 || secondTokens.length !== 1) continue;
+        const first = firstTokens[0];
+        const second = secondTokens[0];
+        if (!isCapitalizedToken(first) || !isCapitalizedToken(second)) continue;
+        if (isBlockedToken(first) || isBlockedToken(second)) continue;
+        const candidate = `${first} ${second}`;
+        const key = normalizeLine(candidate);
+        if (!pairCandidates.has(key)) {
+          pairCandidates.set(key, titleCase(candidate));
+        }
+      }
+    };
+    scanAdjacentSingleTokens(ocrLineTextsFront);
+    scanAdjacentSingleTokens(ocrLineTextsBack);
+    if (pairCandidates.size === 1) {
+      const only = Array.from(pairCandidates.values())[0];
+      const hadPlayer = Boolean(resolved.player);
+      resolved.player = only;
+      setSourceIfUnset("player", "ocr", hadPlayer);
     }
   }
   let brandSetYearLocked = false;
@@ -1962,6 +2048,49 @@ export function resolveCardFacts(intel = {}) {
   ) {
     resolved.isSlabbed = true;
   }
+  if (!resolved.player) {
+    const isCapitalizedToken = (token) =>
+      /^[A-Z][a-z]+$/.test(token) ||
+      /^[A-Z][a-z]+['.-]?[A-Za-z]+$/.test(token) ||
+      /^[A-Z]{2,}$/.test(token);
+    const isBlockedToken = (token) => {
+      const normalized = normalizeLine(token);
+      if (!normalized) return true;
+      if (positionTokens.some((t) => normalized.includes(t))) return true;
+      if (teamKeywords.some((t) => normalized.includes(t))) return true;
+      if (["mlb", "nfl", "nba", "nhl"].includes(normalized)) return true;
+      return false;
+    };
+    const pairCandidates = new Map();
+    const scanAdjacentSingleTokens = (lines) => {
+      for (let i = 0; i < lines.length - 1; i += 1) {
+        const firstLine = lines[i];
+        const secondLine = lines[i + 1];
+        if (!firstLine || !secondLine) continue;
+        const firstTokens = firstLine.split(/\s+/).filter(Boolean);
+        const secondTokens = secondLine.split(/\s+/).filter(Boolean);
+        if (firstTokens.length !== 1 || secondTokens.length !== 1) continue;
+        const first = firstTokens[0];
+        const second = secondTokens[0];
+        if (!isCapitalizedToken(first) || !isCapitalizedToken(second)) continue;
+        if (isBlockedToken(first) || isBlockedToken(second)) continue;
+        const candidate = `${first} ${second}`;
+        const key = normalizeLine(candidate);
+        if (!pairCandidates.has(key)) {
+          pairCandidates.set(key, titleCase(candidate));
+        }
+      }
+    };
+    scanAdjacentSingleTokens(ocrLineTextsFront);
+    scanAdjacentSingleTokens(ocrLineTextsBack);
+    if (pairCandidates.size === 1) {
+      const only = Array.from(pairCandidates.values())[0];
+      const hadPlayer = Boolean(resolved.player);
+      resolved.player = only;
+      setSourceIfUnset("player", "ocr", hadPlayer);
+    }
+  }
+
   if (resolved.player) {
     if (teamKeywords.some((team) => normalizeLine(resolved.player).includes(team))) {
       resolved.player = null;
