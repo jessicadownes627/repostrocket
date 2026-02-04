@@ -46,6 +46,7 @@ const EMPTY_RESPONSE = {
 
 export async function handler(event) {
   try {
+    const startedAt = Date.now();
     if (!process.env.OPENAI_API_KEY) {
       return {
         statusCode: 500,
@@ -88,48 +89,57 @@ export async function handler(event) {
     })();
 
     let visionAlt = "No alt text";
+    const timeBudgetMs = 9500;
+    const visionTimeoutMs = 2500;
 
-    if (normalizedImageUrl) {
+    if (normalizedImageUrl && Date.now() - startedAt < timeBudgetMs - 3500) {
       try {
         console.log("📸 Vision Prefilter: sending image_url");
-        const visionResp = await client.responses.create({
-          model: "gpt-4o",
-          input: [
-            {
-              role: "system",
-              content: VISION_PROMPT,
-            },
-            {
-              role: "user",
-              content: [
-                {
-                  type: "input_text",
-                  text: "Describe this image in 1–2 sentences for product identification.",
-                },
-                {
-                  type: "input_image",
-                  image_url: normalizedImageUrl,
-                },
-              ],
-            },
-          ],
-        });
+        const visionResp = await Promise.race([
+          client.responses.create({
+            model: "gpt-4o",
+            input: [
+              {
+                role: "system",
+                content: VISION_PROMPT,
+              },
+              {
+                role: "user",
+                content: [
+                  {
+                    type: "input_text",
+                    text: "Describe this image in 1–2 sentences for product identification.",
+                  },
+                  {
+                    type: "input_image",
+                    image_url: normalizedImageUrl,
+                  },
+                ],
+              },
+            ],
+          }),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Vision prefilter timeout")), visionTimeoutMs)
+          ),
+        ]);
 
         visionAlt = (visionResp.output_text || "No alt text").trim();
         console.log("📸 Vision Prefilter ALT TEXT:", visionAlt);
       } catch (err) {
-        console.log("VISION PREFILTER ERROR:", err);
-        return {
-          statusCode: 500,
-          body: JSON.stringify({
-            error: "Vision prefilter failed",
-            details: err.message || String(err),
-          }),
-        };
+        console.log("VISION PREFILTER ERROR (skipping):", err);
+        visionAlt = photoContext || "Unknown item";
       }
     }
 
-    const forcedCategory = applyApparelBias(visionAlt);
+    const hasVisionSignal =
+      Boolean(visionAlt) &&
+      visionAlt !== "No alt text" &&
+      visionAlt !== "Unknown item";
+    const forcedCategory = userCategory
+      ? userCategory
+      : hasVisionSignal
+      ? ""
+      : applyApparelBias(visionAlt);
 
     const compactPayload = {
       photo_context: sanitizeField(visionAlt || photoContext || "Unknown item", 160),

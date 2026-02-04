@@ -4,6 +4,7 @@ import LuxeChipGroup from "../components/LuxeChipGroup";
 import LuxeInput from "../components/LuxeInput";
 import { useListingStore } from "../store/useListingStore";
 import { getPhotoUrl } from "../utils/photoHelpers";
+import { generateMagicDraft } from "../utils/generateMagicDraft";
 import {
   getConfidenceInsight,
   getConfidenceSuggestions,
@@ -36,6 +37,8 @@ export default function SingleListing() {
     analysisState,
     requestSportsAnalysis,
     setReviewIdentityField,
+    premiumUsesRemaining,
+    consumeMagicUse,
   } = useListingStore();
   const analysisComplete = analysisState === "complete" || analysisState === "error";
 
@@ -58,6 +61,7 @@ export default function SingleListing() {
   const [manualSetValue, setManualSetValue] = useState("");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
+  const [magicFillMessage, setMagicFillMessage] = useState("");
 
   const detectedFrontImage =
     listingData?.editedPhoto ||
@@ -122,6 +126,51 @@ export default function SingleListing() {
     isSlabbed && (!reviewIdentity?.grader || graderSource === "inferred");
   const showGradeChips =
     isSlabbed && reviewIdentity?.grader && !gradeValue;
+  const magicFillDisabled = premiumUsesRemaining <= 0;
+  const handleMagicFill = async () => {
+    if (magicFillDisabled) {
+      setMagicFillMessage(
+        "You’ve already used today’s Magic Fill. Try again tomorrow."
+      );
+      return;
+    }
+    setMagicFillMessage("");
+    try {
+      const raw = listingData || {};
+      const current = {
+        title: title?.trim() || raw.title || "",
+        description: description?.trim() || raw.description || "",
+        price: price?.trim() || raw.price || "",
+        brand: brand?.trim() || raw.brand || "",
+        condition: raw.condition || condition || "",
+        category: raw.category || category || "",
+        tags: Array.isArray(tags) ? tags : [],
+      };
+      const draftInput = {
+        ...raw,
+        ...current,
+        photos: Array.isArray(raw.photos) ? raw.photos : [],
+        secondaryPhotos: Array.isArray(listingData?.secondaryPhotos)
+          ? listingData.secondaryPhotos
+          : [],
+        editedPhoto: raw.editedPhoto,
+        cardIntel: listingData?.cardIntel,
+        apparelIntel: listingData?.apparelIntel,
+      };
+      const draft = await generateMagicDraft(draftInput, { glowMode: true });
+      const parsed = draft?.parsed;
+      if (parsed?.title?.after) setTitle(parsed.title.after);
+      if (parsed?.description?.after) setDescription(parsed.description.after);
+      if (parsed?.price?.after) setPrice(parsed.price.after);
+      if (parsed?.category_choice) setCategory(parsed.category_choice);
+      if (Array.isArray(parsed?.tags?.after) && parsed.tags.after.length) {
+        setTags(parsed.tags.after);
+      }
+      consumeMagicUse();
+    } catch (err) {
+      console.error("Magic Fill failed:", err);
+    }
+  };
   const gradeChipOptions = {
     PSA: ["7", "8", "9", "10"],
     BGS: ["8", "8.5", "9", "9.5", "10"],
@@ -1095,12 +1144,26 @@ export default function SingleListing() {
 
       {/* MAGIC FILL — CASUAL ONLY */}
       <div className="mb-10">
-        <button className="w-full py-4 rounded-[28px] bg-[#F4E9D5] text-black tracking-[0.2em]">
+        <button
+          type="button"
+          onClick={handleMagicFill}
+          aria-disabled={magicFillDisabled}
+          className={`w-full py-4 rounded-[28px] tracking-[0.2em] ${
+            magicFillDisabled
+              ? "bg-[#F4E9D5]/50 text-black/50"
+              : "bg-[#F4E9D5] text-black"
+          }`}
+        >
           Run Magic Fill
         </button>
         <div className="text-center text-xs opacity-60 mt-2">
           1 free Magic Fill per day · Upgrade for unlimited
         </div>
+        {magicFillMessage && (
+          <div className="text-center text-xs text-white/70 mt-2">
+            {magicFillMessage}
+          </div>
+        )}
       </div>
 
       <LuxeInput label="Title" value={title} onChange={setTitle} />
