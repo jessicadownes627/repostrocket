@@ -50,7 +50,7 @@ export default function Dashboard() {
           <span className="sparkly-header header-glitter">Repost Rocket</span>
         </h1>
         <p className="text-sm opacity-70 mt-1 tracking-wide">
-          Precision listing prep. Fast. Polished. Profitable.
+          Fast. Polished. Profitable.
         </p>
         <div className="lux-divider lux-divider-hero"></div>
       </div>
@@ -78,7 +78,7 @@ export default function Dashboard() {
       <LuxeCard
         title="TrendSense"
         subtitle="Insights"
-        description="Real-time selling trends. See what’s moving right now."
+        description="Real-time selling trends. See what’s moving now."
         premium
         onClick={handleTrendSense}
       />
@@ -98,7 +98,7 @@ export default function Dashboard() {
         onClick={() => navigate("/settings")}
       >
         <div className="lux-upgrade-text">
-          Premium = Unlimited + Batch + Pro workflows
+          Premium unlocks unlimited + Batch workflows
         </div>
       </div>
 

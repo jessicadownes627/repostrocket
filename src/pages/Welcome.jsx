@@ -16,7 +16,7 @@ export default function Welcome() {
 
         {/* SUBTITLE */}
         <p className="text-xl md:text-2xl text-[#E6DCC6] opacity-85 mt-2 font-light tracking-wide">
-          Precision listing prep.
+          List Faster. Everywhere.
         </p>
 
         {/* SHIMMER UNDERLINE */}
