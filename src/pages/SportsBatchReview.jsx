@@ -10,6 +10,25 @@ import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { uploadBatchFile } from "../utils/batchUpload";
 import { convertHeicIfNeeded } from "../utils/imageTools";
 
+const SET_CANDIDATE_MAP = {
+  panini: {
+    football: ["Donruss", "Score", "Prizm"],
+    basketball: ["Prizm", "Donruss"],
+  },
+  topps: {
+    baseball: ["Topps Chrome", "Topps"],
+  },
+  "upper deck": {
+    hockey: ["Upper Deck"],
+  },
+};
+const POPULAR_SET_MAP = {
+  baseball: ["Topps", "Topps Chrome", "Bowman", "Bowman Chrome"],
+  football: ["Donruss", "Prizm", "Score", "Select"],
+  basketball: ["Prizm", "Donruss", "Select", "Hoops"],
+  hockey: ["Upper Deck", "O-Pee-Chee"],
+};
+
 export default function SportsBatchReview() {
   const navigate = useNavigate();
   const { cardStates, updateCard, removeCard, batchMeta, abortAnalysis } =
@@ -17,6 +36,9 @@ export default function SportsBatchReview() {
   const [editModeCardId, setEditModeCardId] = useState(null);
   const [editBuffers, setEditBuffers] = useState({});
   const [appliedGroups, setAppliedGroups] = useState({});
+  const [setPickerCardId, setSetPickerCardId] = useState(null);
+  const [setPickerQuery, setSetPickerQuery] = useState("");
+  const setPickerInputRef = useRef(null);
   const autoApplyRef = useRef(false);
   const cards = useMemo(
     () =>
@@ -139,6 +161,35 @@ export default function SportsBatchReview() {
   );
 
   const getFieldConfidence = () => "";
+
+  const normalizeKey = (value) =>
+    String(value ?? "").toLowerCase().trim();
+
+  const getSetCandidates = (identity) => {
+    const sportKey = normalizeKey(identity?.sport);
+    const yearValue = String(identity?.year ?? "").trim();
+    if (!sportKey || !yearValue) return [];
+    const brandKey = normalizeKey(identity?.brand);
+    if (brandKey && SET_CANDIDATE_MAP[brandKey]) {
+      const candidates = SET_CANDIDATE_MAP[brandKey][sportKey] || [];
+      return Array.isArray(candidates) ? candidates : [];
+    }
+    const all = [];
+    Object.values(SET_CANDIDATE_MAP).forEach((bySport) => {
+      const candidates = bySport[sportKey] || [];
+      if (Array.isArray(candidates)) all.push(...candidates);
+    });
+    return Array.from(new Set(all));
+  };
+  const getPopularSets = (identity) => {
+    const sportKey = normalizeKey(identity?.sport);
+    if (sportKey && POPULAR_SET_MAP[sportKey]) {
+      const popular = POPULAR_SET_MAP[sportKey] || [];
+      return Array.isArray(popular) ? popular : [];
+    }
+    const all = Object.values(POPULAR_SET_MAP).flat();
+    return Array.from(new Set(all));
+  };
 
   const normalizeEditValue = (value) => {
     const raw = String(value ?? "").trim();
@@ -393,7 +444,10 @@ export default function SportsBatchReview() {
               const normalizedTeam =
                 typeof identity.team === "string"
                   ? identity.team
-                  : identity.team?.name || "";
+                  : identity.team?.fullName ||
+                    identity.team?.full ||
+                    identity.team?.name ||
+                    "";
               const isSlabbed = identity.isSlabbed === true;
               const frontCorners = Array.isArray(card.frontCorners)
                 ? card.frontCorners
@@ -435,200 +489,220 @@ export default function SportsBatchReview() {
                   brand: identity.brand,
                 }) ||
                 "Untitled";
+              const setCandidates = getSetCandidates(identity);
+              const baseCandidates =
+                setCandidates.length > 0 ? setCandidates : getPopularSets(identity);
+              const filteredSetCandidates = setPickerQuery
+                ? baseCandidates.filter((candidate) =>
+                    candidate.toLowerCase().includes(setPickerQuery.toLowerCase())
+                  )
+                : baseCandidates;
+              const showSetPicker = setPickerCardId === card.id;
               return (
-                <details
-                  key={card.id}
-                  className="border border-white/10 rounded-xl p-3"
-                >
-                  <summary className="cursor-pointer list-none">
-                    <div className="space-y-3">
-                      <div className="text-xs uppercase tracking-[0.25em] text-white/50">
-                        Card {index + 1}
+                <div key={card.id} className="space-y-2">
+                  <details className="border border-white/10 rounded-xl p-3">
+                    <summary className="cursor-pointer list-none">
+                      <div className="space-y-3">
+                        <div className="text-xs uppercase tracking-[0.25em] text-white/50">
+                          Card {index + 1}
+                        </div>
+                        <div className="flex items-start gap-3">
+                          <div className="flex flex-col gap-2 shrink-0">
+                            <div className="flex items-center gap-2">
+                              {hasFrontImage ? (
+                                <img
+                                  src={card.frontImage.url}
+                                  alt="Card front"
+                                  className="w-16 h-auto rounded border border-white/10 object-cover"
+                                />
+                              ) : (
+                                <div className="w-16 aspect-[3/4] rounded border border-dashed border-white/20" />
+                              )}
+                              {hasBackImage ? (
+                                <img
+                                  src={card.backImage.url}
+                                  alt="Card back"
+                                  className="w-16 h-auto rounded border border-white/10 object-cover"
+                                />
+                              ) : (
+                                <div className="w-16 aspect-[3/4] rounded border border-dashed border-white/20 flex items-center justify-center text-[9px] text-white/40">
+                                  Back optional
+                                </div>
+                              )}
+                            </div>
+                            {!isSlabbed &&
+                              ((frontCorners && frontCorners.length > 0) ||
+                                (Array.isArray(card.backCorners) &&
+                                  card.backCorners.length > 0)) && (
+                                <div className="flex gap-2">
+                                  {(frontCorners && frontCorners.length > 0
+                                    ? frontCorners
+                                    : card.backCorners
+                                  )
+                                    .slice(0, cornerSlots)
+                                    .map((corner, idx) => (
+                                      <img
+                                        key={`${card.id}-corner-summary-${idx}`}
+                                        src={corner.url || corner}
+                                        alt={`Corner ${idx + 1}`}
+                                        className="h-10 w-10 rounded-md border border-white/10 object-cover"
+                                      />
+                                    ))}
+                                </div>
+                              )}
+                          </div>
+                          <div className="flex-1 min-w-0 space-y-2">
+                            <div className="text-base text-white">
+                              {normalizedPlayer ||
+                                (isResolved
+                                  ? renderUnknown("Unknown player")
+                                  : renderDetecting("Detecting player"))}
+                              {normalizedPlayer && playerConfidence && (
+                                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/45">
+                                  {playerConfidence}
+                                </span>
+                              )}
+                              {!normalizedPlayer && isResolved && (
+                                (() => {
+                                  const hint = getConfidenceInsight(
+                                    "player",
+                                    confidenceContext
+                                  );
+                                  return hint ? (
+                                    <div className="text-xs text-white/45 mt-1">
+                                      Partial insight: {hint}
+                                    </div>
+                                  ) : null;
+                                })()
+                              )}
+                            </div>
+                            <div className="text-sm text-white/70">
+                              {normalizedTeam || identity.sport ? (
+                                <div className="flex flex-wrap items-center gap-2">
+                                  {normalizedTeam && (
+                                    <span className="inline-flex items-center gap-2">
+                                      <span>{normalizedTeam}</span>
+                                      {teamConfidence && (
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/45">
+                                          {teamConfidence}
+                                        </span>
+                                      )}
+                                    </span>
+                                  )}
+                                  {normalizedTeam && identity.sport && <span>•</span>}
+                                  {identity.sport && (
+                                    <span className="inline-flex items-center gap-2">
+                                      <span>{identity.sport}</span>
+                                      {sportConfidence && (
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/45">
+                                          {sportConfidence}
+                                        </span>
+                                      )}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : isResolved ? (
+                                renderUnknown("Unknown team · sport")
+                              ) : (
+                                renderDetecting("Detecting team · sport")
+                              )}
+                              {!normalizedTeam && !identity.sport && isResolved && (
+                                (() => {
+                                  const hint =
+                                    getConfidenceInsight("team", confidenceContext) ||
+                                    getConfidenceInsight("sport", confidenceContext);
+                                  return hint ? (
+                                    <div className="text-xs text-white/45 mt-1">
+                                      Partial insight: {hint}
+                                    </div>
+                                  ) : null;
+                                })()
+                              )}
+                            </div>
+                            <div className="text-sm text-white/60">
+                              {identity.setName || identity.year ? (
+                                <div className="flex flex-wrap items-center gap-2">
+                                  {(identity.setName || "Unknown set") && (
+                                    <span className="inline-flex items-center gap-2">
+                                      <span>{identity.setName || "Unknown set"}</span>
+                                      {identity.setName && setConfidence && (
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/45">
+                                          {setConfidence}
+                                        </span>
+                                      )}
+                                    </span>
+                                  )}
+                                  <span>·</span>
+                                  {(identity.year || "Unknown year") && (
+                                    <span className="inline-flex items-center gap-2">
+                                      <span>{identity.year || "Unknown year"}</span>
+                                      {identity.year && yearConfidence && (
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/45">
+                                          {yearConfidence}
+                                        </span>
+                                      )}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : isResolved ? (
+                                renderUnknown("Unknown set · year")
+                              ) : (
+                                renderDetecting("Detecting set · year")
+                              )}
+                              {!identity.setName && (
+                                <button
+                                  type="button"
+                                  className="mt-2 inline-flex items-center px-3 py-1 rounded-full border border-white/15 text-[11px] uppercase tracking-[0.2em] text-white/70 hover:text-white hover:border-white/30"
+                                  onClick={() => {
+                                    setSetPickerCardId(card.id);
+                                    setSetPickerQuery("");
+                                  }}
+                                >
+                                  Select set
+                                </button>
+                              )}
+                              {isResolved && !identity.setName && (
+                                (() => {
+                                  const hint = getConfidenceInsight(
+                                    "setName",
+                                    confidenceContext
+                                  );
+                                  return hint ? (
+                                    <div className="text-xs text-white/45 mt-1">
+                                      Partial insight: {hint}
+                                    </div>
+                                  ) : null;
+                                })()
+                              )}
+                              {isResolved && !identity.year && (
+                                (() => {
+                                  const hint = getConfidenceInsight(
+                                    "year",
+                                    confidenceContext
+                                  );
+                                  return hint ? (
+                                    <div className="text-xs text-white/45 mt-1">
+                                      Partial insight: {hint}
+                                    </div>
+                                  ) : null;
+                                })()
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-[10px] uppercase tracking-[0.2em] text-white/50">
+                            Details ▸
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex items-start gap-3">
-                        <div className="flex flex-col gap-2 shrink-0">
-                          <div className="flex items-center gap-2">
-                            {hasFrontImage ? (
-                              <img
-                                src={card.frontImage.url}
-                                alt="Card front"
-                                className="w-16 h-auto rounded border border-white/10 object-cover"
-                              />
-                            ) : (
-                              <div className="w-16 aspect-[3/4] rounded border border-dashed border-white/20" />
-                            )}
-                            {hasBackImage ? (
-                              <img
-                                src={card.backImage.url}
-                                alt="Card back"
-                                className="w-16 h-auto rounded border border-white/10 object-cover"
-                              />
-                            ) : (
-                              <div className="w-16 aspect-[3/4] rounded border border-dashed border-white/20 flex items-center justify-center text-[9px] text-white/40">
-                                Back optional
-                              </div>
-                            )}
-                          </div>
-                          {!isSlabbed &&
-                            ((frontCorners && frontCorners.length > 0) ||
-                              (Array.isArray(card.backCorners) &&
-                                card.backCorners.length > 0)) && (
-                              <div className="flex gap-2">
-                                {(frontCorners && frontCorners.length > 0
-                                  ? frontCorners
-                                  : card.backCorners
-                                )
-                                  .slice(0, cornerSlots)
-                                  .map((corner, idx) => (
-                                    <img
-                                      key={`${card.id}-corner-summary-${idx}`}
-                                      src={corner.url || corner}
-                                      alt={`Corner ${idx + 1}`}
-                                      className="h-10 w-10 rounded-md border border-white/10 object-cover"
-                                    />
-                                  ))}
-                              </div>
-                            )}
-                        </div>
-                        <div className="flex-1 min-w-0 space-y-2">
-                          <div className="text-base text-white">
-                            {normalizedPlayer ||
-                              (isResolved
-                                ? renderUnknown("Unknown player")
-                                : renderDetecting("Detecting player"))}
-                            {normalizedPlayer && playerConfidence && (
-                              <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/45">
-                                {playerConfidence}
-                              </span>
-                            )}
-                            {!normalizedPlayer && isResolved && (
-                              (() => {
-                                const hint = getConfidenceInsight(
-                                  "player",
-                                  confidenceContext
-                                );
-                                return hint ? (
-                                  <div className="text-xs text-white/45 mt-1">
-                                    Partial insight: {hint}
-                                  </div>
-                                ) : null;
-                              })()
-                            )}
-                          </div>
-                          <div className="text-sm text-white/70">
-                            {normalizedTeam || identity.sport ? (
-                              <div className="flex flex-wrap items-center gap-2">
-                                {normalizedTeam && (
-                                  <span className="inline-flex items-center gap-2">
-                                    <span>{normalizedTeam}</span>
-                                    {teamConfidence && (
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/45">
-                                        {teamConfidence}
-                                      </span>
-                                    )}
-                                  </span>
-                                )}
-                                {normalizedTeam && identity.sport && <span>•</span>}
-                                {identity.sport && (
-                                  <span className="inline-flex items-center gap-2">
-                                    <span>{identity.sport}</span>
-                                    {sportConfidence && (
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/45">
-                                        {sportConfidence}
-                                      </span>
-                                    )}
-                                  </span>
-                                )}
-                              </div>
-                            ) : isResolved ? (
-                              renderUnknown("Unknown team · sport")
-                            ) : (
-                              renderDetecting("Detecting team · sport")
-                            )}
-                            {!normalizedTeam && !identity.sport && isResolved && (
-                              (() => {
-                                const hint =
-                                  getConfidenceInsight("team", confidenceContext) ||
-                                  getConfidenceInsight("sport", confidenceContext);
-                                return hint ? (
-                                  <div className="text-xs text-white/45 mt-1">
-                                    Partial insight: {hint}
-                                  </div>
-                                ) : null;
-                              })()
-                            )}
-                          </div>
-                          <div className="text-sm text-white/60">
-                            {identity.setName || identity.year ? (
-                              <div className="flex flex-wrap items-center gap-2">
-                                {(identity.setName || "Unknown set") && (
-                                  <span className="inline-flex items-center gap-2">
-                                    <span>{identity.setName || "Unknown set"}</span>
-                                    {identity.setName && setConfidence && (
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/45">
-                                        {setConfidence}
-                                      </span>
-                                    )}
-                                  </span>
-                                )}
-                                <span>·</span>
-                                {(identity.year || "Unknown year") && (
-                                  <span className="inline-flex items-center gap-2">
-                                    <span>{identity.year || "Unknown year"}</span>
-                                    {identity.year && yearConfidence && (
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full border border-white/10 text-[10px] uppercase tracking-[0.2em] text-white/45">
-                                        {yearConfidence}
-                                      </span>
-                                    )}
-                                  </span>
-                                )}
-                              </div>
-                            ) : isResolved ? (
-                              renderUnknown("Unknown set · year")
-                            ) : (
-                              renderDetecting("Detecting set · year")
-                            )}
-                            {isResolved && !identity.setName && (
-                              (() => {
-                                const hint = getConfidenceInsight(
-                                  "setName",
-                                  confidenceContext
-                                );
-                                return hint ? (
-                                  <div className="text-xs text-white/45 mt-1">
-                                    Partial insight: {hint}
-                                  </div>
-                                ) : null;
-                              })()
-                            )}
-                            {isResolved && !identity.year && (
-                              (() => {
-                                const hint = getConfidenceInsight(
-                                  "year",
-                                  confidenceContext
-                                );
-                                return hint ? (
-                                  <div className="text-xs text-white/45 mt-1">
-                                    Partial insight: {hint}
-                                  </div>
-                                ) : null;
-                              })()
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-[10px] uppercase tracking-[0.2em] text-white/50">
-                          Details ▸
-                        </div>
-                      </div>
-                    </div>
-                  </summary>
-                  <div className="mt-4 space-y-4 text-sm">
+                    </summary>
+                    <div className="mt-4 space-y-4 text-sm">
                     <button
                       type="button"
-                      className="inline-flex items-center px-4 py-2 rounded-full border border-white/15 text-xs uppercase tracking-[0.25em] text-white/70 hover:text-white"
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/15 text-xs uppercase tracking-[0.25em] text-white/70 hover:text-white"
                       onClick={() => toggleEditMode(card.id)}
                     >
-                      {isEditMode ? "Done" : "Edit card details"}
+                      {!isEditMode && <span aria-hidden="true">✏️</span>}
+                      {isEditMode ? "Done" : "Review & Edit Card"}
                     </button>
                     {isEditMode && (
                       <h3 className="text-sm uppercase tracking-[0.25em] text-white/70">
@@ -803,6 +877,71 @@ export default function SportsBatchReview() {
 
                   </div>
                 </details>
+                {showSetPicker && (
+                  <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 p-4">
+                    <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0b0b0c] p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm uppercase tracking-[0.25em] text-white/70">
+                          Select set
+                        </h3>
+                        <button
+                          type="button"
+                          className="text-xs uppercase tracking-[0.25em] text-white/50 hover:text-white"
+                          onClick={() => setSetPickerCardId(null)}
+                        >
+                          Close
+                        </button>
+                      </div>
+                      <div className="text-xs text-white/50 mb-3">
+                        {identity.sport && identity.year
+                          ? `${identity.sport} • ${identity.year}${
+                              identity.brand ? ` • ${identity.brand}` : ""
+                            }`
+                          : "Add sport and year to see sets."}
+                      </div>
+                      <div className="max-h-64 overflow-y-auto space-y-2">
+                        <div className="flex flex-wrap gap-2">
+                          {filteredSetCandidates.map((option) => (
+                            <button
+                              key={`${card.id}-set-${option}`}
+                              type="button"
+                              className="px-3 py-1.5 rounded-full border border-white/10 text-xs uppercase tracking-[0.2em] text-white/75 hover:border-white/30 hover:text-white"
+                              onClick={() => {
+                                const nextIdentity = { ...(identity || {}) };
+                                const nextSources = {
+                                  ...(nextIdentity._sources || {}),
+                                };
+                                nextIdentity.setName = option;
+                                nextSources.setName = "manual";
+                                nextIdentity._sources = nextSources;
+                                updateCard(card.id, { identity: nextIdentity });
+                                setSetPickerCardId(null);
+                              }}
+                            >
+                              {option}
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            className="px-3 py-1.5 rounded-full border border-white/10 text-xs uppercase tracking-[0.2em] text-white/45 hover:text-white"
+                            onClick={() => setPickerInputRef.current?.focus()}
+                          >
+                            Can&apos;t find it? Type to search
+                          </button>
+                        </div>
+                      </div>
+                      <input
+                        type="text"
+                        value={setPickerQuery}
+                        onChange={(event) => setSetPickerQuery(event.target.value)}
+                        placeholder="Search sets"
+                        className="mt-3 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-white/40"
+                        ref={setPickerInputRef}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
               );
             })}
           </div>
