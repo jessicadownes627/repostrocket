@@ -32,6 +32,22 @@ textarea {
   caret-color: #FCE9C9;
 }
 
+/* Single Listing cursor alignment for luxe inputs */
+.lux-input,
+.lux-textarea {
+  line-height: 1.4 !important;
+  padding-top: 14px !important;
+  padding-bottom: 14px !important;
+  box-sizing: border-box;
+}
+
+.lux-input:focus,
+.lux-textarea:focus {
+  line-height: 1.4 !important;
+  padding-top: 14px !important;
+  padding-bottom: 14px !important;
+}
+
 .luxe-card *,
 input,
 textarea {

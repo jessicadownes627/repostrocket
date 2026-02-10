@@ -62,6 +62,18 @@ export default function SingleListing() {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [magicFillMessage, setMagicFillMessage] = useState("");
+  const placeholderTitle =
+    (title || "").trim().toLowerCase() === "item for sale";
+  const placeholderDescription = (() => {
+    const text = (description || "").trim().toLowerCase();
+    if (!text) return false;
+    return (
+      text.includes("item specifics") ||
+      text.includes("ships fast") ||
+      text.includes("bundle to save") ||
+      text.includes("streetwear marketplace ready")
+    );
+  })();
 
   const detectedFrontImage =
     listingData?.editedPhoto ||
@@ -1167,7 +1179,17 @@ export default function SingleListing() {
       </div>
 
       <LuxeInput label="Title" value={title} onChange={setTitle} />
+      {placeholderTitle && (
+        <div className="text-xs text-white/50 -mt-4 mb-4">
+          Placeholder title — edit this to match your item.
+        </div>
+      )}
       <LuxeInput label="Description" value={description} onChange={setDescription} />
+      {placeholderDescription && (
+        <div className="text-xs text-white/50 -mt-4 mb-4">
+          Placeholder description — add details about your item.
+        </div>
+      )}
       <LuxeInput label="Price" value={price} onChange={setPrice} />
 
       <div className="mb-6">
