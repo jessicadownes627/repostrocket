@@ -93,7 +93,7 @@ export default function Dashboard() {
       <div className="lux-divider"></div>
       <div
         className="lux-upgrade-card"
-        onClick={() => navigate("/settings")}
+        onClick={() => navigate("/premium")}
       >
         <div className="lux-upgrade-text">
           Premium unlocks unlimited + Batch workflows

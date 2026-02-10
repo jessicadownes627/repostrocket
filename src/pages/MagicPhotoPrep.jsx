@@ -2,6 +2,7 @@ import { useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useListingStore } from "../store/useListingStore";
 import { convertHeicIfNeeded } from "../utils/imageTools";
+import { fileToDataUrl } from "../utils/photoHelpers";
 import "../styles/createListing.css"; // small helpers only
 
 export default function MagicPhotoPrep() {
@@ -19,11 +20,30 @@ export default function MagicPhotoPrep() {
   /* ------------------------------------------------------ */
   const handleFiles = useCallback(
     async (files) => {
-      if (!files || files.length === 0) return;
+      if (!files || files.length === 0) {
+        setUploadMessage(
+          "No photo selected. If you denied camera access, enable it in Settings and try again."
+        );
+        return;
+      }
 
-      const list = Array.from(files);
+      const list = Array.from(files).filter(Boolean);
+      const firstOriginal = list[0];
+
+      if (!firstOriginal || typeof firstOriginal !== "object") {
+        setUploadMessage("We couldn’t read that photo. Please try again.");
+        return;
+      }
+
+      if (typeof firstOriginal.size === "number" && firstOriginal.size === 0) {
+        setUploadMessage("That photo looks empty. Please retake it or choose another image.");
+        return;
+      }
+
       if (list.length > 1) {
-        setUploadMessage("Single Listing supports one photo at a time. Using the first image you selected.");
+        setUploadMessage(
+          "Single Listing supports one photo at a time. Using the first image you selected."
+        );
       } else {
         setUploadMessage("");
       }
@@ -31,15 +51,37 @@ export default function MagicPhotoPrep() {
       // New item: clear any existing listing data before setting photos
       resetListing();
 
-      const firstOriginal = list[0];
       let processedFile = firstOriginal;
       try {
         processedFile = await convertHeicIfNeeded(firstOriginal);
       } catch (err) {
         console.error("HEIC conversion failed:", err);
+        setUploadMessage("We couldn’t convert that photo. Please try a different image.");
       }
 
-      const url = URL.createObjectURL(processedFile);
+      if (!(processedFile instanceof Blob)) {
+        setUploadMessage("We couldn’t read that photo. Please try again.");
+        return;
+      }
+
+      let url = "";
+      try {
+        url = URL.createObjectURL(processedFile);
+      } catch (err) {
+        console.error("createObjectURL failed:", err);
+        try {
+          url = await fileToDataUrl(processedFile);
+        } catch (innerErr) {
+          console.error("fileToDataUrl failed:", innerErr);
+          setUploadMessage("We couldn’t load that photo. Please try again.");
+          return;
+        }
+      }
+
+      if (!url) {
+        setUploadMessage("We couldn’t load that photo. Please try again.");
+        return;
+      }
 
       setTimeout(() => {
         const img = new Image();
@@ -72,7 +114,7 @@ export default function MagicPhotoPrep() {
     e.preventDefault();
     setIsDragging(false);
     const dtFiles = e.dataTransfer.files;
-    if (dtFiles.length) await handleFiles(dtFiles);
+    await handleFiles(dtFiles);
   };
 
   const handleBrowse = () => fileInputRef.current?.click();
@@ -141,7 +183,10 @@ export default function MagicPhotoPrep() {
           accept="image/*,image/heic,heic"
           className="hidden"
           ref={fileInputRef}
-          onChange={(e) => handleFiles(e.target.files)}
+          onChange={async (e) => {
+            await handleFiles(e.target.files);
+            e.target.value = "";
+          }}
         />
       </div>
 

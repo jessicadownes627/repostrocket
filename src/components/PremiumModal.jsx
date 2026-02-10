@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 
 const featureCopy = {
@@ -57,6 +58,7 @@ const featureCopy = {
 
 export default function PremiumModal({ open, reason, usage, limit, onClose }) {
   if (!open) return null;
+  const navigate = useNavigate();
 
   const copy = featureCopy[reason] || featureCopy.default;
 
@@ -124,7 +126,7 @@ export default function PremiumModal({ open, reason, usage, limit, onClose }) {
             onClick={() => {
               onClose();
               // send them to settings for upgrade
-              window.location.href = "/settings";
+              navigate("/premium");
             }}
           >
             Upgrade to Premium →

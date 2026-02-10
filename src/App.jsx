@@ -21,6 +21,7 @@ import MultiDetect from "./pages/MultiDetect";
 import BatchComps from "./pages/BatchComps";
 import LaunchListing from "./pages/LaunchListing";
 import TrendSenseDashboard from "./pages/TrendSenseDashboard";
+import Premium from "./pages/Premium";
 import FloatingHomeButton from "./components/FloatingHomeButton";
 
 const HOME_BUTTON_PATHS = new Set([
@@ -63,6 +64,8 @@ function AppShell() {
         <Route path="/batch-comps" element={<BatchComps />} />
         <Route path="/launch-listing" element={<LaunchListing />} />
         <Route path="/trendsense" element={<TrendSenseDashboard />} />
+        <Route path="/premium" element={<Premium />} />
+        <Route path="/settings" element={<Premium />} />
       </Routes>
       {showHomeButton && <FloatingHomeButton />}
     </div>
