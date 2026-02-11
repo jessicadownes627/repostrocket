@@ -7,6 +7,9 @@ export default function Premium() {
   const navigate = useNavigate();
   const [status, setStatus] = useState("loading");
   const [error, setError] = useState("");
+  const normalizedStatus = ["loading", "ready", "error"].includes(status) ? status : "loading";
+  const errorMessage =
+    error || "We couldn’t load the upgrade screen. Please try again.";
 
   const loadPaywall = useCallback(async () => {
     setStatus("loading");
@@ -33,8 +36,7 @@ export default function Premium() {
   }, [loadPaywall]);
 
   const handleUpgrade = () => {
-    setPremiumStatus(true);
-    navigate("/dashboard");
+    alert("Premium checkout is coming soon!");
   };
 
   return (
@@ -53,15 +55,15 @@ export default function Premium() {
       </h1>
       <div className="magic-cta-bar mb-6" />
 
-      {status === "loading" && (
+      {normalizedStatus === "loading" && (
         <div className="mt-6 text-center text-sm opacity-70">
           Loading upgrade options…
         </div>
       )}
 
-      {status === "error" && (
+      {normalizedStatus === "error" && (
         <div className="mt-6 text-center text-sm opacity-80">
-          <p className="mb-4">{error}</p>
+          <p className="mb-4">{errorMessage}</p>
           <button
             onClick={loadPaywall}
             className="px-4 py-2 rounded-lg border border-[#CBB78A]/40 text-[#E8DCC0] hover:bg-[#CBB78A]/20 transition"
@@ -71,7 +73,7 @@ export default function Premium() {
         </div>
       )}
 
-      {status === "ready" && (
+      {normalizedStatus === "ready" && (
         <div className="mt-6 space-y-6">
           <p className="text-center text-sm opacity-70">
             Premium unlocks unlimited Magic Fill, Batch workflows, and priority launches.
