@@ -1,11 +1,10 @@
-// -------------------------------------------------------
-//  PERMANENT PREMIUM OVERRIDE (Jess + Husband + Devices)
-// -------------------------------------------------------
+import { useSyncExternalStore } from "react";
+import { isStoreKitAvailable, checkSubscriptionStatus } from "../utils/storekit";
 
 export const PHONE_KEY = "rr_user_phone";
 export const PREMIUM_KEY = "rr_is_premium";
 
-// Jess & Husband – always VIP
+// Jess & Husband – always VIP (kept for internal testing)
 const OVERRIDE_NUMBERS = [
   "15164104363", // Jess
   "17189082021", // Husband
@@ -19,8 +18,14 @@ const OVERRIDE_DEVICES = [
   "jess-ipad",
 ];
 
-// Helper to read device “fingerprint”
-const getDeviceId = () => {
+let nativeIsPro = null; // null = unknown, boolean when provided by iOS
+const listeners = new Set();
+
+function emit() {
+  for (const cb of listeners) cb();
+}
+
+function getDeviceId() {
   try {
     return (
       window?.navigator?.userAgentData?.platform?.toLowerCase() ||
@@ -30,11 +35,41 @@ const getDeviceId = () => {
   } catch {
     return "";
   }
-};
+}
 
-// Main premium check
+export function setProStatusFromNative(isPro) {
+  nativeIsPro = Boolean(isPro);
+  emit();
+}
+
+function ensureNativeCallbackInstalled() {
+  if (typeof window === "undefined") return;
+  const existing = window.onProStatusChanged;
+  if (existing && existing.__rr_wrapped) return;
+
+  const handler = function onProStatusChangedRR(value) {
+    try {
+      setProStatusFromNative(Boolean(value));
+    } catch (err) {
+      console.error("onProStatusChanged handler failed:", err);
+    }
+    if (typeof existing === "function") {
+      try {
+        existing(value);
+      } catch (err) {
+        console.error("Existing onProStatusChanged handler failed:", err);
+      }
+    }
+  };
+  handler.__rr_wrapped = true;
+  window.onProStatusChanged = handler;
+}
+
+// Call once at module init.
+ensureNativeCallbackInstalled();
+
 export const getPremiumStatus = () => {
-  // 0. Always treat development as premium for testing
+  // Always treat development as premium for testing
   try {
     if (
       typeof import.meta !== "undefined" &&
@@ -44,35 +79,85 @@ export const getPremiumStatus = () => {
       return true;
     }
   } catch {
-    // ignore env lookup failures
+    // ignore
   }
 
-  // 1. Dev override (never remove)
-  if (localStorage.getItem("rr_dev_premium") === "true") return true;
+  // Dev override (never remove)
+  if (typeof localStorage !== "undefined") {
+    if (localStorage.getItem("rr_dev_premium") === "true") return true;
+  }
 
-  // 2. Device override (always premium)
+  // Device override (kept)
   const device = getDeviceId();
   if (OVERRIDE_DEVICES.some((d) => device.includes(d))) return true;
 
-  // 3. Phone override (always premium)
-  const savedPhone = localStorage.getItem(PHONE_KEY);
-  if (savedPhone && OVERRIDE_NUMBERS.includes(savedPhone)) {
-    return true;
+  // Phone override (kept)
+  try {
+    const savedPhone = localStorage.getItem(PHONE_KEY);
+    if (savedPhone && OVERRIDE_NUMBERS.includes(savedPhone)) {
+      return true;
+    }
+  } catch {
+    // ignore
   }
 
-  // 4. Normal premium check
-  return localStorage.getItem(PREMIUM_KEY) === "premium";
+  // iOS StoreKit is the source of truth when available
+  if (isStoreKitAvailable()) {
+    return nativeIsPro === true;
+  }
+
+  // Web fallback (existing behavior)
+  try {
+    return localStorage.getItem(PREMIUM_KEY) === "premium";
+  } catch {
+    return false;
+  }
 };
 
-// Keep setters for existing code (e.g., PaywallModal)
+export function subscribePremiumStatus(listener) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+export function usePremiumStatus() {
+  return useSyncExternalStore(
+    subscribePremiumStatus,
+    getPremiumStatus,
+    () => false
+  );
+}
+
+// Compatibility for existing code paths (web/dev only).
 export const setPremiumStatus = (value) => {
-  if (value) {
-    localStorage.setItem(PREMIUM_KEY, "premium");
-  } else {
-    localStorage.removeItem(PREMIUM_KEY);
+  if (isStoreKitAvailable()) {
+    console.warn(
+      "setPremiumStatus is ignored on iOS; use StoreKit purchase/restore and onProStatusChanged."
+    );
+    return;
+  }
+  try {
+    if (value) {
+      localStorage.setItem(PREMIUM_KEY, "premium");
+    } else {
+      localStorage.removeItem(PREMIUM_KEY);
+    }
+    emit();
+  } catch {
+    // ignore
   }
 };
 
 export const setUserPhone = (phone) => {
-  localStorage.setItem(PHONE_KEY, phone);
+  try {
+    localStorage.setItem(PHONE_KEY, phone);
+  } catch {
+    // ignore
+  }
 };
+
+export function requestNativeSubscriptionStatus() {
+  ensureNativeCallbackInstalled();
+  if (!isStoreKitAvailable()) return;
+  checkSubscriptionStatus();
+}
+

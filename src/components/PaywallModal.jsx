@@ -1,6 +1,6 @@
 import React from "react";
 import "../styles/paywall.css";
-import { setPremiumStatus } from "../store/premiumStore";
+import { purchaseProSubscription, restorePurchases } from "../utils/storekit";
 
 export default function PaywallModal({ open, onClose }) {
   if (!open) return null;
@@ -22,12 +22,29 @@ export default function PaywallModal({ open, onClose }) {
 
         <button
           className="paywall-upgrade-btn"
-          onClick={() => {
-            setPremiumStatus(true);
+          onClick={async () => {
+            const result = await purchaseProSubscription();
+            if (!result?.ok) {
+              alert(result?.message || "Purchase could not be completed. Please try again.");
+              return;
+            }
             onClose(true);
           }}
         >
           Upgrade Now – $9.99/mo
+        </button>
+
+        <button
+          className="paywall-cancel-btn"
+          onClick={async () => {
+            const result = await restorePurchases();
+            if (!result?.ok) {
+              alert(result?.message || "Restore could not be completed. Please try again.");
+              return;
+            }
+          }}
+        >
+          Restore Purchases
         </button>
 
         <button className="paywall-cancel-btn" onClick={() => onClose(false)}>

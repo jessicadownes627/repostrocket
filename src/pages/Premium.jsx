@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { setPremiumStatus } from "../store/premiumStore";
+import { purchaseProSubscription, restorePurchases } from "../utils/storekit";
 import "../styles/createListing.css";
 
 export default function Premium() {
@@ -35,8 +35,13 @@ export default function Premium() {
     loadPaywall();
   }, [loadPaywall]);
 
-  const handleUpgrade = () => {
-    alert("Premium checkout is coming soon!");
+  const handleUpgrade = async () => {
+    const result = await purchaseProSubscription();
+    if (!result?.ok) {
+      alert(result?.message || "Purchase could not be completed. Please try again.");
+      return;
+    }
+    navigate("/dashboard");
   };
 
   return (
@@ -96,6 +101,19 @@ export default function Premium() {
             onClick={handleUpgrade}
           >
             Upgrade Now
+          </button>
+
+          <button
+            type="button"
+            className="w-full text-xs opacity-70 hover:opacity-100 transition underline underline-offset-4"
+            onClick={async () => {
+              const result = await restorePurchases();
+              if (!result?.ok) {
+                alert(result?.message || "Restore could not be completed. Please try again.");
+              }
+            }}
+          >
+            Restore Purchases
           </button>
         </div>
       )}

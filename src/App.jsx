@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
 import { BatchProvider } from "./store/useBatchStore";
 import { SportsBatchProvider } from "./store/useSportsBatchStore";
@@ -23,6 +24,7 @@ import LaunchListing from "./pages/LaunchListing";
 import TrendSenseDashboard from "./pages/TrendSenseDashboard";
 import Premium from "./pages/Premium";
 import FloatingHomeButton from "./components/FloatingHomeButton";
+import { requestNativeSubscriptionStatus } from "./store/premiumStore";
 
 const HOME_BUTTON_PATHS = new Set([
   "/single-listing",
@@ -73,6 +75,10 @@ function AppShell() {
 }
 
 function App() {
+  useEffect(() => {
+    requestNativeSubscriptionStatus();
+  }, []);
+
   return (
     <Router basename="/">
       <BatchProvider>

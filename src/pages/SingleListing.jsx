@@ -6,6 +6,7 @@ import { useListingStore } from "../store/useListingStore";
 import { getPhotoUrl } from "../utils/photoHelpers";
 import { generateMagicDraft } from "../utils/generateMagicDraft";
 import { getMarketSnapshot } from "../utils/getMarketSnapshot";
+import { usePremiumStatus } from "../store/premiumStore";
 import {
   getConfidenceInsight,
   getConfidenceSuggestions,
@@ -31,6 +32,7 @@ const SET_CANDIDATE_MAP = {
 export default function SingleListing() {
   const navigate = useNavigate();
   const location = useLocation();
+  const isPro = usePremiumStatus();
   const {
     listingData: storedListingData,
     analysisInFlight,
@@ -141,9 +143,9 @@ export default function SingleListing() {
     isSlabbed && (!reviewIdentity?.grader || graderSource === "inferred");
   const showGradeChips =
     isSlabbed && reviewIdentity?.grader && !gradeValue;
-  const magicFillDisabled = premiumUsesRemaining <= 0;
+  const magicFillDisabled = !isPro && premiumUsesRemaining <= 0;
   const handleMagicFill = async () => {
-    if (magicFillDisabled) {
+    if (!isPro && magicFillDisabled) {
       setMagicFillMessage(
         "You’ve already used today’s Magic Fill. Try again tomorrow."
       );
@@ -209,7 +211,7 @@ export default function SingleListing() {
       } catch {
         // informational only: silently ignore
       }
-      consumeMagicUse();
+      if (!isPro) consumeMagicUse();
     } catch (err) {
       console.error("Magic Fill failed:", err);
     }
@@ -1210,7 +1212,7 @@ export default function SingleListing() {
           Run Magic Fill
         </button>
         <div className="text-center text-xs opacity-60 mt-2">
-          1 free Magic Fill per day · Upgrade for unlimited
+          1 free Magic Fill per day · Upgrade to Pro for unlimited
         </div>
         {magicFillMessage && (
           <div className="text-center text-xs text-white/70 mt-2">

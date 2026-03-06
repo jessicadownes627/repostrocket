@@ -1,6 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { purchaseProSubscription, restorePurchases } from "../utils/storekit";
 
 const featureCopy = {
   magicFill: {
@@ -123,13 +124,31 @@ export default function PremiumModal({ open, reason, usage, limit, onClose }) {
           <button
             className="w-full mt-8 py-3 rounded-xl bg-[#CBB78A]/20 border border-[#CBB78A]/40 
                        text-[#E8DCC0] hover:bg-[#CBB78A]/30 transition"
-            onClick={() => {
+            onClick={async () => {
+              const result = await purchaseProSubscription();
+              if (!result?.ok) {
+                alert(result?.message || "Purchase could not be completed. Please try again.");
+                return;
+              }
               onClose();
-              // send them to settings for upgrade
-              navigate("/premium");
+              navigate("/dashboard");
             }}
           >
-            Upgrade to Premium →
+            Upgrade to Pro →
+          </button>
+
+          <button
+            type="button"
+            className="w-full mt-3 text-xs opacity-70 hover:opacity-100 transition underline underline-offset-4"
+            onClick={async () => {
+              const result = await restorePurchases();
+              if (!result?.ok) {
+                alert(result?.message || "Restore could not be completed. Please try again.");
+                return;
+              }
+            }}
+          >
+            Restore Purchases
           </button>
         </motion.div>
       </motion.div>
