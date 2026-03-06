@@ -16,6 +16,8 @@
 :root {
   --lux-bg: #0a0a0a;
   --lux-text: #e8e1d0;
+  --lux-black: var(--lux-bg);
+  --text-main: var(--lux-text);
 
   --lux-border: rgba(203, 183, 138, 0.35);
   --lux-border-strong: rgba(203, 183, 138, 0.65);
@@ -45,8 +47,8 @@
 /* ------------------------------------------------------ */
 
 body {
-  background: var(--lux-bg);
-  color: var(--lux-text);
+  background: var(--lux-black);
+  color: var(--text-main);
   font-family: "Inter", sans-serif;
 }
 
@@ -730,4 +732,177 @@ body::after {
     max-width: none;
     height: 56px;
   }
+}
+
+/* ------------------------------------------------------ */
+/*  1️⃣5️⃣ WARMTH PASS (GLOBAL, REVERSIBLE)               */
+/* ------------------------------------------------------ */
+
+:root {
+  --paper-bg: #f4efdf;
+  --paper-bg-soft: #efe8d6;
+  --paper-card: #f7f2e4;
+  --paper-border: rgba(74, 67, 58, 0.2);
+  --ink-main: #2f3a47;
+  --ink-soft: #5f6772;
+}
+
+html.theme-paper,
+html.theme-paper body,
+html.theme-paper #root,
+html.theme-paper main,
+html.theme-paper .app-wrapper,
+html.theme-paper .page-wrapper {
+  background: radial-gradient(circle at top, #f7f2e7 0%, var(--paper-bg) 62%, var(--paper-bg-soft) 100%) !important;
+  color: var(--ink-main) !important;
+}
+
+html.theme-paper a,
+html.theme-paper p,
+html.theme-paper span,
+html.theme-paper label,
+html.theme-paper small,
+html.theme-paper .lux-soft-text,
+html.theme-paper .rr-sub,
+html.theme-paper .card-content,
+html.theme-paper .section-sub {
+  color: var(--ink-soft);
+}
+
+html.theme-paper h1,
+html.theme-paper h2,
+html.theme-paper h3,
+html.theme-paper h4,
+html.theme-paper h5,
+html.theme-paper h6,
+html.theme-paper .sparkly-header,
+html.theme-paper .rr-title,
+html.theme-paper .rr-module-title {
+  color: var(--ink-main) !important;
+}
+
+/* soften hardcoded dark utility classes used across pages */
+html.theme-paper [class*="bg-[#030303]"],
+html.theme-paper [class*="bg-[#050505]"],
+html.theme-paper [class*="bg-[#050807]"],
+html.theme-paper [class*="bg-black"],
+html.theme-paper [class*="bg-[#0d0d0f]"] {
+  background-color: var(--paper-bg) !important;
+}
+
+html.theme-paper [class*="text-white"],
+html.theme-paper [class*="text-[#E8E1D0]"],
+html.theme-paper [class*="text-[#E8DCC0]"] {
+  color: var(--ink-main) !important;
+}
+
+html.theme-paper .rr-gold-dust,
+html.theme-paper .rr-deep-emerald {
+  opacity: 0.08;
+  filter: none;
+}
+
+html.theme-paper .sparkly-header,
+html.theme-paper .header-glitter {
+  background: none !important;
+  color: var(--ink-main) !important;
+  animation: none !important;
+  text-shadow: none !important;
+}
+
+html.theme-paper .section-wrapper,
+html.theme-paper .section-card,
+html.theme-paper .card,
+html.theme-paper .panel,
+html.theme-paper .luxe-card,
+html.theme-paper .create-shell,
+html.theme-paper .lux-dashboard-card,
+html.theme-paper .rr-module,
+html.theme-paper .lux-upgrade-card {
+  background: var(--paper-card) !important;
+  border: 1px solid var(--paper-border) !important;
+  box-shadow: none !important;
+}
+
+html.theme-paper button,
+html.theme-paper .btn,
+html.theme-paper .btn-primary,
+html.theme-paper .primary-btn,
+html.theme-paper .lux-quiet-btn,
+html.theme-paper .lux-continue-btn,
+html.theme-paper .lux-small-btn {
+  background: rgba(247, 242, 228, 0.88) !important;
+  color: var(--ink-main) !important;
+  border: 1px solid rgba(74, 67, 58, 0.28) !important;
+  border-radius: 12px !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+html.theme-paper button:hover,
+html.theme-paper .btn:hover,
+html.theme-paper .btn-primary:hover,
+html.theme-paper .primary-btn:hover,
+html.theme-paper .lux-quiet-btn:hover,
+html.theme-paper .lux-continue-btn:hover,
+html.theme-paper .lux-small-btn:hover {
+  background: rgba(241, 235, 220, 0.92) !important;
+  color: var(--ink-main) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+html.theme-paper input,
+html.theme-paper textarea,
+html.theme-paper select,
+html.theme-paper .input-field,
+html.theme-paper .lux-input,
+html.theme-paper .lux-textarea,
+html.theme-paper .lux-attribute-display {
+  background: rgba(248, 244, 233, 0.9) !important;
+  color: var(--ink-main) !important;
+  border: 1px solid var(--paper-border) !important;
+}
+
+html.theme-paper .lux-divider,
+html.theme-paper .rr-divider,
+html.theme-paper .gold-divider,
+html.theme-paper .magic-cta-bar,
+html.theme-paper .magic-champagne-line,
+html.theme-paper .shimmer-divider {
+  height: 1px !important;
+  background: linear-gradient(90deg, transparent, rgba(74, 67, 58, 0.25), transparent) !important;
+}
+
+html.theme-paper .lux-divider::after,
+html.theme-paper .shimmer-divider::after,
+html.theme-paper .magic-cta-bar::after,
+html.theme-paper .ready-launch-badge::before {
+  display: none !important;
+}
+
+html.theme-paper .app-wrapper,
+html.theme-paper .rr-dashboard,
+html.theme-paper .create-page {
+  padding-top: 3rem !important;
+  padding-bottom: 3.5rem !important;
+}
+
+html.theme-paper .rr-section-label {
+  margin-top: 56px;
+  margin-bottom: 16px;
+  color: var(--ink-soft) !important;
+}
+
+/* Moments / birthdays: keep bullets, soften supporting text */
+html.theme-paper .moments-list li,
+html.theme-paper .moments li,
+html.theme-paper .birthdays li {
+  color: var(--ink-soft) !important;
+}
+
+html.theme-paper .moments-list li strong,
+html.theme-paper .moments li strong,
+html.theme-paper .birthdays li strong {
+  color: var(--ink-main) !important;
 }

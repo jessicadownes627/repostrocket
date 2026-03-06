@@ -17,7 +17,7 @@ export default function formatForGrailed(item = {}) {
   const collectibleBlock = buildCollectibleDetails(item);
 
   const collectibleTitle =
-    ["Sports Cards", "Collectibles"].includes(category)
+    ["Sports Cards", "Sports Equipment", "Collectibles"].includes(category)
       ? `${item.cardPlayer || ""} • ${item.cardSet || ""}${
           item.variant ? ` • ${item.variant}` : ""
         }${

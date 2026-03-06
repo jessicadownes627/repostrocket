@@ -48,15 +48,56 @@ export function mapPhotosToUrls(photos) {
   return photos.map((p) => getPhotoUrl(p));
 }
 
-export function fileToDataUrl(file) {
+function isHeicLike({ type = "", name = "" } = {}) {
+  const t = (type || "").toLowerCase();
+  const n = (name || "").toLowerCase();
+  return (
+    t === "image/heic" ||
+    t === "image/heif" ||
+    t === "image/heic-sequence" ||
+    t === "image/heif-sequence" ||
+    t.includes("heic") ||
+    t.includes("heif") ||
+    n.endsWith(".heic") ||
+    n.endsWith(".heif")
+  );
+}
+
+async function convertHeicToRasterImageBlob(blobOrFile, nameHint = "") {
+  const blob = blobOrFile instanceof Blob ? blobOrFile : null;
+  if (!blob) return null;
+  if (!isHeicLike({ type: blob.type, name: nameHint })) return null;
+
+  const { default: heic2any } = await import("heic2any");
+  try {
+    const jpeg = await heic2any({
+      blob,
+      toType: "image/jpeg",
+      quality: 0.9,
+    });
+    return Array.isArray(jpeg) ? jpeg[0] : jpeg;
+  } catch (err) {
+    try {
+      const png = await heic2any({
+        blob,
+        toType: "image/png",
+        quality: 1,
+      });
+      return Array.isArray(png) ? png[0] : png;
+    } catch (err2) {
+      console.warn("HEIC/HEIF conversion failed:", err2);
+      return null;
+    }
+  }
+}
+
+function readBlobAsDataUrl(blob) {
   return new Promise((resolve, reject) => {
-    if (!file) {
-      reject(new Error("No file provided"));
+    if (!(blob instanceof Blob)) {
+      reject(new Error("No blob provided"));
       return;
     }
-
     const reader = new FileReader();
-
     reader.onload = () => {
       const result = reader.result;
       if (typeof result === "string" && result.startsWith("data:image")) {
@@ -65,10 +106,49 @@ export function fileToDataUrl(file) {
         reject(new Error("File is not a valid image"));
       }
     };
-
     reader.onerror = reject;
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(blob);
   });
+}
+
+async function rasterizeBlobToJpegDataUrl(blob) {
+  if (!(blob instanceof Blob)) return "";
+  try {
+    const bitmap = await createImageBitmap(blob);
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return "";
+      ctx.drawImage(bitmap, 0, 0);
+      return canvas.toDataURL("image/jpeg", 0.92);
+    } finally {
+      bitmap.close?.();
+    }
+  } catch {
+    return "";
+  }
+}
+
+export async function fileToDataUrl(fileOrBlob) {
+  if (!fileOrBlob) {
+    throw new Error("No file provided");
+  }
+  const nameHint = typeof fileOrBlob?.name === "string" ? fileOrBlob.name : "";
+  const typeHint = typeof fileOrBlob?.type === "string" ? fileOrBlob.type : "";
+
+  if (isHeicLike({ type: typeHint, name: nameHint })) {
+    const converted = await convertHeicToRasterImageBlob(fileOrBlob, nameHint);
+    if (converted) {
+      return await readBlobAsDataUrl(converted);
+    }
+    const rasterized = await rasterizeBlobToJpegDataUrl(fileOrBlob);
+    if (rasterized) return rasterized;
+    throw new Error("HEIC/HEIF conversion failed");
+  }
+
+  return await readBlobAsDataUrl(fileOrBlob);
 }
 
 export async function photoEntryToDataUrl(entry) {
@@ -87,7 +167,11 @@ export async function photoEntryToDataUrl(entry) {
     const response = await fetch(src, { mode: "cors" });
     const blob = await response.blob();
     if (!blob) return "";
-    return await fileToDataUrl(new File([blob], entry.altText || "card-photo", { type: blob.type || "image/jpeg" }));
+    return await fileToDataUrl(
+      new File([blob], entry.altText || "card-photo", {
+        type: blob.type || "image/jpeg",
+      })
+    );
   } catch (err) {
     console.error("photoEntryToDataUrl: unable to fetch remote image", err);
     return "";

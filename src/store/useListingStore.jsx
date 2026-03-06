@@ -66,6 +66,8 @@ export function ListingProvider({ children }) {
   const [sportsAnalysisError, setSportsAnalysisError] = useState("");
   const isNetlifyDevRuntime =
     typeof process !== "undefined" && process.env?.NETLIFY_DEV === "true";
+  const isDevMagicUnlimited = Boolean(import.meta.env.DEV || isNetlifyDevRuntime);
+  const devMagicUses = 999;
 
   const commitIdentity = (listing, nextIdentity) => {
     const hasFields =
@@ -175,6 +177,10 @@ export function ListingProvider({ children }) {
     try {
       const raw = localStorage.getItem(MAGIC_KEY);
       const today = new Date().toDateString();
+      if (isDevMagicUnlimited) {
+        setPremiumUsesRemaining(devMagicUses);
+        return;
+      }
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed.date === today && typeof parsed.remaining === "number") {
@@ -186,9 +192,9 @@ export function ListingProvider({ children }) {
       setPremiumUsesRemaining(1);
     } catch (err) {
       console.error("Failed to restore magic usage", err);
-      setPremiumUsesRemaining(1);
+      setPremiumUsesRemaining(isDevMagicUnlimited ? devMagicUses : 1);
     }
-  }, []);
+  }, [isDevMagicUnlimited]);
 
   // Persist to localStorage when state changes
   useEffect(() => {
@@ -855,7 +861,8 @@ export function ListingProvider({ children }) {
       });
     };
 
-    const consumeMagicUse = () => {
+  const consumeMagicUse = () => {
+      if (isDevMagicUnlimited) return;
       setPremiumUsesRemaining((prev) => (prev > 0 ? prev - 1 : 0));
     };
 

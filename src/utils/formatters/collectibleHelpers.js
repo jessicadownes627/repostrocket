@@ -1,6 +1,6 @@
 // NEW — Build Collectible Details Block
 export function buildCollectibleDetails(item) {
-  if (!item || !["Sports Cards", "Collectibles"].includes(item.category)) {
+  if (!item || !["Sports Cards", "Sports Equipment", "Collectibles"].includes(item.category)) {
     return "";
   }
 
@@ -38,4 +38,3 @@ export function buildCollectibleDetails(item) {
     ? `\n\n🔥 **Collectible Details**\n${lines.map((l) => `• ${l}`).join("\n")}\n`
     : "";
 }
-

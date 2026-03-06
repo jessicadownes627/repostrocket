@@ -166,6 +166,7 @@ export default function Inventory() {
           <option value="Beauty">Beauty</option>
           <option value="Collectibles">Collectibles</option>
           <option value="Sports Cards">Sports Cards</option>
+          <option value="Sports Equipment">Sports Equipment</option>
         </select>
 
         <select

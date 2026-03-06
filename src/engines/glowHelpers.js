@@ -3,16 +3,20 @@
 // ---------------------------------------------
 
 // Optional rewrite to elevate description without hallucinating
-export function enhanceDescriptionForGlow(desc = "") {
+export function enhanceDescriptionForGlow(desc = "", intent = "") {
   if (!desc) return desc;
 
-  return (
-    desc
-      .replace(/\b(nice|cute|good|simple|basic)\b/gi, "")
-      .replace(/\s+/g, " ")
-      .trim() +
-    " Crafted with attention to detail, this piece brings effortless style to any wardrobe."
-  );
+  const cleaned = desc
+    .replace(/\b(nice|cute|good|simple|basic)\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const normalizedIntent = String(intent || "").toLowerCase();
+  if (normalizedIntent === "sports_resale" || normalizedIntent === "generic_resale") {
+    return cleaned;
+  }
+
+  return `${cleaned} Crafted with attention to detail.`;
 }
 
 // Title enhancer — short, strong, and salable
@@ -43,6 +47,9 @@ export function generateGlowScore(result) {
 export function glowIntentClassifier(text = "") {
   const lower = text.toLowerCase();
 
+  if (lower.match(/\b(nfl|nba|nhl|mlb|ncaa|football|basketball|baseball|soccer|hockey|jersey|helmet|cleats|glove|trading card|sports card)\b/)) {
+    return "sports_resale";
+  }
   if (lower.match(/dress|shirt|jeans|top|hoodie|jacket|pants|skirt/)) {
     return "fashion";
   }
@@ -53,5 +60,5 @@ export function glowIntentClassifier(text = "") {
     return "decor";
   }
 
-  return "fashion"; // default bias
+  return "generic_resale";
 }

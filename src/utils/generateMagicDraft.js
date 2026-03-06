@@ -1,6 +1,6 @@
 import { runMagicFill } from "./runMagicFill";
 import { parseMagicFillOutput } from "../engines/MagicFillEngine";
-import { fileToDataUrl } from "./photoHelpers";
+import { deriveAltTextFromFilename, ensurePhotoObject, fileToDataUrl } from "./photoHelpers";
 import { analyzeCardImages } from "./cardIntelClient";
 import { analyzeApparelImages } from "./apparelIntel";
 
@@ -24,7 +24,10 @@ function collectPhotoEntries(item = {}) {
   if (Array.isArray(item.photos)) list.push(...item.photos);
   if (Array.isArray(item.secondaryPhotos)) list.push(...item.secondaryPhotos);
   if (Array.isArray(item.cardPhotos)) list.push(...item.cardPhotos);
-  return list.filter(Boolean);
+  return list
+    .filter(Boolean)
+    .map((entry, idx) => ensurePhotoObject(entry, `item photo ${idx + 1}`))
+    .filter((entry) => Boolean(entry?.url || entry?.file));
 }
 
 async function resolvePhotoDataUrl(entry, options, fallbackEdited) {
@@ -43,6 +46,23 @@ async function resolvePhotoDataUrl(entry, options, fallbackEdited) {
   if (!fallbackSrc) return "";
   if (fallbackSrc.startsWith("data:")) return fallbackSrc;
   return await ensureDataUrlFromSource(fallbackSrc);
+}
+
+function resolvePhotoImageUrl(entry, fallbackEdited) {
+  const candidate = entry?.url || fallbackEdited || "";
+  if (!candidate) return "";
+  if (candidate.startsWith("data:")) return candidate;
+  if (candidate.startsWith("http://") || candidate.startsWith("https://")) {
+    try {
+      const url = new URL(candidate);
+      const pathname = (url.pathname || "").toLowerCase();
+      if (pathname.endsWith(".heic") || pathname.endsWith(".heif")) {
+        return "";
+      }
+    } catch {}
+    return candidate;
+  }
+  return "";
 }
 
 function hasCardCategory(item = {}) {
@@ -79,8 +99,12 @@ export async function generateMagicDraft(item = {}, options = {}) {
   const primaryEntry = photos[0] || null;
 
   const photoDataUrl = await resolvePhotoDataUrl(primaryEntry, options, item?.editedPhoto);
+  const photoImageUrl = resolvePhotoImageUrl(primaryEntry, item?.editedPhoto);
   const cardMode = options.cardMode ?? hasCardCategory(item);
   const apparelMode = options.apparelMode ?? hasBabyApparelCategory(item);
+  const resolvedPhotoContext =
+    (primaryEntry?.altText || "").trim() ||
+    deriveAltTextFromFilename(primaryEntry?.file?.name || primaryEntry?.url || "");
 
   let cardIntel = options.cardIntel || item.cardIntel || null;
   if (!cardIntel && cardMode && photos.length) {
@@ -119,8 +143,9 @@ export async function generateMagicDraft(item = {}, options = {}) {
   const requestPayload = {
     listing: listingPayload,
     userCategory: item.category || "",
-    photoContext: primaryEntry?.altText || "",
+    photoContext: resolvedPhotoContext,
     photoDataUrl,
+    photoImageUrl,
     glowMode: options.glowMode ?? false,
   };
 

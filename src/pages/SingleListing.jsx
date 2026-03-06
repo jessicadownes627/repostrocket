@@ -11,7 +11,7 @@ import {
 } from "../utils/confidenceInsights";
 import "../styles/overrides.css";
 
-const CATEGORY_OPTIONS = ["Sports Cards", "Apparel", "Accessories", "Home Goods", "Other"];
+const CATEGORY_OPTIONS = ["Sports Cards", "Sports Equipment", "Apparel", "Accessories", "Home Goods", "Other"];
 const CONDITION_OPTIONS = ["New with tags", "Like new", "Very good", "Good", "Fair"];
 const TAG_OPTIONS = ["Neutral", "Modern", "Minimal", "Classic", "Statement"];
 const SET_CANDIDATE_MAP = {
@@ -36,6 +36,7 @@ export default function SingleListing() {
     reviewIdentity,
     analysisState,
     requestSportsAnalysis,
+    setListingField,
     setReviewIdentityField,
     premiumUsesRemaining,
     consumeMagicUse,
@@ -171,17 +172,40 @@ export default function SingleListing() {
       };
       const draft = await generateMagicDraft(draftInput, { glowMode: true });
       const parsed = draft?.parsed;
-      if (parsed?.title?.after) setTitle(parsed.title.after);
-      if (parsed?.description?.after) setDescription(parsed.description.after);
-      if (parsed?.price?.after) setPrice(parsed.price.after);
-      if (parsed?.category_choice) setCategory(parsed.category_choice);
+      if (parsed?.title?.after) {
+        setTitle(parsed.title.after);
+        setListingField("title", parsed.title.after);
+      }
+      if (parsed?.description?.after) {
+        setDescription(parsed.description.after);
+        setListingField("description", parsed.description.after);
+      }
+      if (parsed?.price?.after) {
+        setPrice(parsed.price.after);
+        setListingField("price", parsed.price.after);
+      }
+      if (parsed?.category_choice) {
+        setCategory(parsed.category_choice);
+        setListingField("category", parsed.category_choice);
+      }
       if (Array.isArray(parsed?.tags?.after) && parsed.tags.after.length) {
         setTags(parsed.tags.after);
+        setListingField("tags", parsed.tags.after);
       }
       consumeMagicUse();
     } catch (err) {
       console.error("Magic Fill failed:", err);
     }
+  };
+
+  const persistCasualDraftToStore = () => {
+    setListingField("title", (title || "").trim());
+    setListingField("description", (description || "").trim());
+    setListingField("price", (price || "").trim());
+    setListingField("brand", (brand || "").trim());
+    setListingField("category", category || "");
+    setListingField("condition", condition || "");
+    setListingField("tags", Array.isArray(tags) ? tags : []);
   };
   const gradeChipOptions = {
     PSA: ["7", "8", "9", "10"],
@@ -1178,53 +1202,93 @@ export default function SingleListing() {
         )}
       </div>
 
-      <LuxeInput label="Title" value={title} onChange={setTitle} />
+      <LuxeInput
+        label="Title"
+        value={title}
+        onChange={(next) => {
+          setTitle(next);
+          setListingField("title", next);
+        }}
+      />
       {placeholderTitle && (
         <div className="text-xs text-white/50 -mt-4 mb-4">
           Placeholder title — edit this to match your item.
         </div>
       )}
-      <LuxeInput label="Description" value={description} onChange={setDescription} />
+      <LuxeInput
+        label="Description"
+        value={description}
+        onChange={(next) => {
+          setDescription(next);
+          setListingField("description", next);
+        }}
+      />
       {placeholderDescription && (
         <div className="text-xs text-white/50 -mt-4 mb-4">
           Placeholder description — add details about your item.
         </div>
       )}
-      <LuxeInput label="Price" value={price} onChange={setPrice} />
+      <LuxeInput
+        label="Price"
+        value={price}
+        onChange={(next) => {
+          setPrice(next);
+          setListingField("price", next);
+        }}
+      />
 
       <div className="mb-6">
         <div className="text-sm uppercase opacity-70 mb-2">Category</div>
-        <LuxeChipGroup
+      <LuxeChipGroup
           options={CATEGORY_OPTIONS}
           value={category}
-          onChange={setCategory}
+          onChange={(next) => {
+            setCategory(next);
+            setListingField("category", next);
+          }}
         />
       </div>
 
-      <LuxeInput label="Brand" value={brand} onChange={setBrand} />
+      <LuxeInput
+        label="Brand"
+        value={brand}
+        onChange={(next) => {
+          setBrand(next);
+          setListingField("brand", next);
+        }}
+      />
 
       <div className="mb-6">
         <div className="text-sm uppercase opacity-70 mb-2">Condition</div>
-        <LuxeChipGroup
+      <LuxeChipGroup
           options={CONDITION_OPTIONS}
           value={condition}
-          onChange={setCondition}
+          onChange={(next) => {
+            setCondition(next);
+            setListingField("condition", next);
+          }}
         />
       </div>
 
       <div className="mb-10">
         <div className="text-sm uppercase opacity-70 mb-2">Tags</div>
-        <LuxeChipGroup
+      <LuxeChipGroup
           options={TAG_OPTIONS}
           value={tags}
           multiple
-          onChange={setTags}
+          onChange={(next) => {
+            setTags(next);
+            setListingField("tags", next);
+          }}
         />
       </div>
 
       <button
         className="lux-continue-btn w-full py-5 tracking-[0.28em]"
-        onClick={() => navigate("/launch")}
+        onClick={() => {
+          persistCasualDraftToStore();
+          navigate("/launch");
+        }}
       >
         Verify & Lock Listing →
       </button>
