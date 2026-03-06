@@ -5,6 +5,7 @@ import LuxeInput from "../components/LuxeInput";
 import { useListingStore } from "../store/useListingStore";
 import { getPhotoUrl } from "../utils/photoHelpers";
 import { generateMagicDraft } from "../utils/generateMagicDraft";
+import { getMarketSnapshot } from "../utils/getMarketSnapshot";
 import {
   getConfidenceInsight,
   getConfidenceSuggestions,
@@ -63,6 +64,7 @@ export default function SingleListing() {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [magicFillMessage, setMagicFillMessage] = useState("");
+  const [marketSnapshot, setMarketSnapshot] = useState(null);
   const placeholderTitle =
     (title || "").trim().toLowerCase() === "item for sale";
   const placeholderDescription = (() => {
@@ -172,6 +174,7 @@ export default function SingleListing() {
       };
       const draft = await generateMagicDraft(draftInput, { glowMode: true });
       const parsed = draft?.parsed;
+      setMarketSnapshot(null);
       if (parsed?.title?.after) {
         setTitle(parsed.title.after);
         setListingField("title", parsed.title.after);
@@ -191,6 +194,20 @@ export default function SingleListing() {
       if (Array.isArray(parsed?.tags?.after) && parsed.tags.after.length) {
         setTags(parsed.tags.after);
         setListingField("tags", parsed.tags.after);
+      }
+
+      try {
+        const snapshot = await getMarketSnapshot({
+          title: parsed?.title?.after || current.title,
+          object_type: draft?.ai?.object_type || draft?.ai?.objectType || "",
+          tags:
+            (Array.isArray(parsed?.tags?.after) && parsed.tags.after.length
+              ? parsed.tags.after
+              : current.tags) || [],
+        });
+        if (snapshot) setMarketSnapshot(snapshot);
+      } catch {
+        // informational only: silently ignore
       }
       consumeMagicUse();
     } catch (err) {
@@ -1223,6 +1240,26 @@ export default function SingleListing() {
           setListingField("description", next);
         }}
       />
+      {marketSnapshot && (
+        <div className="market-snapshot-card">
+          <div className="market-snapshot-title">Market Snapshot</div>
+          <div className="market-snapshot-sub">Recent sales for similar items</div>
+          <div className="market-snapshot-examples">
+            {(marketSnapshot.examples || []).slice(0, 3).map((price, idx) => (
+              <div key={`ms-${idx}`} className="market-snapshot-pill">
+                ${Math.round(Number(price) || 0)}
+              </div>
+            ))}
+          </div>
+          <div className="market-snapshot-range-label">Typical range</div>
+          <div className="market-snapshot-range-value">
+            ${Math.round(marketSnapshot.minPrice)} – ${Math.round(marketSnapshot.maxPrice)}
+          </div>
+          <div className="market-snapshot-note">
+            Based on similar marketplace listings. Actual value may vary.
+          </div>
+        </div>
+      )}
       {placeholderDescription && (
         <div className="text-xs text-white/50 -mt-4 mb-4">
           Placeholder description — add details about your item.

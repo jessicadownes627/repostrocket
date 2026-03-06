@@ -3107,3 +3107,74 @@ section {
   background: #e4d6b2;
   box-shadow: 0 0 8px rgba(228, 214, 178, 0.8);
 }
+
+/* -------------------------------------------- */
+/*  Market Snapshot (Single Listing)            */
+/* -------------------------------------------- */
+.market-snapshot-card {
+  margin-top: 14px;
+  margin-bottom: 22px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.22);
+  box-shadow: 0 0 18px rgba(0, 0, 0, 0.35);
+}
+
+.market-snapshot-title {
+  font-size: 12px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.78);
+  margin-bottom: 6px;
+}
+
+.market-snapshot-sub {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 10px;
+}
+
+.market-snapshot-examples {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.market-snapshot-pill {
+  padding: 7px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(232, 213, 168, 0.35);
+  background: rgba(232, 213, 168, 0.08);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.market-snapshot-range {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.market-snapshot-range-label {
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 4px;
+}
+
+.market-snapshot-range-value {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.market-snapshot-note {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  line-height: 1.35;
+}
