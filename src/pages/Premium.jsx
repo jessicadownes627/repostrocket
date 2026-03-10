@@ -1,33 +1,46 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { purchaseProSubscription, restorePurchases } from "../utils/storekit";
+import {
+  purchaseProSubscription,
+  requestProducts,
+  restorePurchases,
+  useStoreKitProducts,
+} from "../utils/storekit";
+import SubscriptionDisclosure from "../components/SubscriptionDisclosure";
 import "../styles/createListing.css";
 
 export default function Premium() {
   const navigate = useNavigate();
-  const [status, setStatus] = useState("loading");
-  const [error, setError] = useState("");
-  const normalizedStatus = ["loading", "ready", "error"].includes(status) ? status : "loading";
+  const { status: productStatus, error: productError, products } =
+    useStoreKitProducts();
+  const [screenState, setScreenState] = useState("loading");
+  const [screenError, setScreenError] = useState("");
+  const normalizedStatus = ["loading", "ready", "error"].includes(screenState)
+    ? screenState
+    : "loading";
   const errorMessage =
-    error || "We couldn’t load the upgrade screen. Please try again.";
+    screenError || "We couldn’t load the upgrade screen. Please try again.";
+  const primaryProduct = products[0] || null;
+  const isUpgradeReady = productStatus === "ready" && Boolean(primaryProduct);
 
   const loadPaywall = useCallback(async () => {
-    setStatus("loading");
-    setError("");
+    setScreenState("loading");
+    setScreenError("");
     try {
       if (typeof navigator !== "undefined" && navigator.onLine === false) {
         throw new Error("offline");
       }
+      await requestProducts();
       await new Promise((resolve) => setTimeout(resolve, 300));
-      setStatus("ready");
+      setScreenState("ready");
     } catch (err) {
       console.error("Premium screen failed to load:", err);
-      setError(
+      setScreenError(
         navigator?.onLine === false
           ? "You’re offline. Reconnect to load upgrade options."
           : "We couldn’t load the upgrade screen. Please try again."
       );
-      setStatus("error");
+      setScreenState("error");
     }
   }, []);
 
@@ -96,11 +109,36 @@ export default function Premium() {
             </ul>
           </div>
 
+          {productStatus === "loading" && (
+            <div className="text-center text-sm opacity-75">
+              Loading App Store subscription details…
+            </div>
+          )}
+
+          {productStatus === "ready" && primaryProduct && (
+            <div className="rounded-2xl border border-[#CBB78A]/20 bg-black/20 p-4 text-sm">
+              <div className="opacity-70">App Store subscription</div>
+              <div className="mt-1 text-[#E8DCC0] font-semibold">
+                {primaryProduct.title || "Repost Rocket Premium"}
+              </div>
+              {primaryProduct.displayPrice && (
+                <div className="opacity-75">{primaryProduct.displayPrice}</div>
+              )}
+            </div>
+          )}
+
+          {productStatus === "error" && (
+            <div className="rounded-2xl border border-[#CBB78A]/20 bg-black/20 p-4 text-sm opacity-80">
+              {productError || "Premium is temporarily unavailable. Please try again later."}
+            </div>
+          )}
+
           <button
-            className="w-full py-4 text-lg font-semibold rounded-xl lux-continue-btn"
+            className="w-full py-4 text-lg font-semibold rounded-xl lux-continue-btn disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={handleUpgrade}
+            disabled={!isUpgradeReady}
           >
-            Upgrade Now
+            {productStatus === "loading" ? "Loading Subscription…" : "Upgrade to Premium"}
           </button>
 
           <button
@@ -115,6 +153,18 @@ export default function Premium() {
           >
             Restore Purchases
           </button>
+
+          {productStatus === "error" && (
+            <button
+              type="button"
+              onClick={loadPaywall}
+              className="w-full text-xs opacity-70 hover:opacity-100 transition underline underline-offset-4"
+            >
+              Retry Loading Subscription
+            </button>
+          )}
+
+          <SubscriptionDisclosure className="pt-2" />
         </div>
       )}
     </div>

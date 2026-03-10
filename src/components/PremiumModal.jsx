@@ -1,7 +1,13 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { purchaseProSubscription, restorePurchases } from "../utils/storekit";
+import {
+  purchaseProSubscription,
+  requestProducts,
+  restorePurchases,
+  useStoreKitProducts,
+} from "../utils/storekit";
+import SubscriptionDisclosure from "./SubscriptionDisclosure";
 
 const featureCopy = {
   magicFill: {
@@ -58,10 +64,22 @@ const featureCopy = {
 };
 
 export default function PremiumModal({ open, reason, usage, limit, onClose }) {
-  if (!open) return null;
   const navigate = useNavigate();
+  const { status: productStatus, error: productError, products } =
+    useStoreKitProducts();
+  const primaryProduct = products[0] || null;
+  const isUpgradeReady = productStatus === "ready" && Boolean(primaryProduct);
 
   const copy = featureCopy[reason] || featureCopy.default;
+
+  React.useEffect(() => {
+    if (!open) return;
+    if (productStatus === "idle") {
+      requestProducts();
+    }
+  }, [open, productStatus]);
+
+  if (!open) return null;
 
   return (
     <AnimatePresence>
@@ -123,7 +141,7 @@ export default function PremiumModal({ open, reason, usage, limit, onClose }) {
           {/* Upgrade button */}
           <button
             className="w-full mt-8 py-3 rounded-xl bg-[#CBB78A]/20 border border-[#CBB78A]/40 
-                       text-[#E8DCC0] hover:bg-[#CBB78A]/30 transition"
+                       text-[#E8DCC0] hover:bg-[#CBB78A]/30 transition disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={async () => {
               const result = await purchaseProSubscription();
               if (!result?.ok) {
@@ -133,9 +151,22 @@ export default function PremiumModal({ open, reason, usage, limit, onClose }) {
               onClose();
               navigate("/dashboard");
             }}
+            disabled={!isUpgradeReady}
           >
-            Upgrade to Pro →
+            {productStatus === "loading" ? "Loading Subscription…" : "Upgrade to Pro →"}
           </button>
+
+          {productStatus === "ready" && primaryProduct?.displayPrice && (
+            <div className="mt-3 text-xs opacity-70 text-center">
+              {primaryProduct.displayPrice}
+            </div>
+          )}
+
+          {productStatus === "error" && (
+            <div className="mt-3 text-xs opacity-75 text-center">
+              {productError || "Premium is temporarily unavailable. Please try again later."}
+            </div>
+          )}
 
           <button
             type="button"
@@ -150,6 +181,18 @@ export default function PremiumModal({ open, reason, usage, limit, onClose }) {
           >
             Restore Purchases
           </button>
+
+          {productStatus === "error" && (
+            <button
+              type="button"
+              className="w-full mt-2 text-xs opacity-70 hover:opacity-100 transition underline underline-offset-4"
+              onClick={() => requestProducts()}
+            >
+              Retry Loading Subscription
+            </button>
+          )}
+
+          <SubscriptionDisclosure className="mt-4" />
         </motion.div>
       </motion.div>
     </AnimatePresence>

@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 export default function Welcome() {
   const navigate = useNavigate();
@@ -43,6 +44,15 @@ export default function Welcome() {
         >
           Start
         </button>
+
+        <div className="mt-8 text-xs text-[#E6DCC6]/65 space-x-4">
+          <Link className="underline underline-offset-4" to="/privacy">
+            Privacy Policy
+          </Link>
+          <Link className="underline underline-offset-4" to="/terms">
+            Terms of Use
+          </Link>
+        </div>
       </div>
 
       {/* SHIMMER KEYFRAMES */}

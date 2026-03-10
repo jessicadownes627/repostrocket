@@ -1,8 +1,26 @@
 import React from "react";
 import "../styles/paywall.css";
-import { purchaseProSubscription, restorePurchases } from "../utils/storekit";
+import {
+  purchaseProSubscription,
+  requestProducts,
+  restorePurchases,
+  useStoreKitProducts,
+} from "../utils/storekit";
+import SubscriptionDisclosure from "./SubscriptionDisclosure";
 
 export default function PaywallModal({ open, onClose }) {
+  const { status: productStatus, error: productError, products } =
+    useStoreKitProducts();
+  const primaryProduct = products[0] || null;
+  const isUpgradeReady = productStatus === "ready" && Boolean(primaryProduct);
+
+  React.useEffect(() => {
+    if (!open) return;
+    if (productStatus === "idle") {
+      requestProducts();
+    }
+  }, [open, productStatus]);
+
   if (!open) return null;
 
   return (
@@ -30,9 +48,22 @@ export default function PaywallModal({ open, onClose }) {
             }
             onClose(true);
           }}
+          disabled={!isUpgradeReady}
         >
-          Upgrade Now – $9.99/mo
+          {productStatus === "loading" ? "Loading Subscription…" : "Upgrade Now"}
         </button>
+
+        {productStatus === "ready" && primaryProduct?.displayPrice && (
+          <div className="mt-2 text-xs opacity-70 text-center">
+            {primaryProduct.displayPrice}
+          </div>
+        )}
+
+        {productStatus === "error" && (
+          <div className="mt-2 text-xs opacity-75 text-center">
+            {productError || "Premium is temporarily unavailable. Please try again later."}
+          </div>
+        )}
 
         <button
           className="paywall-cancel-btn"
@@ -50,6 +81,14 @@ export default function PaywallModal({ open, onClose }) {
         <button className="paywall-cancel-btn" onClick={() => onClose(false)}>
           Not now
         </button>
+
+        {productStatus === "error" && (
+          <button className="paywall-cancel-btn" onClick={() => requestProducts()}>
+            Retry Loading Subscription
+          </button>
+        )}
+
+        <SubscriptionDisclosure className="mt-4" />
       </div>
     </div>
   );
