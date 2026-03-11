@@ -3,6 +3,7 @@ import { useSyncExternalStore } from "react";
 export const PRODUCT_ID = "repostrocket.pro.monthly";
 
 const listeners = new Set();
+let pendingPurchase = null;
 
 let productState = {
   status: "idle",
@@ -21,6 +22,17 @@ function updateProductState(next) {
     ...next,
   };
   emit();
+}
+
+function getErrorMessage(error, fallback) {
+  if (typeof error === "string" && error.trim()) return error;
+  if (typeof error?.message === "string" && error.message.trim()) {
+    return error.message;
+  }
+  if (typeof error?.localizedDescription === "string" && error.localizedDescription.trim()) {
+    return error.localizedDescription;
+  }
+  return fallback;
 }
 
 function getWindowObject() {
@@ -78,6 +90,40 @@ function normalizeProducts(payload) {
       raw: product,
     }))
     .filter((product) => product.productId);
+}
+
+function resolvePendingPurchase(result) {
+  if (!pendingPurchase) return;
+  const { resolve, timeoutId } = pendingPurchase;
+  clearTimeout(timeoutId);
+  pendingPurchase = null;
+  resolve(result);
+}
+
+function createPendingPurchase() {
+  if (pendingPurchase) {
+    return null;
+  }
+
+  let resolvePromise;
+  const promise = new Promise((resolve) => {
+    resolvePromise = resolve;
+  });
+
+  const timeoutId = setTimeout(() => {
+    resolvePendingPurchase({
+      ok: false,
+      message: "Purchase timed out. Please try again.",
+    });
+  }, 60000);
+
+  pendingPurchase = {
+    resolve: resolvePromise,
+    timeoutId,
+    promise,
+  };
+
+  return promise;
 }
 
 function installStoreKitCallbacks() {
@@ -148,6 +194,7 @@ function installStoreKitCallbacks() {
 
   const handlePurchaseSuccess = function onStoreKitPurchaseSuccess(payload) {
     console.info("[StoreKit] purchase success", payload);
+    resolvePendingPurchase({ ok: true, payload });
     if (typeof previousPurchaseSuccess === "function") {
       previousPurchaseSuccess(payload);
     }
@@ -158,6 +205,13 @@ function installStoreKitCallbacks() {
 
   const handlePurchaseFailed = function onStoreKitPurchaseFailed(error) {
     console.error("[StoreKit] purchase failure", error);
+    resolvePendingPurchase({
+      ok: false,
+      message: getErrorMessage(
+        error,
+        "Purchase could not be completed. Please try again."
+      ),
+    });
     if (typeof previousPurchaseFailed === "function") {
       previousPurchaseFailed(error);
     }
@@ -269,6 +323,14 @@ export async function purchaseProSubscription() {
     return { ok: false, message };
   }
 
+  const purchasePromise = createPendingPurchase();
+  if (!purchasePromise) {
+    return {
+      ok: false,
+      message: "A purchase is already in progress. Please finish it first.",
+    };
+  }
+
   try {
     console.info("[StoreKit] purchase start", {
       requestedProductId: PRODUCT_ID,
@@ -285,8 +347,12 @@ export async function purchaseProSubscription() {
       handler: handlerName,
       productId: product.productId,
     });
-    return { ok: true };
+    return await purchasePromise;
   } catch (err) {
+    resolvePendingPurchase({
+      ok: false,
+      message: "Purchase could not be completed. Please try again.",
+    });
     console.error("[StoreKit] purchase failure", err);
     return {
       ok: false,
