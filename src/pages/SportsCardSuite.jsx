@@ -228,11 +228,8 @@ export default function SportsCardSuite() {
               }
               className="w-full text-left px-6 py-6 rounded-[32px] text-[#F8EED5] bg-transparent hover:shadow-[0_30px_85px_rgba(8,4,0,0.65)] transition-all"
             >
-              <div className="text-sm uppercase tracking-[0.45em] opacity-80 mb-2 flex items-center gap-3">
-                <span>Batch Sports Cards</span>
-                <span className="px-2 py-0.5 text-[10px] rounded-full border border-[#CBB78A]/40 text-[#CBB78A] uppercase tracking-[0.3em]">
-                  Premium
-                </span>
+              <div className="text-sm uppercase tracking-[0.45em] opacity-80 mb-2">
+                Batch Sports Cards
               </div>
               <div className="text-[17px] leading-relaxed mb-4 max-w-3xl text-white/80">
                 Prep multiple cards in one guided flow from photos to launch.
