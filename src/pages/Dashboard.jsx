@@ -50,13 +50,12 @@ export default function Dashboard() {
         onClick={() => navigate("/sports-cards")}
       />
 
-      <div className="rr-section-label">PREMIUM TOOLS</div>
+      <div className="rr-section-label">ADVANCED TOOLS</div>
 
       <LuxeCard
         title="TrendSense"
         subtitle="Insights"
         description="Real-time selling trends. See what’s moving now."
-        premium
         onClick={handleTrendSense}
       />
 
@@ -64,7 +63,6 @@ export default function Dashboard() {
         title="Batch Mode"
         subtitle="Multi-Item"
         description="Prep large batches in one streamlined flow."
-        premium
         onClick={handleBatchMode}
       />
     </div>
