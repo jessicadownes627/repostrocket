@@ -6,7 +6,6 @@ import { useListingStore } from "../store/useListingStore";
 import { getPhotoUrl } from "../utils/photoHelpers";
 import { generateMagicDraft } from "../utils/generateMagicDraft";
 import { getMarketSnapshot } from "../utils/getMarketSnapshot";
-import { usePremiumStatus } from "../store/premiumStore";
 import {
   getConfidenceInsight,
   getConfidenceSuggestions,
@@ -32,7 +31,6 @@ const SET_CANDIDATE_MAP = {
 export default function SingleListing() {
   const navigate = useNavigate();
   const location = useLocation();
-  const isPro = usePremiumStatus();
   const {
     listingData: storedListingData,
     analysisInFlight,
@@ -41,8 +39,6 @@ export default function SingleListing() {
     requestSportsAnalysis,
     setListingField,
     setReviewIdentityField,
-    premiumUsesRemaining,
-    consumeMagicUse,
   } = useListingStore();
   const analysisComplete = analysisState === "complete" || analysisState === "error";
 
@@ -143,14 +139,7 @@ export default function SingleListing() {
     isSlabbed && (!reviewIdentity?.grader || graderSource === "inferred");
   const showGradeChips =
     isSlabbed && reviewIdentity?.grader && !gradeValue;
-  const magicFillDisabled = !isPro && premiumUsesRemaining <= 0;
   const handleMagicFill = async () => {
-    if (!isPro && magicFillDisabled) {
-      setMagicFillMessage(
-        "You’ve already used today’s Magic Fill. Try again tomorrow."
-      );
-      return;
-    }
     setMagicFillMessage("");
     try {
       const raw = listingData || {};
@@ -211,12 +200,11 @@ export default function SingleListing() {
       } catch {
         // informational only: silently ignore
       }
-      if (!isPro) consumeMagicUse();
     } catch (err) {
       console.error("Magic Fill failed:", err);
+      setMagicFillMessage("Magic Fill failed. Please try again.");
     }
   };
-
   const persistCasualDraftToStore = () => {
     setListingField("title", (title || "").trim());
     setListingField("description", (description || "").trim());
@@ -1197,22 +1185,16 @@ export default function SingleListing() {
 
       <h1 className="text-center text-3xl mb-10">Single Listing</h1>
 
-      {/* MAGIC FILL — CASUAL ONLY */}
       <div className="mb-10">
         <button
           type="button"
           onClick={handleMagicFill}
-          aria-disabled={magicFillDisabled}
-          className={`w-full py-4 rounded-[28px] tracking-[0.2em] ${
-            magicFillDisabled
-              ? "bg-[#F4E9D5]/50 text-black/50"
-              : "bg-[#F4E9D5] text-black"
-          }`}
+          className="w-full py-4 rounded-[28px] tracking-[0.2em] bg-[#F4E9D5] text-black"
         >
           Run Magic Fill
         </button>
         <div className="text-center text-xs opacity-60 mt-2">
-          1 free Magic Fill per day · Upgrade to Pro for unlimited
+          Generate listing details automatically.
         </div>
         {magicFillMessage && (
           <div className="text-center text-xs text-white/70 mt-2">

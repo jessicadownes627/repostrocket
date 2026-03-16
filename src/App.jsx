@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { BatchProvider } from "./store/useBatchStore";
 import { SportsBatchProvider } from "./store/useSportsBatchStore";
 
@@ -22,11 +22,9 @@ import MultiDetect from "./pages/MultiDetect";
 import BatchComps from "./pages/BatchComps";
 import LaunchListing from "./pages/LaunchListing";
 import TrendSenseDashboard from "./pages/TrendSenseDashboard";
-import Premium from "./pages/Premium";
 import Legal from "./pages/Legal";
 import FloatingHomeButton from "./components/FloatingHomeButton";
 import { requestNativeSubscriptionStatus } from "./store/premiumStore";
-import { requestProducts } from "./utils/storekit";
 
 const HOME_BUTTON_PATHS = new Set([
   "/single-listing",
@@ -68,8 +66,8 @@ function AppShell() {
         <Route path="/batch-comps" element={<BatchComps />} />
         <Route path="/launch-listing" element={<LaunchListing />} />
         <Route path="/trendsense" element={<TrendSenseDashboard />} />
-        <Route path="/premium" element={<Premium />} />
-        <Route path="/settings" element={<Premium />} />
+        <Route path="/premium" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/settings" element={<Navigate to="/dashboard" replace />} />
         <Route path="/privacy" element={<Legal />} />
         <Route path="/terms" element={<Legal />} />
       </Routes>
@@ -81,7 +79,6 @@ function AppShell() {
 function App() {
   useEffect(() => {
     requestNativeSubscriptionStatus();
-    requestProducts();
   }, []);
 
   return (
