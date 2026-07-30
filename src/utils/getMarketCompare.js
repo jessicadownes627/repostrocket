@@ -41,9 +41,25 @@ export async function getMarketCompare({
     }
 
     const data = await response.json();
-    if (!data || typeof data !== "object") return null;
-    return data;
+    return normalizeMarketCompareResponse(data);
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error("Market research timed out. Please try again.");
+    }
+    throw error;
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+function normalizeMarketCompareResponse(data) {
+  if (!data || typeof data !== "object") return null;
+
+  return {
+    query: data.query && typeof data.query === "object" ? data.query : {},
+    providers: Array.isArray(data.providers) ? data.providers : [],
+    results: Array.isArray(data.results) ? data.results : [],
+    errors: Array.isArray(data.errors) ? data.errors : [],
+    fetchedAt: data.fetchedAt || "",
+  };
 }

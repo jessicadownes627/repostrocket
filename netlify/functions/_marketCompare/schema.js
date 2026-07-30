@@ -68,6 +68,21 @@ export function createMarketCompareResponse({
   };
 }
 
+export function dedupeResults(results = []) {
+  const seen = new Set();
+  const deduped = [];
+
+  results.forEach((entry) => {
+    if (!entry || typeof entry !== "object") return;
+    const key = buildResultKey(entry);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    deduped.push(entry);
+  });
+
+  return deduped;
+}
+
 function sortProviders(providers = []) {
   return [...providers].sort((a, b) => {
     return providerRank(a?.provider) - providerRank(b?.provider);
@@ -100,4 +115,13 @@ function normalizeScore(value) {
   const num = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(num)) return 0;
   return Math.max(0, Math.min(1, Math.round(num * 1000) / 1000));
+}
+
+function buildResultKey(entry) {
+  const provider = String(entry?.provider || "").toLowerCase();
+  const listingId = String(entry?.listingId || "").trim();
+  const url = String(entry?.url || "").trim();
+  if (provider && listingId) return `${provider}:${listingId}`;
+  if (provider && url) return `${provider}:${url}`;
+  return "";
 }

@@ -20,8 +20,11 @@ export default function MarketResearchCard({
   data = null,
   error = "",
 }) {
-  const providerReports = Array.isArray(data?.providers) ? data.providers : [];
-  const results = Array.isArray(data?.results) ? data.results : [];
+  const providerReports = useMemo(
+    () => indexProviderReports(data?.providers),
+    [data?.providers]
+  );
+  const results = useMemo(() => sanitizeListings(data?.results), [data?.results]);
   const [sortMode, setSortMode] = useState("lowest");
 
   const groupedResults = useMemo(() => {
@@ -97,9 +100,7 @@ export default function MarketResearchCard({
         <>
           <div className="market-research-provider-list">
             {PROVIDERS.map((provider) => {
-              const report = providerReports.find(
-                (entry) => entry?.provider === provider.id
-              );
+              const report = providerReports[provider.id] || null;
               const listings = groupedResults[provider.id] || [];
 
               return (
@@ -113,7 +114,7 @@ export default function MarketResearchCard({
             })}
           </div>
 
-          {!results.length && !hasComingSoon(providerReports) && (
+          {!results.length && !hasComingSoon(Object.values(providerReports)) && (
             <StatePanel
               title="No active listings found"
               body="Try a more specific title or brand to refine the search."
@@ -278,4 +279,25 @@ function buildProviderCaption(status, count = 0, listingsLength = 0) {
   if (!listingsLength) return "No active listings found";
   if (count === 1) return "1 active listing";
   return `${count || listingsLength} active listings`;
+}
+
+function indexProviderReports(reports) {
+  const entries = Array.isArray(reports) ? reports : [];
+  return entries.reduce((acc, report) => {
+    const key = String(report?.provider || "").toLowerCase();
+    if (!key) return acc;
+    acc[key] = report;
+    return acc;
+  }, {});
+}
+
+function sanitizeListings(results) {
+  if (!Array.isArray(results)) return [];
+
+  return results.filter((entry) => {
+    if (!entry || typeof entry !== "object") return false;
+    if (!entry.provider) return false;
+    if (!entry.url && !entry.listingId) return false;
+    return true;
+  });
 }

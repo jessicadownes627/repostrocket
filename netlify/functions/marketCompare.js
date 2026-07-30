@@ -1,17 +1,29 @@
 import { ensureMarketCompareQuery } from "./_marketCompare/queryBuilder.js";
 import { getEnabledProviders } from "./_marketCompare/providers/index.js";
-import { createMarketCompareResponse } from "./_marketCompare/schema.js";
+import {
+  createMarketCompareResponse,
+  createProviderReport,
+  dedupeResults,
+} from "./_marketCompare/schema.js";
 
 const DEFAULT_PROVIDER_LIMIT = 6;
 const DEFAULT_TIMEOUT_MS = 8000;
 
 export async function handler(event) {
   if (event.httpMethod && event.httpMethod !== "POST") {
-    return jsonResponse(405, { error: "Method Not Allowed" });
+    return jsonResponse(
+      405,
+      createMarketCompareResponse({
+        query: {},
+        providers: [],
+        results: [],
+        errors: ["Method Not Allowed"],
+      })
+    );
   }
 
   try {
-    const parsedBody = JSON.parse(event.body || "{}");
+    const parsedBody = parseRequestBody(event.body);
     const query = ensureMarketCompareQuery(parsedBody);
 
     if (!query) {
@@ -31,15 +43,25 @@ export async function handler(event) {
     const providers = getEnabledProviders();
 
     const providerResponses = await Promise.all(
-      providers.map(async ({ search }) => {
+      providers.map(async ({ name, search }) => {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeoutMs);
         try {
-          return await search({
+          const result = await search({
             query,
             limit,
             signal: controller.signal,
           });
+          return normalizeProviderResult(name, result);
+        } catch (error) {
+          return {
+            provider: createProviderReport({
+              provider: name,
+              status: "error",
+              error: error?.message || "Provider request failed",
+            }),
+            results: [],
+          };
         } finally {
           clearTimeout(timer);
         }
@@ -47,7 +69,9 @@ export async function handler(event) {
     );
 
     const providerReports = providerResponses.map((entry) => entry.provider);
-    const results = providerResponses.flatMap((entry) => entry.results || []);
+    const results = dedupeResults(
+      providerResponses.flatMap((entry) => entry.results || [])
+    );
     const errors = providerReports
       .filter((provider) => provider?.status === "error" || provider?.status === "not_configured")
       .map((provider) => `${provider.provider}: ${provider.error}`);
@@ -62,9 +86,11 @@ export async function handler(event) {
       })
     );
   } catch (error) {
+    const statusCode =
+      error?.message === "Invalid JSON request body" ? 400 : 500;
     console.error("Market Compare Backend Error:", error);
     return jsonResponse(
-      500,
+      statusCode,
       createMarketCompareResponse({
         query: {},
         providers: [],
@@ -94,5 +120,35 @@ function jsonResponse(statusCode, body) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
+  };
+}
+
+function parseRequestBody(body) {
+  try {
+    return JSON.parse(body || "{}");
+  } catch {
+    throw new Error("Invalid JSON request body");
+  }
+}
+
+function normalizeProviderResult(name, result) {
+  const safeResult =
+    result && typeof result === "object" ? result : { provider: null, results: [] };
+  const provider =
+    safeResult.provider && typeof safeResult.provider === "object"
+      ? safeResult.provider
+      : createProviderReport({
+          provider: name,
+          status: "error",
+          error: "Malformed provider response",
+        });
+
+  return {
+    provider: {
+      ...provider,
+      provider: provider.provider || name,
+      resultCount: Array.isArray(safeResult.results) ? safeResult.results.length : 0,
+    },
+    results: Array.isArray(safeResult.results) ? safeResult.results : [],
   };
 }
