@@ -171,6 +171,7 @@ export default function SingleListing() {
           brand: lookupBrand,
           category: lookupCategory,
           tags: lookupTags,
+          limit: 10,
         });
 
         if (cancelled) return;

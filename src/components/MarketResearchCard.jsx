@@ -1,6 +1,18 @@
+import { useMemo, useState } from "react";
+
 const PROVIDERS = [
-  { id: "ebay", label: "eBay" },
-  { id: "etsy", label: "Etsy" },
+  {
+    id: "ebay",
+    label: "eBay",
+    badge: "e",
+    badgeClassName: "market-research-provider-badge--ebay",
+  },
+  {
+    id: "etsy",
+    label: "Etsy",
+    badge: "E",
+    badgeClassName: "market-research-provider-badge--etsy",
+  },
 ];
 
 export default function MarketResearchCard({
@@ -10,28 +22,75 @@ export default function MarketResearchCard({
 }) {
   const providerReports = Array.isArray(data?.providers) ? data.providers : [];
   const results = Array.isArray(data?.results) ? data.results : [];
+  const [sortMode, setSortMode] = useState("lowest");
+
+  const groupedResults = useMemo(() => {
+    return PROVIDERS.reduce((acc, provider) => {
+      const providerResults = results.filter(
+        (entry) => entry?.provider === provider.id
+      );
+      acc[provider.id] = sortListings(providerResults, sortMode);
+      return acc;
+    }, {});
+  }, [results, sortMode]);
 
   return (
     <div className="market-research-card">
-      <div className="market-research-title">Market Research</div>
-      <div className="market-research-sub">
-        Active listings from official marketplace APIs
+      <div className="market-research-header">
+        <div>
+          <div className="market-research-title">Market Research</div>
+          <div className="market-research-sub">
+            Active listings from official marketplace APIs
+          </div>
+        </div>
+
+        <div className="market-research-sorter" role="group" aria-label="Sort market research">
+          <button
+            type="button"
+            className={`market-research-sort-button ${
+              sortMode === "lowest" ? "is-active" : ""
+            }`}
+            onClick={() => setSortMode("lowest")}
+          >
+            Lowest Price
+          </button>
+          <button
+            type="button"
+            className={`market-research-sort-button ${
+              sortMode === "highest" ? "is-active" : ""
+            }`}
+            onClick={() => setSortMode("highest")}
+          >
+            Highest Price
+          </button>
+        </div>
       </div>
 
       {status === "idle" && (
-        <div className="market-research-state">
-          Add a title or brand to start market research.
-        </div>
+        <StatePanel
+          title="Ready when you are"
+          body="Add a title or brand to start market research."
+        />
       )}
 
       {status === "loading" && (
-        <div className="market-research-state">Loading marketplace data...</div>
+        <div className="market-research-loading">
+          <div className="market-research-loading-copy">
+            Searching supported marketplaces...
+          </div>
+          <div className="market-research-skeleton-grid" aria-hidden="true">
+            <div className="market-research-skeleton-card" />
+            <div className="market-research-skeleton-card" />
+          </div>
+        </div>
       )}
 
       {status === "error" && (
-        <div className="market-research-state">
-          {error || "Unable to load market research right now."}
-        </div>
+        <StatePanel
+          title="Market research unavailable"
+          body={error || "Unable to load market research right now."}
+          tone="error"
+        />
       )}
 
       {status === "success" && (
@@ -41,25 +100,24 @@ export default function MarketResearchCard({
               const report = providerReports.find(
                 (entry) => entry?.provider === provider.id
               );
-              const listing = results.find(
-                (entry) => entry?.provider === provider.id
-              );
+              const listings = groupedResults[provider.id] || [];
 
               return (
                 <ProviderSection
                   key={provider.id}
                   provider={provider}
                   report={report}
-                  listing={listing}
+                  listings={listings}
                 />
               );
             })}
           </div>
 
           {!results.length && !hasComingSoon(providerReports) && (
-            <div className="market-research-state">
-              No comparable active listings found.
-            </div>
+            <StatePanel
+              title="No active listings found"
+              body="Try a more specific title or brand to refine the search."
+            />
           )}
         </>
       )}
@@ -67,49 +125,98 @@ export default function MarketResearchCard({
   );
 }
 
-function ProviderSection({ provider, report, listing }) {
+function ProviderSection({ provider, report, listings }) {
   const status = report?.status || "idle";
   const showComingSoon = status === "not_configured";
+  const hasManyResults = listings.length > 3;
+  const [expanded, setExpanded] = useState(false);
+  const visibleListings =
+    expanded || !hasManyResults ? listings : listings.slice(0, 3);
 
   return (
     <div className="market-research-provider">
-      <div className="market-research-provider-name">{provider.label}</div>
+      <div className="market-research-provider-head">
+        <div className="market-research-provider-meta">
+          <div
+            className={`market-research-provider-icon ${provider.badgeClassName || ""}`}
+            aria-hidden="true"
+          >
+            {provider.badge || provider.label.slice(0, 1)}
+          </div>
+          <div>
+            <div className="market-research-provider-name">{provider.label}</div>
+            <div className="market-research-provider-caption">
+              {buildProviderCaption(status, report?.resultCount, listings.length)}
+            </div>
+          </div>
+        </div>
+
+        {hasManyResults ? (
+          <button
+            type="button"
+            className="market-research-toggle"
+            onClick={() => setExpanded((value) => !value)}
+          >
+            {expanded ? "Show Less" : `Show ${listings.length - 3} More`}
+          </button>
+        ) : null}
+      </div>
 
       {showComingSoon ? (
-        <div className="market-research-provider-state">Coming Soon</div>
-      ) : listing ? (
-        <div
-          className="market-research-grid"
-          role="table"
-          aria-label={`${provider.label} market research`}
-        >
-          <div className="market-research-grid-label">Price</div>
-          <div className="market-research-grid-label">Shipping</div>
-          <div className="market-research-grid-label">Condition</div>
-          <div className="market-research-grid-label">View</div>
+        <div className="market-research-provider-state market-research-provider-state--coming">
+          Coming Soon
+        </div>
+      ) : listings.length ? (
+        <div className="market-research-results">
+          <div
+            className="market-research-grid market-research-grid--head"
+            role="row"
+            aria-hidden="true"
+          >
+            <div className="market-research-grid-label">Price</div>
+            <div className="market-research-grid-label">Shipping</div>
+            <div className="market-research-grid-label">Condition</div>
+            <div className="market-research-grid-label">View</div>
+          </div>
 
-          <div className="market-research-grid-value">
-            {formatPrice(listing.price, listing.currency)}
-          </div>
-          <div className="market-research-grid-value">
-            {formatShipping(listing.shipping, listing.currency)}
-          </div>
-          <div className="market-research-grid-value">
-            {listing.condition || "—"}
-          </div>
-          <div className="market-research-grid-value">
-            {listing.url ? (
-              <a
-                href={listing.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="market-research-link"
+          <div className="market-research-result-list" role="table" aria-label={`${provider.label} market research`}>
+            {visibleListings.map((listing) => (
+              <div
+                key={`${provider.id}-${listing.listingId || listing.url}`}
+                className="market-research-grid market-research-grid--row"
+                role="row"
               >
-                View
-              </a>
-            ) : (
-              "—"
-            )}
+                <div className="market-research-grid-cell" data-label="Price">
+                  <span className="market-research-grid-value">
+                    {formatPrice(listing.price, listing.currency)}
+                  </span>
+                </div>
+                <div className="market-research-grid-cell" data-label="Shipping">
+                  <span className="market-research-grid-value">
+                    {formatShipping(listing.shipping, listing.currency)}
+                  </span>
+                </div>
+                <div className="market-research-grid-cell" data-label="Condition">
+                  <span className="market-research-grid-value">
+                    {listing.condition || "—"}
+                  </span>
+                </div>
+                <div className="market-research-grid-cell" data-label="View">
+                  {listing.url ? (
+                    <a
+                      href={listing.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="market-research-link"
+                    >
+                      View
+                    </a>
+                  ) : (
+                    <span className="market-research-grid-value">—</span>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       ) : status === "error" ? (
@@ -117,6 +224,15 @@ function ProviderSection({ provider, report, listing }) {
       ) : (
         <div className="market-research-provider-state">No active listings</div>
       )}
+    </div>
+  );
+}
+
+function StatePanel({ title, body, tone = "neutral" }) {
+  return (
+    <div className={`market-research-state-panel market-research-state-panel--${tone}`}>
+      <div className="market-research-state-title">{title}</div>
+      <div className="market-research-state-body">{body}</div>
     </div>
   );
 }
@@ -141,4 +257,25 @@ function formatShipping(value, currency = "USD") {
 
 function hasComingSoon(providers = []) {
   return providers.some((provider) => provider?.status === "not_configured");
+}
+
+function sortListings(listings = [], mode = "lowest") {
+  return [...listings].sort((a, b) => {
+    const aPrice = typeof a?.price === "number" ? a.price : Number.POSITIVE_INFINITY;
+    const bPrice = typeof b?.price === "number" ? b.price : Number.POSITIVE_INFINITY;
+
+    if (mode === "highest") {
+      return bPrice - aPrice;
+    }
+
+    return aPrice - bPrice;
+  });
+}
+
+function buildProviderCaption(status, count = 0, listingsLength = 0) {
+  if (status === "not_configured") return "Official API not connected yet";
+  if (status === "error") return "Provider unavailable right now";
+  if (!listingsLength) return "No active listings found";
+  if (count === 1) return "1 active listing";
+  return `${count || listingsLength} active listings`;
 }
