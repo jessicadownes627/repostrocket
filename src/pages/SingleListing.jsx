@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import LuxeChipGroup from "../components/LuxeChipGroup";
 import LuxeInput from "../components/LuxeInput";
+import MarketResearchCard from "../components/MarketResearchCard";
 import { useListingStore } from "../store/useListingStore";
 import { getPhotoUrl } from "../utils/photoHelpers";
 import { generateMagicDraft } from "../utils/generateMagicDraft";
+import { getMarketCompare } from "../utils/getMarketCompare";
 import { getMarketSnapshot } from "../utils/getMarketSnapshot";
 import {
   getConfidenceInsight,
@@ -63,6 +65,9 @@ export default function SingleListing() {
   const [titleDraft, setTitleDraft] = useState("");
   const [magicFillMessage, setMagicFillMessage] = useState("");
   const [marketSnapshot, setMarketSnapshot] = useState(null);
+  const [marketCompareData, setMarketCompareData] = useState(null);
+  const [marketCompareStatus, setMarketCompareStatus] = useState("idle");
+  const [marketCompareError, setMarketCompareError] = useState("");
   const placeholderTitle =
     (title || "").trim().toLowerCase() === "item for sale";
   const placeholderDescription = (() => {
@@ -139,6 +144,54 @@ export default function SingleListing() {
     isSlabbed && (!reviewIdentity?.grader || graderSource === "inferred");
   const showGradeChips =
     isSlabbed && reviewIdentity?.grader && !gradeValue;
+
+  useEffect(() => {
+    const lookupTitle = (title || "").trim();
+    const lookupBrand = (brand || "").trim();
+    const lookupCategory = (category || "").trim();
+    const lookupTags = Array.isArray(tags) ? tags.filter(Boolean) : [];
+    const seed =
+      lookupTitle || lookupBrand || lookupCategory || lookupTags[0] || "";
+
+    if (!seed) {
+      setMarketCompareStatus("idle");
+      setMarketCompareData(null);
+      setMarketCompareError("");
+      return;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      setMarketCompareStatus("loading");
+      setMarketCompareError("");
+
+      try {
+        const result = await getMarketCompare({
+          title: lookupTitle,
+          brand: lookupBrand,
+          category: lookupCategory,
+          tags: lookupTags,
+        });
+
+        if (cancelled) return;
+        setMarketCompareData(result);
+        setMarketCompareStatus("success");
+      } catch (err) {
+        if (cancelled) return;
+        setMarketCompareData(null);
+        setMarketCompareStatus("error");
+        setMarketCompareError(
+          err?.message || "Unable to load market research right now."
+        );
+      }
+    }, 500);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [title, brand, category, tags]);
+
   const handleMagicFill = async () => {
     setMagicFillMessage("");
     try {
@@ -1244,6 +1297,11 @@ export default function SingleListing() {
           </div>
         </div>
       )}
+      <MarketResearchCard
+        status={marketCompareStatus}
+        data={marketCompareData}
+        error={marketCompareError}
+      />
       {placeholderDescription && (
         <div className="text-xs text-white/50 -mt-4 mb-4">
           Placeholder description — add details about your item.

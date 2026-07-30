@@ -3178,3 +3178,93 @@ section {
   font-size: 11px;
   line-height: 1.35;
 }
+
+/* -------------------------------------------- */
+/*  Market Research (Single Listing)            */
+/* -------------------------------------------- */
+.market-research-card {
+  margin-top: 14px;
+  margin-bottom: 22px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.22);
+  box-shadow: 0 0 18px rgba(0, 0, 0, 0.35);
+}
+
+.market-research-title {
+  font-size: 12px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.82);
+  margin-bottom: 6px;
+}
+
+.market-research-sub {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.market-research-provider-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.market-research-provider {
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.market-research-provider:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+
+.market-research-provider-name {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.market-research-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px 10px;
+}
+
+.market-research-grid-label {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.52);
+}
+
+.market-research-grid-value,
+.market-research-provider-state,
+.market-research-state {
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 13px;
+}
+
+.market-research-state {
+  margin-top: 12px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.market-research-provider-state {
+  color: rgba(255, 255, 255, 0.64);
+}
+
+.market-research-link {
+  color: rgba(255, 255, 255, 0.9);
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+@media (max-width: 640px) {
+  .market-research-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
